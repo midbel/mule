@@ -45,6 +45,18 @@ func Prepare(name, method string) Request {
 	}
 }
 
+func (r Request) Depends(ev env.Env) ([]string, error) {
+	var list []string
+	for i := range r.depends {
+		str, err := r.depends[i].Expand(ev)
+		if err != nil {
+			return nil, err
+		}
+		list = append(list, str)
+	}
+	return list, nil
+}
+
 func (r Request) Prepare(ev env.Env) (*http.Request, error) {
 	req, err := r.getRequest(ev)
 	if err != nil {
@@ -66,7 +78,7 @@ func (r Request) getRequest(ev env.Env) (*http.Request, error) {
 	if err != nil {
 		return nil, err
 	}
-	return http.NewRequest(r.method, uri.String(), body)	
+	return http.NewRequest(r.method, uri.String(), body)
 }
 
 func (r Request) setHeaders(req *http.Request, ev env.Env) error {
@@ -85,6 +97,20 @@ func (r Request) setHeaders(req *http.Request, ev env.Env) error {
 			return err
 		}
 		req.SetBasicAuth(u, p)
+	}
+	return r.attachCookies(req, ev)
+}
+
+func (r Request) attachCookies(req *http.Request, ev env.Env) error {
+	for _, c := range r.cookies {
+		cook, err := c.Cookie(ev)
+		if err != nil {
+			return err
+		}
+		if err = cook.Valid(); err != nil {
+			return err
+		}
+		req.AddCookie(cook)
 	}
 	return nil
 }
@@ -137,6 +163,41 @@ func (b Bag) Values(e env.Env) (url.Values, error) {
 		}
 	}
 	return all, nil
+}
+
+func (b Bag) Cookie(e env.Env) (*http.Cookie, error) {
+	var (
+		cook http.Cookie
+		err  error
+	)
+	for k, vs := range b {
+		if len(vs) == 0 {
+			continue
+		}
+		switch k {
+		case "name":
+			cook.Name, err = vs[0].Expand(e)
+		case "value":
+			cook.Value, err = vs[0].Expand(e)
+		case "path":
+			cook.Path, err = vs[0].Expand(e)
+		case "domain":
+			cook.Domain, err = vs[0].Expand(e)
+		case "expires":
+		case "max-age":
+			cook.MaxAge, err = vs[0].ExpandInt(e)
+		case "secure":
+			cook.Secure, err = vs[0].ExpandBool(e)
+		case "http-only":
+			cook.HttpOnly, err = vs[0].ExpandBool(e)
+		default:
+			return nil, fmt.Errorf("%s: invalid cookie property")
+		}
+		if err != nil {
+			return nil, err
+		}
+	}
+	return &cook, nil
 }
 
 type ExpectFunc func(*http.Response) error

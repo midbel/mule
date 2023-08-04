@@ -372,7 +372,7 @@ func (p *Parser) parseBag() (Bag, error) {
 	defer p.skip(EOL)
 	var (
 		bag = make(Bag)
-		err   error
+		err error
 	)
 	for !p.done() && !p.is(Rbrace) {
 		err = p.parseKeyValues(func(key string, word Word) {
