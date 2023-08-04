@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"io"
 	"net/http"
-	"net/url"
 	"os"
 	"sort"
 	"strings"
@@ -24,8 +23,8 @@ type Collection struct {
 	parent *Collection
 
 	env         env.Env
-	headers     http.Header
-	query       url.Values
+	headers     Bag
+	query       Bag
 	requests    []Request
 	collections []*Collection
 }
@@ -55,41 +54,21 @@ func Enclosed(name string, parent *Collection) *Collection {
 }
 
 func (c *Collection) Execute(name string, w io.Writer) error {
-	if name == "" {
-		// find default request in current collection
-		return nil
-	}
-	def, err := c.Find(name)
+	r, err := c.Find(name)
 	if err != nil {
 		return err
 	}
-
-	rc, err := c.execute(def)
+	req, err := r.Prepare(c)
 	if err != nil {
 		return err
-	}
-	defer rc.Close()
-	_, err = io.Copy(w, rc)
-	return err
-}
-
-func (c *Collection) execute(def Request) (io.ReadCloser, error) {
-	def.headers = mergeHeaders(def.headers, c.headers)
-	def.query = mergeQuery(def.query, c.query)
-
-	req, err := def.Prepare()
-	if err != nil {
-		return nil, err
 	}
 	res, err := http.DefaultClient.Do(req)
 	if err != nil {
-		return nil, err
+		return err
 	}
-	if err = def.expect(res); err != nil {
-		defer res.Body.Close()
-		return nil, err
-	}
-	return res.Body, nil
+	defer res.Body.Close()
+	_, err = io.Copy(w, res.Body)
+	return err
 }
 
 func (c *Collection) Find(name string) (Request, error) {

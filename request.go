@@ -16,20 +16,21 @@ type Request struct {
 	Default bool
 
 	method  string
-	depends []string
-	retry   int
-	timeout int
+	depends []Word
+	retry   Word
+	timeout Word
 
-	location *url.URL
-	user     string
-	pass     string
-	query    url.Values
-	headers  http.Header
-	body     string
+	location Word
+	user     Word
+	pass     Word
+	query    Bag
+	headers  Bag
+	body     Word
 
-	cookies []http.Cookie
+	cookies []Bag
 
-	expect func(*http.Response) error
+	// cookies []http.Cookie
+	// expect func(*http.Response) error
 }
 
 func Prepare(name, method string) Request {
@@ -39,41 +40,53 @@ func Prepare(name, method string) Request {
 	return Request{
 		Info:    info,
 		method:  method,
-		expect:  expectNothing,
-		headers: make(http.Header),
-		query:   make(url.Values),
+		headers: make(Bag),
+		query:   make(Bag),
 	}
 }
 
-func (r Request) Prepare() (*http.Request, error) {
-	var body io.Reader
-	if len(r.body) == 0 {
-		body = strings.NewReader(r.body)
-	}
-	req, err := http.NewRequest(r.method, r.location.String(), body)
+func (r Request) Prepare(ev env.Env) (*http.Request, error) {
+	req, err := r.getRequest(ev)
 	if err != nil {
 		return nil, err
 	}
-	req.Header = r.headers.Clone()
-	raw := req.URL.Query()
-	for k, vs := range r.query {
-		for _, v := range vs {
-			raw.Add(k, v)
-		}
-	}
-	req.URL.RawQuery = raw.Encode()
-	if req.Header.Get("Authorization") == "" && r.user != "" && r.pass != "" {
-		req.SetBasicAuth(r.user, r.pass)
-	}
+	return req, r.setHeaders(req, ev)
+}
 
-	for _, c := range r.cookies {
-		if err := c.Valid(); err != nil {
+func (r Request) getRequest(ev env.Env) (*http.Request, error) {
+	var body io.Reader
+	if r.body != nil {
+		tmp, err := r.body.Expand(ev)
+		if err != nil {
 			return nil, err
 		}
-		req.AddCookie(&c)
+		body = strings.NewReader(tmp)
 	}
+	uri, err := r.location.ExpandURL(ev)
+	if err != nil {
+		return nil, err
+	}
+	return http.NewRequest(r.method, uri.String(), body)	
+}
 
-	return req, nil
+func (r Request) setHeaders(req *http.Request, ev env.Env) error {
+	hdr, err := r.headers.Header(ev)
+	if err != nil {
+		return err
+	}
+	req.Header = hdr
+	if hdr.Get("Authorization") == "" && r.user != nil && r.pass != nil {
+		u, err := r.user.Expand(ev)
+		if err != nil {
+			return err
+		}
+		p, err := r.pass.Expand(ev)
+		if err != nil {
+			return err
+		}
+		req.SetBasicAuth(u, p)
+	}
+	return nil
 }
 
 type Bag map[string][]Word

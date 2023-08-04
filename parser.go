@@ -8,7 +8,6 @@ import (
 	"os"
 	"path/filepath"
 	"strconv"
-	"strings"
 
 	"github.com/midbel/mule/env"
 )
@@ -217,38 +216,23 @@ func (p *Parser) parseRequest(collect *Collection) error {
 		}
 		p.next()
 		switch kw {
-		case "default":
-			req.Default, err = p.parseBool(collect)
-			continue
 		case "url":
-			req.location, err = p.parseURL(collect)
+			req.location, err = p.parseWord()
 		case "retry":
-			req.retry, err = p.parseNumber(collect)
+			req.retry, err = p.parseWord()
 		case "timeout":
-			req.timeout, err = p.parseNumber(collect)
+			req.timeout, err = p.parseWord()
 		case "headers":
-			req.headers, err = p.parseHeaders(collect)
+			req.headers, err = p.parseBag()
 		case "query":
-			req.query, err = p.parseQuery(collect)
+			req.query, err = p.parseBag()
 		case "body":
-			req.body, err = p.parseString(collect)
+			req.body, err = p.parseWord()
 		case "cookie":
-			cookie, err1 := p.parseCookie(collect)
-			if err1 != nil {
-				err = err1
-				break
-			}
-			req.cookies = append(req.cookies, cookie)
 		case "username":
-			req.user, err = p.parseString(collect)
+			req.user, err = p.parseWord()
 		case "password":
-			req.pass, err = p.parseString(collect)
-		case "tls":
-			_, err = p.parseTLS(collect)
-		case "before":
-			err = p.parseScript(collect)
-		case "after":
-			err = p.parseScript(collect)
+			req.pass, err = p.parseWord()
 		default:
 			return p.unexpected()
 		}
@@ -264,125 +248,47 @@ func (p *Parser) parseRequest(collect *Collection) error {
 	return p.expect(Rbrace)
 }
 
-func (p *Parser) parseQuote(env env.Env) (string, error) {
-	if err := p.expect(Quote); err != nil {
-		return "", err
-	}
-	var parts []string
-	for !p.done() && !p.is(Quote) {
-		str, err := p.parseString(env)
-		if err != nil {
-			return "", err
-		}
-		parts = append(parts, str)
-	}
-	return strings.Join(parts, ""), p.expect(Quote)
-}
-
-func (p *Parser) parseURL(env env.Env) (*url.URL, error) {
-	defer p.next()
-
-	var str string
+func (p *Parser) parseWord() (Word, error) {
 	switch {
-	case p.is(Quote):
-		v, err := p.parseQuote(env)
-		if err != nil {
-			return nil, err
-		}
-		str = v
-	case p.is(Variable):
-		v, err := env.Resolve(p.curr.Literal)
-		if err != nil {
-			return nil, err
-		}
-		str = v
 	case p.is(Macro):
 		dat, err := p.parseMacro()
 		if err != nil {
 			return nil, err
-		}
-		str, _ = dat.(string)
-	case p.is(String) || p.is(Ident):
-		str = p.curr.Literal
-	default:
-		return nil, p.unexpected()
-	}
-	return url.Parse(str)
-}
-
-func (p *Parser) parseString(env env.Env) (string, error) {
-	defer p.next()
-
-	switch {
-	case p.is(Quote):
-		return p.parseQuote(env)
-	case p.is(Number) || p.is(String) || p.is(Ident):
-		return p.curr.Literal, nil
-	case p.is(Variable):
-		return env.Resolve(p.curr.Literal)
-	case p.is(Macro):
-		dat, err := p.parseMacro()
-		if err != nil {
-			return "", err
 		}
 		str, _ := dat.(string)
-		return str, nil
-	default:
-		return "", p.unexpected()
-	}
-}
-
-func (p *Parser) parseBool(env env.Env) (bool, error) {
-	if p.is(EOL) {
-		return true, nil
-	}
-	defer p.next()
-	switch {
-	case p.is(Number):
-		v, err := strconv.Atoi(p.curr.Literal)
-		if err != nil {
-			return false, err
-		}
-		return v != 0, nil
-	case p.is(String) || p.is(Ident):
-		return strconv.ParseBool(p.curr.Literal)
+		return createLiteral(str), nil
+	case p.is(Quote):
+		return p.parseQuote()
 	case p.is(Variable):
-		v, err := env.Resolve(p.curr.Literal)
-		if err != nil {
-			return false, err
-		}
-		return strconv.ParseBool(v)
+		defer p.next()
+		return createVariable(p.curr.Literal), nil
 	default:
-		return false, p.unexpected()
+		defer p.next()
+		return createLiteral(p.curr.Literal), nil
 	}
 }
 
-func (p *Parser) parseNumber(env env.Env) (int, error) {
-	defer p.next()
-
-	var str string
-	switch {
-	case p.is(Number) || p.is(String) || p.is(Ident):
-		str = p.curr.Literal
-	case p.is(Variable):
-		v, err := env.Resolve(p.curr.Literal)
-		if err != nil {
-			return 0, err
-		}
-		str = v
-	case p.is(Macro):
-		dat, err := p.parseMacro()
-		if err != nil {
-			return 0, err
-		}
-		str, _ = dat.(string)
-	default:
-		return 0, p.unexpected()
+func (p *Parser) parseQuote() (Word, error) {
+	if err := p.expect(Quote); err != nil {
+		return nil, err
 	}
-	return strconv.Atoi(str)
+	p.next()
+	var ws compound
+	for !p.done() && !p.is(Quote) {
+		w, err := p.parseWord()
+		if err != nil {
+			return nil, err
+		}
+		ws = append(ws, w)
+	}
+	var w Word = ws
+	if len(ws) == 1 {
+		w = ws[0]
+	}
+	return w, p.expect(Quote)
 }
 
-func (p *Parser) parseKeyValues(env env.Env, set func(string, string)) error {
+func (p *Parser) parseKeyValues(set func(string, Word)) error {
 	p.skip(EOL)
 	if !p.is(Ident) {
 		return p.unexpected()
@@ -390,82 +296,13 @@ func (p *Parser) parseKeyValues(env env.Env, set func(string, string)) error {
 	ident := p.curr.Literal
 	p.next()
 	for !p.done() && !p.is(EOL) {
-		switch {
-		case p.is(Ident) || p.is(String) || p.is(Number):
-			set(ident, p.curr.Literal)
-		case p.is(Quote):
-			value, err := p.parseQuote(env)
-			if err != nil {
-				return err
-			}
-			set(ident, value)
-			continue
-		case p.is(Variable):
-			value, err := env.Resolve(p.curr.Literal)
-			if err != nil {
-				return err
-			}
-			set(ident, value)
-		case p.is(Macro):
-			dat, err := p.parseMacro()
-			if err != nil {
-				return err
-			}
-			value, _ := dat.(string)
-			set(ident, value)
-		default:
-			return p.unexpected()
+		word, err := p.parseWord()
+		if err != nil {
+			return err
 		}
-		p.next()
+		set(ident, word)
 	}
 	return nil
-}
-
-func (p *Parser) parseCookie(env env.Env) (http.Cookie, error) {
-	var (
-		cookie http.Cookie
-		err    error
-		track  = createTracker()
-	)
-	if !p.is(Ident) {
-		return cookie, p.unexpected()
-	}
-	cookie.Name = p.curr.Literal
-	p.next()
-	if err := p.expect(Lbrace); err != nil {
-		return cookie, err
-	}
-	for !p.done() && !p.is(Rbrace) {
-		p.skip(EOL)
-		if !p.is(Ident) && !p.is(Keyword) {
-			return cookie, p.unexpected()
-		}
-		kw := p.curr.Literal
-		if err := track.Seen(kw); err != nil {
-			return cookie, err
-		}
-		p.next()
-		switch kw {
-		case "value":
-			cookie.Value, err = p.parseString(env)
-		case "domain":
-			cookie.Domain, err = p.parseString(env)
-		case "secure":
-			cookie.Secure, err = p.parseBool(env)
-		case "http-only":
-			cookie.HttpOnly, err = p.parseBool(env)
-		case "max-age":
-			cookie.MaxAge, err = p.parseNumber(env)
-		case "same-site":
-		default:
-			return cookie, p.unexpected()
-		}
-		if err != nil {
-			return cookie, err
-		}
-		p.skip(EOL)
-	}
-	return cookie, p.expect(Rbrace)
 }
 
 func (p *Parser) parseExpect(env env.Env) (ExpectFunc, error) {
@@ -528,46 +365,25 @@ func (p *Parser) parseScript(env env.Env) error {
 	return nil
 }
 
-func (p *Parser) parseQuery(env env.Env) (url.Values, error) {
+func (p *Parser) parseBag() (Bag, error) {
 	if err := p.expect(Lbrace); err != nil {
 		return nil, err
 	}
 	defer p.skip(EOL)
 	var (
-		query = make(url.Values)
+		bag = make(Bag)
 		err   error
 	)
 	for !p.done() && !p.is(Rbrace) {
-		err = p.parseKeyValues(env, func(key, value string) {
-			query.Add(key, value)
+		err = p.parseKeyValues(func(key string, word Word) {
+			bag.Add(key, word)
 		})
 		if err != nil {
 			return nil, err
 		}
 		p.skip(EOL)
 	}
-	return query, p.expect(Rbrace)
-}
-
-func (p *Parser) parseHeaders(env env.Env) (http.Header, error) {
-	if err := p.expect(Lbrace); err != nil {
-		return nil, err
-	}
-	defer p.skip(EOL)
-	var (
-		hdr = make(http.Header)
-		err error
-	)
-	for !p.done() && !p.is(Rbrace) {
-		err = p.parseKeyValues(env, func(key, value string) {
-			hdr.Add(key, value)
-		})
-		if err != nil {
-			return nil, err
-		}
-		p.skip(EOL)
-	}
-	return hdr, p.expect(Rbrace)
+	return bag, p.expect(Rbrace)
 }
 
 func (p *Parser) parseVariables(collect *Collection) error {
@@ -610,16 +426,7 @@ func (p *Parser) parseTLS(env env.Env) (interface{}, error) {
 		return nil, err
 	}
 	defer p.skip(EOL)
-	var err error
-	for !p.done() && !p.is(Rbrace) {
-		err = p.parseKeyValues(env, func(key, value string) {
 
-		})
-		if err != nil {
-			return nil, err
-		}
-		p.skip(EOL)
-	}
 	return nil, p.expect(Rbrace)
 }
 
@@ -633,18 +440,18 @@ func (p *Parser) parseCollectionTLS(collect *Collection) error {
 
 func (p *Parser) parseCollectionQuery(collect *Collection) error {
 	p.next()
-	query, err := p.parseQuery(collect)
+	bg, err := p.parseBag()
 	if err == nil {
-		collect.query = query
+		collect.query = bg
 	}
 	return err
 }
 
 func (p *Parser) parseCollectionHeaders(collect *Collection) error {
 	p.next()
-	hdr, err := p.parseHeaders(collect)
+	bg, err := p.parseBag()
 	if err == nil {
-		collect.headers = hdr
+		collect.headers = bg
 	}
 	return err
 }

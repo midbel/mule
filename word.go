@@ -12,7 +12,7 @@ type Word interface {
 	Expand(env.Env) (string, error)
 	ExpandBool(env.Env) (bool, error)
 	ExpandInt(env.Env) (int, error)
-	ExpandU(env.Env) (*url.URL, error)
+	ExpandURL(env.Env) (*url.URL, error)
 }
 
 type compound []Word
@@ -55,6 +55,10 @@ func (cs compound) ExpandURL(e env.Env) (*url.URL, error) {
 
 type literal string
 
+func createLiteral(str string) Word {
+	return literal(str)
+}
+
 func (i literal) Expand(_ env.Env) (string, error) {
 	return string(i), nil
 }
@@ -72,6 +76,10 @@ func (i literal) ExpandURL(_ env.Env) (*url.URL, error) {
 }
 
 type variable string
+
+func createVariable(str string) Word {
+	return variable(str)
+}
 
 func (v variable) Expand(e env.Env) (string, error) {
 	return e.Resolve(string(v))
