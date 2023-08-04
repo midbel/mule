@@ -22,7 +22,12 @@ collection test {
 
 	get test {
 
-		url http://localhost:9090/test
+		url http://localhost:9090/test?format=1
+
+		query {
+			dtstart '2023-01-01'
+			dtend   '2024-01-01'
+		}
 
 		username test
 		password test

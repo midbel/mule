@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httputil"
+	"net/url"
 	"os"
 	"sync/atomic"
 	"time"
@@ -40,10 +41,12 @@ func (d *dumper) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		When    time.Time     `json:"timestamp"`
 		Uptime  time.Duration `json:"uptime"`
 		Headers http.Header   `json:"headers"`
+		Params  url.Values    `json:"params"`
 	}{
 		Count:   d.counter.Add(1),
 		When:    time.Now(),
 		Headers: r.Header,
+		Params:  r.URL.Query(),
 		Uptime:  time.Since(d.when),
 	}
 

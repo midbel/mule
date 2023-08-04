@@ -179,7 +179,7 @@ func (b Bag) ValuesWith(e env.Env, other url.Values) (url.Values, error) {
 		all[k] = append(all[k], vs...)
 	}
 	return all, nil
-} 
+}
 
 func (b Bag) Cookie(e env.Env) (*http.Cookie, error) {
 	var (
