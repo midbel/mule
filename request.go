@@ -78,6 +78,11 @@ func (r Request) getRequest(ev env.Env) (*http.Request, error) {
 	if err != nil {
 		return nil, err
 	}
+	query, err := r.query.ValuesWith(ev, uri.Query())
+	if err != nil {
+		return nil, err
+	}
+	uri.RawQuery = query.Encode()
 	return http.NewRequest(r.method, uri.String(), body)
 }
 
@@ -164,6 +169,17 @@ func (b Bag) Values(e env.Env) (url.Values, error) {
 	}
 	return all, nil
 }
+
+func (b Bag) ValuesWith(e env.Env, other url.Values) (url.Values, error) {
+	all, err := b.Values(e)
+	if err != nil {
+		return nil, err
+	}
+	for k, vs := range other {
+		all[k] = append(all[k], vs...)
+	}
+	return all, nil
+} 
 
 func (b Bag) Cookie(e env.Env) (*http.Cookie, error) {
 	var (
