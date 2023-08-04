@@ -2,9 +2,9 @@ package mule
 
 import (
 	"bytes"
+	"fmt"
 	"io"
 	"sort"
-	"fmt"
 	"unicode/utf8"
 )
 

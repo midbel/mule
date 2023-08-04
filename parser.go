@@ -1,14 +1,14 @@
 package mule
 
 import (
-	"strings"
-	"strconv"
 	"fmt"
 	"io"
+	"net/http"
 	"net/url"
 	"os"
 	"path/filepath"
-	"net/http"
+	"strconv"
+	"strings"
 
 	"github.com/midbel/mule/env"
 )

@@ -1,11 +1,13 @@
 package mule
 
 import (
-	"io"
 	"fmt"
-	"strings"
+	"io"
 	"net/http"
 	"net/url"
+	"strings"
+
+	"github.com/midbel/mule/env"
 )
 
 type Request struct {
@@ -72,6 +74,56 @@ func (r Request) Prepare() (*http.Request, error) {
 	}
 
 	return req, nil
+}
+
+type Bag map[string][]Word
+
+func (b Bag) Add(key string, value Word) {
+	b[key] = append(b[key], value)
+}
+
+func (b Bag) Set(key string, value Word) {
+	b[key] = []Word{value}
+}
+
+func (b Bag) Clone() Bag {
+	g := make(Bag)
+	for k, vs := range b {
+		g[k] = append(g[k], vs...)
+	}
+	return g
+}
+
+func (b Bag) Merge(other Bag) Bag {
+	return b
+}
+
+func (b Bag) Header(e env.Env) (http.Header, error) {
+	all := make(http.Header)
+	for k, vs := range b {
+		for i := range vs {
+			str, err := vs[i].Expand(e)
+			if err != nil {
+				return nil, err
+			}
+			all.Add(k, str)
+		}
+	}
+	return all, nil
+}
+
+func (b Bag) Values(e env.Env) (url.Values, error) {
+	all := make(url.Values)
+	for k, vs := range b {
+		for i := range vs {
+			str, err := vs[i].Expand(e)
+			if err != nil {
+				return nil, err
+			}
+			all.Add(k, str)
+		}
+	}
+	return all, nil
 }
 
 type ExpectFunc func(*http.Response) error
