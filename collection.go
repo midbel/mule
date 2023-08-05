@@ -53,11 +53,33 @@ func Enclosed(name string, parent *Collection) *Collection {
 	}
 }
 
+func (c *Collection) Path() []string {
+	var (
+		parts []string
+		sub = c
+	)
+	for sub != nil {
+		parts = append(parts, sub.Name)
+		sub = sub.parent
+	}
+	return parts
+}
+
 func (c *Collection) Execute(name string, w io.Writer) error {
 	r, err := c.Find(name)
 	if err != nil {
 		return err
 	}
+	others, err := r.Depends(c)
+	if err != nil {
+		return err
+	}
+	for _, n := range others {
+		if err := c.Execute(n, w); err != nil {
+			return err
+		}
+	}
+
 	req, err := r.Prepare(c)
 	if err != nil {
 		return err

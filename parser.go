@@ -238,6 +238,8 @@ func (p *Parser) parseRequest(collect *Collection) error {
 			req.post, err = p.parseScript(collect)
 		case "expect":
 			req.expect, err = p.parseExpect(collect)
+		case "depends":
+			req.depends, err = p.parseDepends()
 		default:
 			return p.unexpected()
 		}
@@ -334,22 +336,14 @@ func (p *Parser) parseKeyValues(set func(string, Word)) error {
 	return nil
 }
 
-func (p *Parser) parseDepends(env env.Env) ([]string, error) {
-	var list []string
+func (p *Parser) parseDepends() ([]Word, error) {
+	var list []Word
 	for !p.done() && !p.is(EOL) {
-		switch {
-		case p.is(Ident):
-			list = append(list, p.curr.Literal)
-		case p.is(Variable):
-			v, err := env.Resolve(p.curr.Literal)
-			if err != nil {
-				return nil, err
-			}
-			list = append(list, v)
-		default:
-			return nil, p.unexpected()
+		w, err := p.parseWord()
+		if err != nil {
+			return nil, err
 		}
-		p.next()
+		list = append(list, w)
 	}
 	return list, nil
 }

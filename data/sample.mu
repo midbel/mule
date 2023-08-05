@@ -9,6 +9,8 @@ collection test {
 
 	get demo {
 
+		depends 'test.test'
+
 		url http://localhost:9090/demo
 
 		query {
