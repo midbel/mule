@@ -1,3 +1,2 @@
-let x = 1;
-x = 2;
-console.log(x);
+let x = (10+1)/2;
+x

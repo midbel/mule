@@ -37,23 +37,25 @@ func NewParser(r io.Reader) *Parser {
 	if n, ok := r.(interface{ Name() string }); ok {
 		p.file = n.Name()
 	}
-	p.registerInfix(Assign, p.parseBinary)
+	p.registerInfix(Assign, p.parseAssignment)
+	p.registerInfix(AddAssign, p.parseAssignment)
+	p.registerInfix(SubAssign, p.parseAssignment)
+	p.registerInfix(MulAssign, p.parseAssignment)
+	p.registerInfix(DivAssign, p.parseAssignment)
+	p.registerInfix(ModAssign, p.parseAssignment)
+	p.registerInfix(PowAssign, p.parseAssignment)
+	p.registerInfix(LshiftAssign, p.parseAssignment)
+	p.registerInfix(RshiftAssign, p.parseAssignment)
+	p.registerInfix(BandAssign, p.parseAssignment)
+	p.registerInfix(BorAssign, p.parseAssignment)
 	p.registerInfix(Add, p.parseBinary)
-	p.registerInfix(AddAssign, p.parseBinary)
 	p.registerInfix(Sub, p.parseBinary)
-	p.registerInfix(SubAssign, p.parseBinary)
 	p.registerInfix(Mul, p.parseBinary)
-	p.registerInfix(MulAssign, p.parseBinary)
 	p.registerInfix(Div, p.parseBinary)
-	p.registerInfix(DivAssign, p.parseBinary)
 	p.registerInfix(Mod, p.parseBinary)
-	p.registerInfix(ModAssign, p.parseBinary)
 	p.registerInfix(Pow, p.parseBinary)
-	p.registerInfix(PowAssign, p.parseBinary)
 	p.registerInfix(Lshift, p.parseBinary)
-	p.registerInfix(LshiftAssign, p.parseBinary)
 	p.registerInfix(Rshift, p.parseBinary)
-	p.registerInfix(RshiftAssign, p.parseBinary)
 	p.registerInfix(Eq, p.parseBinary)
 	p.registerInfix(Ne, p.parseBinary)
 	p.registerInfix(Lt, p.parseBinary)
@@ -63,9 +65,7 @@ func NewParser(r io.Reader) *Parser {
 	p.registerInfix(And, p.parseBinary)
 	p.registerInfix(Or, p.parseBinary)
 	p.registerInfix(Band, p.parseBinary)
-	p.registerInfix(BandAssign, p.parseBinary)
 	p.registerInfix(Bor, p.parseBinary)
-	p.registerInfix(BorAssign, p.parseBinary)
 	p.registerInfix(Lsquare, p.parseIndex)
 	p.registerInfix(Lparen, p.parseCall)
 	p.registerInfix(Dot, p.parseDot)
@@ -78,7 +78,7 @@ func NewParser(r io.Reader) *Parser {
 	p.registerPrefix(Number, p.parseNumber)
 	p.registerPrefix(Boolean, p.parseBool)
 	p.registerPrefix(Lsquare, p.parseArray)
-	p.registerPrefix(Lbrace, p.parseObject)
+	p.registerPrefix(Lbrace, p.parseHash)
 	p.registerPrefix(Lparen, p.parseGroup)
 	p.registerPrefix(Not, p.parseUnary)
 	p.registerPrefix(Sub, p.parseUnary)
@@ -130,6 +130,52 @@ func (p *Parser) parseBinary(left Expression) (Expression, error) {
 	}
 	b.Right = right
 	return b, nil
+}
+
+func (p *Parser) parseAssignment(left Expression) (Expression, error) {
+	if _, ok := left.(Variable); !ok {
+		return nil, fmt.Errorf("expected variable")
+	}
+	op := p.curr.Type
+	p.next()
+	right, err := p.parseExpression(powLowest)
+	if err != nil {
+		return nil, err
+	}
+	var ag Assignment
+	switch op {
+	default:
+	case AddAssign:
+		op = Add
+	case SubAssign:
+		op = Sub
+	case MulAssign:
+		op = Mul
+	case DivAssign:
+		op = Div
+	case PowAssign:
+		op = Pow
+	case ModAssign:
+		op = Mod
+	case BandAssign:
+		op = Band
+	case BorAssign:
+		op = Bor
+	case LshiftAssign:
+		op = Lshift
+	case RshiftAssign:
+		op = Rshift
+	}
+	ag.Ident = left
+	if op != Assign {
+		right = Binary{
+			Op:    op,
+			Left:  left,
+			Right: right,
+		}
+	}
+	ag.Expr = right
+	return ag, nil
 }
 
 func (p *Parser) parseCall(left Expression) (Expression, error) {
@@ -259,11 +305,11 @@ func (p *Parser) parseArray() (Expression, error) {
 	return arr, p.expect(Rsquare)
 }
 
-func (p *Parser) parseObject() (Expression, error) {
+func (p *Parser) parseHash() (Expression, error) {
 	if err := p.expect(Lbrace); err != nil {
 		return nil, err
 	}
-	obj := Object{
+	obj := Hash{
 		List: make(map[Expression]Expression),
 	}
 	for !p.done() && !p.is(Rbrace) {
@@ -715,7 +761,6 @@ func (p *Parser) next() {
 
 const (
 	powLowest int = iota
-	powComma
 	powAssign
 	powTernary
 	powLogical
@@ -732,7 +777,6 @@ const (
 )
 
 var bindings = map[rune]int{
-	Comma:        powComma,
 	Assign:       powAssign,
 	AddAssign:    powAssign,
 	SubAssign:    powAssign,

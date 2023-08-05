@@ -10,7 +10,10 @@ import (
 )
 
 func main() {
-	scan := flag.Bool("s", false, "scan")
+	var (
+		scanning = flag.Bool("s", false, "scan")
+		parsing  = flag.Bool("p", false, "parse")
+	)
 	flag.Parse()
 
 	r, err := os.Open(flag.Arg(0))
@@ -20,10 +23,16 @@ func main() {
 	}
 	defer r.Close()
 	switch {
-	case *scan:
+	case *scanning:
 		err = scanFile(r)
-	default:
+	case *parsing:
 		err = parseFile(r)
+	default:
+		var val interface{}
+		val, err = eval.Eval(r)
+		if err == nil {
+			fmt.Println(val)
+		}
 	}
 	if err != nil {
 		fmt.Fprintln(os.Stderr, err)

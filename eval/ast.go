@@ -1,6 +1,6 @@
 package eval
 
-type Expression interface{}
+type Node interface{}
 
 type Primitive[T bool | float64 | string] struct {
 	Literal T
@@ -49,8 +49,13 @@ type Array struct {
 	List []Expression
 }
 
-type Object struct {
+type Hash struct {
 	List map[Expression]Expression
+}
+
+type Assignment struct {
+	Ident Expression
+	Expr  Expression
 }
 
 type Binary struct {
