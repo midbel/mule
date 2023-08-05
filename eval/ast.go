@@ -6,6 +6,28 @@ type Primitive[T bool | float64 | string] struct {
 	Literal T
 }
 
+func createString(str string) Primitive[string] {
+	return Primitive[string]{
+		Literal: str,
+	}
+}
+
+func createNumber(v float64) Primitive[float64] {
+	return Primitive[float64]{
+		Literal: v,
+	}
+}
+
+func createBool(b bool) Primitive[bool] {
+	return Primitive[bool]{
+		Literal: b,
+	}
+}
+
+type Variable struct {
+	Ident string
+}
+
 type Null struct{}
 
 type Block struct {
@@ -47,7 +69,7 @@ type Let struct {
 }
 
 type Argument struct {
-	Ident string
+	Ident   string
 	Default Expression
 }
 

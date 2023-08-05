@@ -354,12 +354,18 @@ func (s *Scanner) scanPunct(tok *Token) {
 		if s.peek() == equal {
 			s.read()
 			tok.Type = Le
+		} else if s.peek() == langle {
+			s.read()
+			tok.Type = Lshift
 		}
 	case rangle:
 		tok.Type = Gt
 		if s.peek() == equal {
 			s.read()
 			tok.Type = Ge
+		} else if s.peek() == rangle {
+			s.read()
+			tok.Type = Rshift
 		}
 	default:
 		tok.Type = Invalid
