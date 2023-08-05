@@ -2,34 +2,37 @@ package env
 
 import (
 	"fmt"
+	"errors"
 )
 
-type Env interface {
-	Define(string, string)
-	Resolve(string) (string, error)
+var ErrNotDefined = errors.New("variable not defined")
+
+type Env[T any] interface {
+	Define(string, T)
+	Resolve(string) (T, error)
 }
 
-type Environment struct {
-	parent Env
-	values map[string]string
+type environ[T any] struct {
+	parent Env[T]
+	values map[string]T
 }
 
-func EmptyEnv() Env {
-	return EnclosedEnv(nil)
+func EmptyEnv[T any]() Env[T] {
+	return EnclosedEnv[T](nil)
 }
 
-func EnclosedEnv(parent Env) Env {
-	return &Environment{
+func EnclosedEnv[T any](parent Env[T]) Env[T] {
+	return &environ[T] {
 		parent: parent,
-		values: make(map[string]string),
+		values: make(map[string]T),
 	}
 }
 
-func (e *Environment) Define(key, value string) {
+func (e *environ[T]) Define(key string, value T) {
 	e.values[key] = value
 }
 
-func (e *Environment) Resolve(key string) (string, error) {
+func (e *environ[T]) Resolve(key string) (T, error) {
 	v, ok := e.values[key]
 	if ok {
 		return v, nil
@@ -37,5 +40,5 @@ func (e *Environment) Resolve(key string) (string, error) {
 	if e.parent != nil {
 		return e.parent.Resolve(key)
 	}
-	return "", fmt.Errorf("%s: variable not defined", key)
+	return v, fmt.Errorf("%s: %w", key, ErrNotDefined)
 }
