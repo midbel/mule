@@ -1,6 +1,6 @@
 let x = 0
 
-if (true) {
+if (false) {
 	x = 10
 } else {
 	x = 100

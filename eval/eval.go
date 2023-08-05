@@ -211,8 +211,7 @@ func evalAssignment(a Assignment, ev env.Env[Value]) (Value, error) {
 	if err != nil {
 		return nil, err
 	}
-	ev.Define(ident.Ident, value)
-	return value, nil
+	return value, ev.Assign(ident.Ident, value)
 }
 
 func evalUnary(u Unary, ev env.Env[Value]) (Value, error) {
