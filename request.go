@@ -28,9 +28,9 @@ type Request struct {
 	body     Word
 
 	cookies []Bag
-	expect func(*http.Response) error
+	expect  func(*http.Response) error
 
-	pre string
+	pre  string
 	post string
 }
 
@@ -46,7 +46,7 @@ func Prepare(name, method string) Request {
 	}
 }
 
-func (r Request) Depends(ev env.Env) ([]string, error) {
+func (r Request) Depends(ev env.Env[string]) ([]string, error) {
 	var list []string
 	for i := range r.depends {
 		str, err := r.depends[i].Expand(ev)
@@ -58,7 +58,7 @@ func (r Request) Depends(ev env.Env) ([]string, error) {
 	return list, nil
 }
 
-func (r Request) Prepare(ev env.Env) (*http.Request, error) {
+func (r Request) Prepare(ev env.Env[string]) (*http.Request, error) {
 	req, err := r.getRequest(ev)
 	if err != nil {
 		return nil, err
@@ -66,7 +66,7 @@ func (r Request) Prepare(ev env.Env) (*http.Request, error) {
 	return req, r.setHeaders(req, ev)
 }
 
-func (r Request) getRequest(ev env.Env) (*http.Request, error) {
+func (r Request) getRequest(ev env.Env[string]) (*http.Request, error) {
 	var body io.Reader
 	if r.body != nil {
 		tmp, err := r.body.Expand(ev)
@@ -87,7 +87,7 @@ func (r Request) getRequest(ev env.Env) (*http.Request, error) {
 	return http.NewRequest(r.method, uri.String(), body)
 }
 
-func (r Request) setHeaders(req *http.Request, ev env.Env) error {
+func (r Request) setHeaders(req *http.Request, ev env.Env[string]) error {
 	hdr, err := r.headers.Header(ev)
 	if err != nil {
 		return err
@@ -107,7 +107,7 @@ func (r Request) setHeaders(req *http.Request, ev env.Env) error {
 	return r.attachCookies(req, ev)
 }
 
-func (r Request) attachCookies(req *http.Request, ev env.Env) error {
+func (r Request) attachCookies(req *http.Request, ev env.Env[string]) error {
 	for _, c := range r.cookies {
 		cook, err := c.Cookie(ev)
 		if err != nil {
@@ -143,7 +143,7 @@ func (b Bag) Merge(other Bag) Bag {
 	return b
 }
 
-func (b Bag) Header(e env.Env) (http.Header, error) {
+func (b Bag) Header(e env.Env[string]) (http.Header, error) {
 	all := make(http.Header)
 	for k, vs := range b {
 		for i := range vs {
@@ -157,7 +157,7 @@ func (b Bag) Header(e env.Env) (http.Header, error) {
 	return all, nil
 }
 
-func (b Bag) Values(e env.Env) (url.Values, error) {
+func (b Bag) Values(e env.Env[string]) (url.Values, error) {
 	all := make(url.Values)
 	for k, vs := range b {
 		for i := range vs {
@@ -171,7 +171,7 @@ func (b Bag) Values(e env.Env) (url.Values, error) {
 	return all, nil
 }
 
-func (b Bag) ValuesWith(e env.Env, other url.Values) (url.Values, error) {
+func (b Bag) ValuesWith(e env.Env[string], other url.Values) (url.Values, error) {
 	all, err := b.Values(e)
 	if err != nil {
 		return nil, err
@@ -182,7 +182,7 @@ func (b Bag) ValuesWith(e env.Env, other url.Values) (url.Values, error) {
 	return all, nil
 }
 
-func (b Bag) Cookie(e env.Env) (*http.Cookie, error) {
+func (b Bag) Cookie(e env.Env[string]) (*http.Cookie, error) {
 	var (
 		cook http.Cookie
 		err  error

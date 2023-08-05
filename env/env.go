@@ -1,8 +1,8 @@
 package env
 
 import (
-	"fmt"
 	"errors"
+	"fmt"
 )
 
 var ErrNotDefined = errors.New("variable not defined")
@@ -22,7 +22,7 @@ func EmptyEnv[T any]() Env[T] {
 }
 
 func EnclosedEnv[T any](parent Env[T]) Env[T] {
-	return &environ[T] {
+	return &environ[T]{
 		parent: parent,
 		values: make(map[string]T),
 	}

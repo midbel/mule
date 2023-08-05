@@ -22,7 +22,7 @@ type Collection struct {
 
 	parent *Collection
 
-	env         env.Env
+	env         env.Env[string]
 	headers     Bag
 	query       Bag
 	requests    []Request
@@ -49,14 +49,14 @@ func Enclosed(name string, parent *Collection) *Collection {
 	return &Collection{
 		Info:   info,
 		parent: parent,
-		env:    env.EmptyEnv(),
+		env:    env.EmptyEnv[string](),
 	}
 }
 
 func (c *Collection) Path() []string {
 	var (
 		parts []string
-		sub = c
+		sub   = c
 	)
 	for sub != nil {
 		parts = append(parts, sub.Name)

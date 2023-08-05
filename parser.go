@@ -255,7 +255,7 @@ func (p *Parser) parseRequest(collect *Collection) error {
 	return p.expect(Rbrace)
 }
 
-func (p *Parser) parseScript(ev env.Env) (string, error) {
+func (p *Parser) parseScript(ev env.Env[string]) (string, error) {
 	w, err := p.parseWord()
 	if err != nil {
 		return "", err
@@ -263,7 +263,7 @@ func (p *Parser) parseScript(ev env.Env) (string, error) {
 	return w.Expand(ev)
 }
 
-func (p *Parser) parseExpect(ev env.Env) (ExpectFunc, error) {
+func (p *Parser) parseExpect(ev env.Env[string]) (ExpectFunc, error) {
 	w, err := p.parseWord()
 	if err != nil {
 		return nil, err
@@ -404,7 +404,7 @@ func (p *Parser) parseVariables(collect *Collection) error {
 	return p.expect(Rbrace)
 }
 
-func (p *Parser) parseTLS(env env.Env) (interface{}, error) {
+func (p *Parser) parseTLS(env env.Env[string]) (interface{}, error) {
 	if err := p.expect(Lbrace); err != nil {
 		return nil, err
 	}
