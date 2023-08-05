@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 
 	"github.com/midbel/mule/env"
+	"github.com/midbel/mule/eval"
 )
 
 type Parser struct {
@@ -255,12 +256,16 @@ func (p *Parser) parseRequest(collect *Collection) error {
 	return p.expect(Rbrace)
 }
 
-func (p *Parser) parseScript(ev env.Env[string]) (string, error) {
+func (p *Parser) parseScript(ev env.Env[string]) (eval.Expression, error) {
 	w, err := p.parseWord()
 	if err != nil {
 		return "", err
 	}
-	return w.Expand(ev)
+	str, err := w.Expand(ev)
+	if err == nil {
+		return eval.ParseString(str)
+	}
+	return "", err
 }
 
 func (p *Parser) parseExpect(ev env.Env[string]) (ExpectFunc, error) {

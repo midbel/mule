@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"github.com/midbel/mule/env"
+	"github.com/midbel/mule/eval"
 )
 
 type Request struct {
@@ -30,8 +31,8 @@ type Request struct {
 	cookies []Bag
 	expect  func(*http.Response) error
 
-	pre  string
-	post string
+	pre  eval.Expression
+	post eval.Expression
 }
 
 func Prepare(name, method string) Request {
