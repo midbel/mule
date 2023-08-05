@@ -70,8 +70,10 @@ func eval(node Expression, ev env.Env[Value]) (Value, error) {
 	case Continue:
 		return nil, errContinue
 	case Try:
+		return evalTry(n, ev)
 	case Throw:
 	case Catch:
+		return evalCatch(n, ev)
 	case Function:
 	default:
 		return nil, fmt.Errorf("%T unsupported node type", node)
@@ -259,4 +261,20 @@ func evalWhile(w While, ev env.Env[Value]) (Value, error) {
 		}
 	}
 	return res, err
+}
+
+func evalTry(t Try, ev env.Env[Value]) (Value, error) {
+	tmp := env.EnclosedEnv[Value](ev)
+	v, err := eval(t.Body, tmp)
+	if errors.Is(err, errThrow) && t.Catch != nil {
+		v, err = eval(t.Catch, tmp)
+	}
+	if t.Finally != nil {
+		eval(t.Finally, tmp)
+	}
+	return v, err
+}
+
+func evalCatch(c Catch, ev env.Env[Value]) (Value, error) {
+	return nil, nil
 }
