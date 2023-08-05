@@ -3,8 +3,16 @@ package eval
 import (
 	"fmt"
 	"io"
+	"errors"
 
 	"github.com/midbel/mule/env"
+)
+
+var (
+	errBreak = errors.New("break")
+	errContinue = errors.New("continue")
+	errReturn = errors.New("return")
+	errThrow = errors.New("throw")
 )
 
 func Eval(r io.Reader) (Value, error) {
@@ -39,8 +47,12 @@ func eval(node Expression, ev env.Env[Value]) (Value, error) {
 		return evalHash(n, ev)
 	case Call:
 		return evalCall(n, ev)
+	case Return:
+		return evalReturn(n, ev)
 	case Block:
 		return evalBlock(n, ev)
+	case Assignment:
+		return evalAssignment(n, ev)
 	case Binary:
 		return evalBinary(n, ev)
 	case Unary:
@@ -48,10 +60,17 @@ func eval(node Expression, ev env.Env[Value]) (Value, error) {
 	case Let:
 		return evalLet(n, ev)
 	case If:
+		return evalIf(n, ev)
 	case Switch:
 	case For:
 	case While:
+		return evalWhile(n, ev)
+	case Break:
+		return nil, errBreak
+	case Continue:
+		return nil, errContinue
 	case Try:
+	case Throw:
 	case Catch:
 	case Function:
 	default:
@@ -102,6 +121,14 @@ func evalHash(h Hash, ev env.Env[Value]) (Value, error) {
 
 func evalCall(c Call, ev env.Env[Value]) (Value, error) {
 	return nil, nil
+}
+
+func evalReturn(r Return, ev env.Env[Value]) (Value, error) {
+	v, err := eval(r.Expr, ev)
+	if err == nil {
+		err = errReturn
+	}
+	return v, err
 }
 
 func evalBlock(b Block, ev env.Env[Value]) (Value, error) {
@@ -196,4 +223,40 @@ func evalLet(e Let, ev env.Env[Value]) (Value, error) {
 		ev.Define(e.Ident, val)
 	}
 	return val, err
+}
+
+func evalIf(i If, ev env.Env[Value]) (Value, error) {
+	v, err := eval(i.Cdt, ev)
+	if err != nil {
+		return nil, err
+	}
+	tmp := env.EnclosedEnv[Value](ev)
+	if v.True() {
+		return eval(i.Csq, tmp)
+	}
+	if i.Alt != nil {
+		return eval(i.Alt, tmp)
+	}
+	return nil, nil
+}
+
+func evalWhile(w While, ev env.Env[Value]) (Value, error) {
+	var (
+		res Value
+		err error
+	)
+	for {
+		v, err := eval(w.Cdt, ev)
+		if err != nil {
+			return nil, err
+		}
+		if !v.True() {
+			break
+		}
+		res, err = eval(w.Body, env.EnclosedEnv[Value](ev))
+		if err != nil {
+			return nil, err
+		}
+	}
+	return res, err
 }
