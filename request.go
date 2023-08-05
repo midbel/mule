@@ -28,9 +28,10 @@ type Request struct {
 	body     Word
 
 	cookies []Bag
+	expect func(*http.Response) error
 
-	// cookies []http.Cookie
-	// expect func(*http.Response) error
+	pre string
+	post string
 }
 
 func Prepare(name, method string) Request {
@@ -214,6 +215,11 @@ func (b Bag) Cookie(e env.Env) (*http.Cookie, error) {
 		}
 	}
 	return &cook, nil
+}
+
+type NamedBag struct {
+	Name string
+	Bag
 }
 
 type ExpectFunc func(*http.Response) error

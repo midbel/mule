@@ -7,7 +7,6 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
-	"strconv"
 
 	"github.com/midbel/mule/env"
 )
@@ -233,6 +232,12 @@ func (p *Parser) parseRequest(collect *Collection) error {
 			req.user, err = p.parseWord()
 		case "password":
 			req.pass, err = p.parseWord()
+		case "pre":
+			req.pre, err = p.parseScript(collect)
+		case "post":
+			req.post, err = p.parseScript(collect)
+		case "expect":
+			req.expect, err = p.parseExpect(collect)
 		default:
 			return p.unexpected()
 		}
@@ -246,6 +251,30 @@ func (p *Parser) parseRequest(collect *Collection) error {
 	}
 	collect.AddRequest(req)
 	return p.expect(Rbrace)
+}
+
+func (p *Parser) parseScript(ev env.Env) (string, error) {
+	w, err := p.parseWord()
+	if err != nil {
+		return "", err
+	}
+	return w.Expand(ev)
+}
+
+func (p *Parser) parseExpect(ev env.Env) (ExpectFunc, error) {
+	w, err := p.parseWord()
+	if err != nil {
+		return nil, err
+	}
+	n, err := w.ExpandInt(ev)
+	if err == nil {
+		return expectCode(n)
+	}
+	str, err := w.Expand(ev)
+	if err != nil {
+		return nil, err
+	}
+	return expectCodeRange(str)
 }
 
 func (p *Parser) parseWord() (Word, error) {
@@ -305,24 +334,6 @@ func (p *Parser) parseKeyValues(set func(string, Word)) error {
 	return nil
 }
 
-func (p *Parser) parseExpect(env env.Env) (ExpectFunc, error) {
-	var (
-		fn  ExpectFunc
-		err error
-	)
-	switch {
-	case p.is(Number):
-		code, _ := strconv.Atoi(p.curr.Literal)
-		fn, err = expectCode(code)
-	case p.is(Ident):
-		fn, err = expectCodeRange(p.curr.Literal)
-	default:
-		return nil, p.unexpected()
-	}
-	p.next()
-	return fn, err
-}
-
 func (p *Parser) parseDepends(env env.Env) ([]string, error) {
 	var list []string
 	for !p.done() && !p.is(EOL) {
@@ -341,28 +352,6 @@ func (p *Parser) parseDepends(env env.Env) ([]string, error) {
 		p.next()
 	}
 	return list, nil
-}
-
-func (p *Parser) parseScript(env env.Env) error {
-	var script string
-	switch {
-	case p.is(Macro):
-		dat, err := p.parseMacro()
-		if err != nil {
-			return err
-		}
-		s, ok := dat.(string)
-		if !ok {
-			return fmt.Errorf("no string received from macro")
-		}
-		script = s
-	case p.is(String):
-		script = p.curr.Literal
-	default:
-		return fmt.Errorf("script should be given in string/heredoc or via a macro")
-	}
-	_ = script
-	return nil
 }
 
 func (p *Parser) parseBag() (Bag, error) {
