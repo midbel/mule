@@ -209,10 +209,14 @@ func (p *Parser) parseString() (Expression, error) {
 func (p *Parser) parseNumber() (Expression, error) {
 	defer p.next()
 	n, err := strconv.ParseFloat(p.curr.Literal, 64)
+	if err == nil {
+		return createNumber(n), nil
+	}
+	x, err := strconv.ParseInt(p.curr.Literal, 0, 64)
 	if err != nil {
 		return nil, err
 	}
-	return createNumber(n), nil
+	return createNumber(float64(x)), nil
 }
 
 func (p *Parser) parseBool() (Expression, error) {

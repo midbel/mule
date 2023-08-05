@@ -298,7 +298,58 @@ func (s *Scanner) scanString(tok *Token) {
 	tok.Literal = s.literal()
 }
 
+func (s *Scanner) scanBinary(tok *Token) {
+	s.write()
+	s.read()
+	for !s.done() && isBin(s.char) {
+		s.write()
+		s.read()
+	}
+}
+
+func (s *Scanner) scanHexa(tok *Token) {
+	s.write()
+	s.read()
+	for !s.done() && isHex(s.char) {
+		s.write()
+		s.read()
+	}
+}
+
+func (s *Scanner) scanOctal(tok *Token) {
+	s.write()
+	s.read()
+	for !s.done() && isOctal(s.char) {
+		s.write()
+		s.read()
+	}
+}
+
 func (s *Scanner) scanNumber(tok *Token) {
+	if k := s.peek(); s.char == '0' && k == 'b' || k == 'x' || k == 'o' {
+		s.write()
+		s.read()
+		switch s.char {
+		case 'o':
+			s.scanOctal(tok)
+		case 'b':
+			s.scanBinary(tok)
+		case 'x':
+			s.scanHexa(tok)
+		}
+		return
+	}
+	var zeros int
+	if s.char == '0' {
+		for !s.done() && s.char == '0' {
+			s.write()
+			s.read()
+			zeros++
+		}
+		if zeros > 1 {
+			tok.Type = Invalid
+		}
+	}
 	for !s.done() && isDigit(s.char) {
 		s.write()
 		s.read()
@@ -566,6 +617,18 @@ func isLetter(r rune) bool {
 
 func isDigit(r rune) bool {
 	return r >= '0' && r <= '9'
+}
+
+func isBin(r rune) bool {
+	return r == '0' || r == '1'
+}
+
+func isOctal(r rune) bool {
+	return r >= '0' && r <= '7'
+}
+
+func isHex(r rune) bool {
+	return isDigit(r) || (r >= 'a' && r <= 'f') && (r >= 'A' && r <= 'F')
 }
 
 func isAlpha(r rune) bool {
