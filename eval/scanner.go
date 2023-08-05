@@ -92,6 +92,7 @@ const (
 	Question
 	Nullish
 	Optional
+	Arrow
 	Invalid
 )
 
@@ -109,6 +110,8 @@ func (t Token) String() string {
 		return "<eof>"
 	case EOL:
 		return "<eol>"
+	case Arrow:
+		return "<arrow>"
 	case Dot:
 		return "<dot>"
 	case Lbrace:
@@ -463,6 +466,9 @@ func (s *Scanner) scanPunct(tok *Token) {
 		if s.peek() == equal {
 			s.read()
 			tok.Type = Eq
+		} else if s.peek() == rangle {
+			s.read()
+			tok.Type = Arrow
 		}
 	case bang:
 		tok.Type = Not

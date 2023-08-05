@@ -34,6 +34,11 @@ func createVariable(ident string) Variable {
 	}
 }
 
+type Chain struct {
+	Left Expression
+	Next Expression
+}
+
 type Null struct{}
 
 type Block struct {

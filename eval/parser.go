@@ -175,7 +175,16 @@ func (p *Parser) parseIndex(left Expression) (Expression, error) {
 }
 
 func (p *Parser) parseDot(left Expression) (Expression, error) {
-	return nil, nil
+	p.next()
+	ch := Chain{
+		Left: left,
+	}
+	next, err := p.parseExpression(powLowest)
+	if err != nil {
+		return nil, err
+	}
+	ch.Next = next
+	return ch, nil
 }
 
 func (p *Parser) parseTernary(left Expression) (Expression, error) {
@@ -716,6 +725,7 @@ const (
 	powShift
 	powAdd
 	powMul
+	powCall
 	powIndex
 	powDot
 	powUnary
@@ -754,6 +764,7 @@ var bindings = map[rune]int{
 	Div:          powMul,
 	Mod:          powMul,
 	Pow:          powMul,
+	Lparen:       powCall,
 	Lsquare:      powIndex,
 	Dot:          powDot,
 }
