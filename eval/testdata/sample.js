@@ -1,8 +1,18 @@
 let x = 1;
-JSON.parse('{"id": 123, "code": "midbel"}') // parse json string
+x = 2;
 
-function add(x, y) {
-	return x + y
+if ( x > 10) {
+	a = 0
+} else if x == 10 {
+	b = 1
+} else {
+	c = -1
 }
 
-let two = add(1, 1)
+try {
+	a / 0
+} catch(error) {
+	a = 0
+}
+
+test ? 0 : 1;

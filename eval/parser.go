@@ -8,7 +8,11 @@ import (
 )
 
 func ParseString(str string) (Expression, error) {
-	return NewParser(strings.NewReader(str)).Parse()
+	return Parse(strings.NewReader(str))
+}
+
+func Parse(r io.Reader) (Expression, error) {
+	return NewParser(r).Parse()
 }
 
 type Parser struct {
@@ -25,6 +29,7 @@ type Parser struct {
 
 func NewParser(r io.Reader) *Parser {
 	p := Parser{
+		scan:     Scan(r),
 		infix:    make(map[rune]func(Expression) (Expression, error)),
 		prefix:   make(map[rune]func() (Expression, error)),
 		keywords: make(map[string]func() (Expression, error)),
@@ -32,6 +37,7 @@ func NewParser(r io.Reader) *Parser {
 	if n, ok := r.(interface{ Name() string }); ok {
 		p.file = n.Name()
 	}
+	p.registerInfix(Assign, p.parseBinary)
 	p.registerInfix(Add, p.parseBinary)
 	p.registerInfix(Sub, p.parseBinary)
 	p.registerInfix(Mul, p.parseBinary)
@@ -54,6 +60,8 @@ func NewParser(r io.Reader) *Parser {
 	p.registerInfix(Lparen, p.parseCall)
 	p.registerInfix(Dot, p.parseDot)
 	p.registerInfix(Question, p.parseTernary)
+	// p.registerInfix(Nullish, p.parseInfix)
+	// p.registerInfix(Optional, p.parseInfix)
 
 	p.registerPrefix(Ident, p.parseIdentifier)
 	p.registerPrefix(String, p.parseString)
@@ -69,18 +77,32 @@ func NewParser(r io.Reader) *Parser {
 	p.registerKeyword("let", p.parseLet)
 	p.registerKeyword("const", p.parseConst)
 	p.registerKeyword("if", p.parseIf)
+	p.registerKeyword("else", p.parseElse)
 	p.registerKeyword("switch", p.parseSwitch)
-	p.registerKeyword("do", p.parseWhile)
 	p.registerKeyword("while", p.parseWhile)
 	p.registerKeyword("for", p.parseFor)
 	p.registerKeyword("function", p.parseFunction)
+	p.registerKeyword("try", p.parseTry)
+	p.registerKeyword("catch", p.parseCatch)
+	p.registerKeyword("return", p.parseReturn)
+	p.registerKeyword("break", p.parseBreak)
+	p.registerKeyword("continue", p.parseContinue)
+
+	p.next()
+	p.next()
 	return &p
 }
 
 func (p *Parser) Parse() (Expression, error) {
 	var b Block
 	for !p.done() {
-
+		p.skip(Comment)
+		e, err := p.parseExpression(powLowest)
+		if err != nil {
+			return nil, err
+		}
+		b.List = append(b.List, e)
+		p.skip(EOL)
 	}
 	return b, nil
 }
@@ -124,15 +146,26 @@ func (p *Parser) parseDot(left Expression) (Expression, error) {
 }
 
 func (p *Parser) parseTernary(left Expression) (Expression, error) {
-	return nil, nil
+	var (
+		expr If
+		err  error
+	)
+	expr.Cdt = left
+	p.next()
+	expr.Csq, err = p.parseExpression(bindings[Question])
+	if err != nil {
+		return nil, err
+	}
+	if err := p.expect(Colon); err != nil {
+		return nil, err
+	}
+	expr.Alt, err = p.parseExpression(bindings[Question])
+	return expr, err
 }
 
 func (p *Parser) parseIdentifier() (Expression, error) {
-	v := Variable{
-		Ident: p.curr.Literal,
-	}
-	p.next()
-	return v, nil
+	defer p.next()
+	return createVariable(p.curr.Literal), nil
 }
 
 func (p *Parser) parseString() (Expression, error) {
@@ -167,14 +200,21 @@ func (p *Parser) parseObject() (Expression, error) {
 }
 
 func (p *Parser) parseGroup() (Expression, error) {
-	p.next()
-	return nil, nil
+	if err := p.expect(Lparen); err != nil {
+		return nil, err
+	}
+	expr, err := p.parseExpression(powLowest)
+	if err != nil {
+		return nil, err
+	}
+	return expr, p.expect(Rparen)
 }
 
 func (p *Parser) parseUnary() (Expression, error) {
 	u := Unary{
 		Op: p.curr.Type,
 	}
+	p.next()
 	right, err := p.parseExpression(powLowest)
 	if err != nil {
 		return nil, err
@@ -193,7 +233,22 @@ func (p *Parser) parseKeyword() (Expression, error) {
 
 func (p *Parser) parseLet() (Expression, error) {
 	p.next()
-	return nil, nil
+	var let Let
+	if !p.is(Ident) {
+		return nil, p.unexpected()
+	}
+	let.Ident = p.curr.Literal
+	p.next()
+	if !p.is(Assign) {
+		return nil, p.unexpected()
+	}
+	p.next()
+	expr, err := p.parseExpression(powLowest)
+	if err != nil {
+		return nil, err
+	}
+	let.Expr = expr
+	return let, nil
 }
 
 func (p *Parser) parseConst() (Expression, error) {
@@ -209,8 +264,88 @@ func (p *Parser) parseWhile() (Expression, error) {
 	return nil, nil
 }
 
+func (p *Parser) parseBreak() (Expression, error) {
+	p.next()
+	var br Break
+	if p.is(Ident) {
+		br.Label = p.curr.Literal
+		p.next()
+	}
+	return br, nil
+}
+
+func (p *Parser) parseContinue() (Expression, error) {
+	p.next()
+	var ct Continue
+	if p.is(Ident) {
+		ct.Label = p.curr.Literal
+		p.next()
+	}
+	return ct, nil
+}
+
 func (p *Parser) parseIf() (Expression, error) {
-	return nil, nil
+	p.next()
+	var (
+		expr If
+		err  error
+	)
+	expr.Cdt, err = p.parseExpression(powLowest)
+	if err != nil {
+		return nil, err
+	}
+	expr.Csq, err = p.parseBlock()
+	if err != nil {
+		return nil, err
+	}
+	if p.is(Keyword) {
+		expr.Alt, err = p.parseKeyword()
+	}
+	return expr, err
+}
+
+func (p *Parser) parseElse() (Expression, error) {
+	p.next()
+	if p.is(Keyword) {
+		return p.parseKeyword()
+	}
+	return p.parseBlock()
+}
+
+func (p *Parser) parseTry() (Expression, error) {
+	p.next()
+	var (
+		try Try
+		err error
+	)
+	try.Body, err = p.parseBlock()
+	if err != nil {
+		return nil, err
+	}
+	try.Catch, err = p.parseKeyword()
+	return try, err
+}
+
+func (p *Parser) parseCatch() (Expression, error) {
+	p.next()
+	if err := p.expect(Lparen); err != nil {
+		return nil, err
+	}
+	if err := p.expect(Ident); err != nil {
+		return nil, err
+	}
+	var (
+		err   error
+		catch Catch
+	)
+	catch = Catch{
+		Err: p.curr.Literal,
+	}
+	if err = p.expect(Rparen); err != nil {
+		return nil, err
+	}
+	catch.Body, err = p.parseBlock()
+	return catch, err
 }
 
 func (p *Parser) parseSwitch() (Expression, error) {
@@ -223,6 +358,37 @@ func (p *Parser) parseCase() (Expression, error) {
 
 func (p *Parser) parseFunction() (Expression, error) {
 	return nil, nil
+}
+
+func (p *Parser) parseReturn() (Expression, error) {
+	p.next()
+	var (
+		ret Return
+		err error
+	)
+	ret.Expr, err = p.parseExpression(powLowest)
+	return ret, err
+}
+
+func (p *Parser) parseBlock() (Expression, error) {
+	var b Block
+	if err := p.expect(Lbrace); err != nil {
+		return nil, err
+	}
+	for !p.done() && !p.is(Rbrace) {
+		e, err := p.parseExpression(powLowest)
+		if err != nil {
+			return nil, err
+		}
+		b.List = append(b.List, e)
+	}
+	if err := p.expect(Rbrace); err != nil {
+		return nil, err
+	}
+	if len(b.List) == 1 {
+		return b.List[0], nil
+	}
+	return b, nil
 }
 
 func (p *Parser) parseExpression(pow int) (Expression, error) {
@@ -294,6 +460,7 @@ const (
 	powLowest int = iota
 	powComma
 	powAssign
+	powTernary
 	powLogical
 	powBitwise
 	powEqual
@@ -301,29 +468,34 @@ const (
 	powShift
 	powAdd
 	powMul
+	powIndex
+	powDot
 	powUnary
 )
 
 var bindings = map[rune]int{
-	Comma:  powComma,
-	Assign: powAssign,
-	Colon:  powAssign,
-	And:    powLogical,
-	Or:     powLogical,
-	Band:   powBitwise,
-	Bor:    powBitwise,
-	Eq:     powEqual,
-	Ne:     powEqual,
-	Lt:     powCompare,
-	Le:     powCompare,
-	Gt:     powCompare,
-	Ge:     powCompare,
-	Lshift: powShift,
-	Rshift: powShift,
-	Add:    powAdd,
-	Sub:    powAdd,
-	Mul:    powMul,
-	Div:    powMul,
-	Mod:    powMul,
-	Pow:    powMul,
+	Comma:    powComma,
+	Assign:   powAssign,
+	Question: powTernary,
+	Colon:    powAssign,
+	And:      powLogical,
+	Or:       powLogical,
+	Band:     powBitwise,
+	Bor:      powBitwise,
+	Eq:       powEqual,
+	Ne:       powEqual,
+	Lt:       powCompare,
+	Le:       powCompare,
+	Gt:       powCompare,
+	Ge:       powCompare,
+	Lshift:   powShift,
+	Rshift:   powShift,
+	Add:      powAdd,
+	Sub:      powAdd,
+	Mul:      powMul,
+	Div:      powMul,
+	Mod:      powMul,
+	Pow:      powMul,
+	Lsquare:  powIndex,
+	Dot:      powDot,
 }

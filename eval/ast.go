@@ -28,6 +28,12 @@ type Variable struct {
 	Ident string
 }
 
+func createVariable(ident string) Variable {
+	return Variable{
+		Ident: ident,
+	}
+}
+
 type Null struct{}
 
 type Block struct {
@@ -80,7 +86,17 @@ type Function struct {
 }
 
 type Return struct {
-	Expression
+	Expr Expression
+}
+
+type Try struct {
+	Body  Expression
+	Catch Expression
+}
+
+type Catch struct {
+	Err  string
+	Body Expression
 }
 
 type If struct {

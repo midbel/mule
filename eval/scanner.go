@@ -13,6 +13,7 @@ var keywords = []string{
 	"const",
 	"for",
 	"if",
+	"else",
 	"switch",
 	"case",
 	"function",
@@ -78,6 +79,8 @@ const (
 	Comma
 	Colon
 	Question
+	Nullish
+	Optional
 	Invalid
 )
 
@@ -244,6 +247,7 @@ func (s *Scanner) scanComment(tok *Token) {
 
 func (s *Scanner) scanString(tok *Token) {
 	quote := s.char
+	s.read()
 	for !s.done() && s.char != quote {
 		s.write()
 		s.read()
@@ -366,6 +370,15 @@ func (s *Scanner) scanPunct(tok *Token) {
 		} else if s.peek() == rangle {
 			s.read()
 			tok.Type = Rshift
+		}
+	case question:
+		tok.Type = Question
+		if s.peek() == question {
+			s.read()
+			tok.Type = Nullish
+		} else if s.peek() == dot {
+			s.read()
+			tok.Type = Optional
 		}
 	default:
 		tok.Type = Invalid
