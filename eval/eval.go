@@ -1,18 +1,18 @@
 package eval
 
 import (
+	"errors"
 	"fmt"
 	"io"
-	"errors"
 
 	"github.com/midbel/mule/env"
 )
 
 var (
-	errBreak = errors.New("break")
+	errBreak    = errors.New("break")
 	errContinue = errors.New("continue")
-	errReturn = errors.New("return")
-	errThrow = errors.New("throw")
+	errReturn   = errors.New("return")
+	errThrow    = errors.New("throw")
 )
 
 func Eval(r io.Reader) (Value, error) {

@@ -94,6 +94,7 @@ func NewParser(r io.Reader) *Parser {
 	p.registerKeyword("function", p.parseFunction)
 	p.registerKeyword("try", p.parseTry)
 	p.registerKeyword("catch", p.parseCatch)
+	p.registerKeyword("finally", p.parseFinally)
 	p.registerKeyword("throw", p.parseThrow)
 	p.registerKeyword("return", p.parseReturn)
 	p.registerKeyword("break", p.parseBreak)
@@ -530,7 +531,15 @@ func (p *Parser) parseTry() (Expression, error) {
 		return nil, err
 	}
 	try.Catch, err = p.parseKeyword()
+	if p.is(Keyword) {
+		try.Finally, err = p.parseKeyword()
+	}
 	return try, err
+}
+
+func (p *Parser) parseFinally() (Expression, error) {
+	p.next()
+	return p.parseBlock()
 }
 
 func (p *Parser) parseCatch() (Expression, error) {

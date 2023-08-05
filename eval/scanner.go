@@ -22,6 +22,7 @@ var keywords = []string{
 	"continue",
 	"try",
 	"catch",
+	"finally",
 	"while",
 	"do",
 	"null",

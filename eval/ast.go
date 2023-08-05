@@ -100,8 +100,9 @@ type Return struct {
 }
 
 type Try struct {
-	Body  Expression
-	Catch Expression
+	Body    Expression
+	Catch   Expression
+	Finally Expression
 }
 
 type Catch struct {
