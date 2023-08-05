@@ -60,7 +60,7 @@ type Unary struct {
 }
 
 type Call struct {
-	Ident string
+	Ident Expression
 	Args  []Expression
 }
 
@@ -99,6 +99,10 @@ type Catch struct {
 	Body Expression
 }
 
+type Throw struct {
+	Expr Expression
+}
+
 type If struct {
 	Cdt Expression
 	Csq Expression
@@ -123,7 +127,6 @@ type For struct {
 }
 
 type While struct {
-	Do   bool
 	Cdt  Expression
 	Body Expression
 }
