@@ -39,13 +39,21 @@ func NewParser(r io.Reader) *Parser {
 	}
 	p.registerInfix(Assign, p.parseBinary)
 	p.registerInfix(Add, p.parseBinary)
+	p.registerInfix(AddAssign, p.parseBinary)
 	p.registerInfix(Sub, p.parseBinary)
+	p.registerInfix(SubAssign, p.parseBinary)
 	p.registerInfix(Mul, p.parseBinary)
+	p.registerInfix(MulAssign, p.parseBinary)
 	p.registerInfix(Div, p.parseBinary)
+	p.registerInfix(DivAssign, p.parseBinary)
 	p.registerInfix(Mod, p.parseBinary)
+	p.registerInfix(ModAssign, p.parseBinary)
 	p.registerInfix(Pow, p.parseBinary)
+	p.registerInfix(PowAssign, p.parseBinary)
 	p.registerInfix(Lshift, p.parseBinary)
+	p.registerInfix(LshiftAssign, p.parseBinary)
 	p.registerInfix(Rshift, p.parseBinary)
+	p.registerInfix(RshiftAssign, p.parseBinary)
 	p.registerInfix(Eq, p.parseBinary)
 	p.registerInfix(Ne, p.parseBinary)
 	p.registerInfix(Lt, p.parseBinary)
@@ -55,7 +63,9 @@ func NewParser(r io.Reader) *Parser {
 	p.registerInfix(And, p.parseBinary)
 	p.registerInfix(Or, p.parseBinary)
 	p.registerInfix(Band, p.parseBinary)
+	p.registerInfix(BandAssign, p.parseBinary)
 	p.registerInfix(Bor, p.parseBinary)
+	p.registerInfix(BorAssign, p.parseBinary)
 	p.registerInfix(Lsquare, p.parseIndex)
 	p.registerInfix(Lparen, p.parseCall)
 	p.registerInfix(Dot, p.parseDot)
@@ -514,14 +524,14 @@ func (p *Parser) parseSwitch() (Expression, error) {
 func (p *Parser) parseCase() (Expression, error) {
 	p.next()
 	var (
-		ca Case
+		ca  Case
 		err error
 	)
 	ca.Value, err = p.parseExpression(powLowest)
 	if err != nil {
 		return nil, err
 	}
-	if err := p.expect(Colon) {
+	if err := p.expect(Colon); err != nil {
 		return nil, err
 	}
 	return ca, nil
@@ -708,28 +718,38 @@ const (
 )
 
 var bindings = map[rune]int{
-	Comma:    powComma,
-	Assign:   powAssign,
-	Question: powTernary,
-	Colon:    powAssign,
-	And:      powLogical,
-	Or:       powLogical,
-	Band:     powBitwise,
-	Bor:      powBitwise,
-	Eq:       powEqual,
-	Ne:       powEqual,
-	Lt:       powCompare,
-	Le:       powCompare,
-	Gt:       powCompare,
-	Ge:       powCompare,
-	Lshift:   powShift,
-	Rshift:   powShift,
-	Add:      powAdd,
-	Sub:      powAdd,
-	Mul:      powMul,
-	Div:      powMul,
-	Mod:      powMul,
-	Pow:      powMul,
-	Lsquare:  powIndex,
-	Dot:      powDot,
+	Comma:        powComma,
+	Assign:       powAssign,
+	AddAssign:    powAssign,
+	SubAssign:    powAssign,
+	DivAssign:    powAssign,
+	MulAssign:    powAssign,
+	PowAssign:    powAssign,
+	ModAssign:    powAssign,
+	BandAssign:   powAssign,
+	BorAssign:    powAssign,
+	LshiftAssign: powAssign,
+	RshiftAssign: powAssign,
+	Question:     powTernary,
+	Colon:        powAssign,
+	And:          powLogical,
+	Or:           powLogical,
+	Band:         powBitwise,
+	Bor:          powBitwise,
+	Eq:           powEqual,
+	Ne:           powEqual,
+	Lt:           powCompare,
+	Le:           powCompare,
+	Gt:           powCompare,
+	Ge:           powCompare,
+	Lshift:       powShift,
+	Rshift:       powShift,
+	Add:          powAdd,
+	Sub:          powAdd,
+	Mul:          powMul,
+	Div:          powMul,
+	Mod:          powMul,
+	Pow:          powMul,
+	Lsquare:      powIndex,
+	Dot:          powDot,
 }

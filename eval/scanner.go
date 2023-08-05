@@ -66,16 +66,27 @@ const (
 	Gt
 	Ge
 	Add
+	AddAssign
 	Sub
+	SubAssign
 	Mul
+	MulAssign
 	Div
+	DivAssign
 	Pow
+	PowAssign
 	Mod
+	ModAssign
 	Lshift
+	LshiftAssign
 	Rshift
+	RshiftAssign
 	Band
+	BandAssign
 	Bor
+	BorAssign
 	Bnot
+	BnotAssign
 	Comma
 	Colon
 	Question
@@ -118,20 +129,46 @@ func (t Token) String() string {
 		return "<comma>"
 	case Question:
 		return "<question>"
+	case And:
+		return "<and>"
+	case Or:
+		return "<or>"
+	case Band:
+		return "<bin-and>"
+	case BandAssign:
+		return "<bin-and-assign>"
+	case Bor:
+		return "<bin-or>"
+	case BorAssign:
+		return "<bin-or-assign>"
+	case Bnot:
+		return "<bin-not>"
 	case Assign:
 		return "<assign>"
 	case Add:
 		return "<add>"
+	case AddAssign:
+		return "<add-assign>"
 	case Sub:
 		return "<sub>"
+	case SubAssign:
+		return "<sub-assign>"
 	case Div:
 		return "<div>"
+	case DivAssign:
+		return "<div-assign>"
 	case Mul:
 		return "<mul>"
+	case MulAssign:
+		return "<mul-assign>"
 	case Pow:
 		return "<pow>"
+	case PowAssign:
+		return "<pow-assign>"
 	case Mod:
 		return "<mod>"
+	case ModAssign:
+		return "<mod-assign>"
 	case Not:
 		return "<not>"
 	case Eq:
@@ -317,29 +354,58 @@ func (s *Scanner) scanPunct(tok *Token) {
 		tok.Type = Rsquare
 	case plus:
 		tok.Type = Add
+		if s.peek() == equal {
+			s.read()
+			tok.Type = AddAssign
+		}
 	case minus:
 		tok.Type = Sub
+		if s.peek() == equal {
+			s.read()
+			tok.Type = SubAssign
+		}
 	case star:
 		tok.Type = Mul
 		if s.peek() == star {
 			s.read()
 			tok.Type = Pow
+			if s.peek() == equal {
+				s.read()
+				tok.Type = PowAssign
+			}
+		} else if s.peek() == equal {
+			s.read()
+			tok.Type = MulAssign
 		}
 	case slash:
 		tok.Type = Div
+		if s.peek() == equal {
+			s.read()
+			tok.Type = DivAssign
+		}
 	case percent:
 		tok.Type = Mod
+		if s.peek() == equal {
+			s.read()
+			tok.Type = ModAssign
+		}
 	case ampersand:
 		tok.Type = Band
 		if s.peek() == ampersand {
 			s.read()
 			tok.Type = And
+		} else if s.peek() == equal {
+			s.read()
+			tok.Type = BandAssign
 		}
 	case pipe:
 		tok.Type = Bor
 		if s.peek() == pipe {
 			s.read()
 			tok.Type = Or
+		} else if s.peek() == equal {
+			s.read()
+			tok.Type = BorAssign
 		}
 	case equal:
 		tok.Type = Assign
@@ -361,6 +427,10 @@ func (s *Scanner) scanPunct(tok *Token) {
 		} else if s.peek() == langle {
 			s.read()
 			tok.Type = Lshift
+			if s.peek() == equal {
+				s.read()
+				tok.Type = LshiftAssign
+			}
 		}
 	case rangle:
 		tok.Type = Gt
@@ -370,6 +440,10 @@ func (s *Scanner) scanPunct(tok *Token) {
 		} else if s.peek() == rangle {
 			s.read()
 			tok.Type = Rshift
+			if s.peek() == equal {
+				s.read()
+				tok.Type = RshiftAssign
+			}
 		}
 	case question:
 		tok.Type = Question
