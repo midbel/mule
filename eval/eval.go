@@ -7,21 +7,19 @@ import (
 	"github.com/midbel/mule/env"
 )
 
-type Expression interface{}
-
-func Eval(r io.Reader) (Object, error) {
+func Eval(r io.Reader) (Value, error) {
 	expr, err := Parse(r)
 	if err != nil {
 		return nil, err
 	}
-	return EvalExpr(expr, env.EmptyEnv[Object]())
+	return EvalExpr(expr, env.EmptyEnv[Value]())
 }
 
-func EvalExpr(node Node, ev env.Env[Object]) (Object, error) {
+func EvalExpr(node Expression, ev env.Env[Value]) (Value, error) {
 	return eval(node, ev)
 }
 
-func eval(node Node, ev env.Env[Object]) (Object, error) {
+func eval(node Expression, ev env.Env[Value]) (Value, error) {
 	switch n := node.(type) {
 	case Primitive[float64]:
 		return evalNumber(n, ev)
@@ -37,8 +35,8 @@ func eval(node Node, ev env.Env[Object]) (Object, error) {
 		return evalIndex(n, ev)
 	case Array:
 		return evalArray(n, ev)
-	case Object:
-		return evalObject(n, ev)
+	case Hash:
+		return evalHash(n, ev)
 	case Call:
 		return evalCall(n, ev)
 	case Block:
@@ -62,32 +60,32 @@ func eval(node Node, ev env.Env[Object]) (Object, error) {
 	return nil, nil
 }
 
-func evalString(p Primitive[string], _ env.Env[Object]) (Object, error) {
-	return CreateObject(p.Literal)
+func evalString(p Primitive[string], _ env.Env[Value]) (Value, error) {
+	return CreateValue(p.Literal)
 }
 
-func evalNumber(p Primitive[float64], _ env.Env[Object]) (Object, error) {
-	return CreateObject(p.Literal)
+func evalNumber(p Primitive[float64], _ env.Env[Value]) (Value, error) {
+	return CreateValue(p.Literal)
 }
 
-func evalBool(p Primitive[bool], _ env.Env[Object]) (Object, error) {
-	return CreateObject(p.Literal)
+func evalBool(p Primitive[bool], _ env.Env[Value]) (Value, error) {
+	return CreateValue(p.Literal)
 }
 
-func evalVariable(v Variable, ev env.Env[Object]) (Object, error) {
+func evalVariable(v Variable, ev env.Env[Value]) (Value, error) {
 	return ev.Resolve(v.Ident)
 }
 
-func evalChain(c Chain, ev env.Env[Object]) (Object, error) {
+func evalChain(c Chain, ev env.Env[Value]) (Value, error) {
 	return nil, nil
 }
 
-func evalIndex(i Index, ev env.Env[Object]) (Object, error) {
+func evalIndex(i Index, ev env.Env[Value]) (Value, error) {
 	return nil, nil
 }
 
-func evalArray(a Array, ev env.Env[Object]) (Object, error) {
-	var arr []Object
+func evalArray(a Array, ev env.Env[Value]) (Value, error) {
+	var arr []Value
 	for i := range a.List {
 		v, err := eval(a.List[i], ev)
 		if err != nil {
@@ -98,19 +96,19 @@ func evalArray(a Array, ev env.Env[Object]) (Object, error) {
 	return CreateArray(arr), nil
 }
 
-func evalObject(o Object, ev env.Env[Object]) (Object, error) {
+func evalHash(h Hash, ev env.Env[Value]) (Value, error) {
 	return nil, nil
 }
 
-func evalCall(c Call, ev env.Env[Object]) (Object, error) {
+func evalCall(c Call, ev env.Env[Value]) (Value, error) {
 	return nil, nil
 }
 
-func evalBlock(b Block, ev env.Env[Object]) (Object, error) {
+func evalBlock(b Block, ev env.Env[Value]) (Value, error) {
 	var (
-		res Object
+		res Value
 		err error
-		tmp = env.EnclosedEnv[Object](ev)
+		tmp = env.EnclosedEnv[Value](ev)
 	)
 	for i := range b.List {
 		res, err = eval(b.List[i], tmp)
@@ -121,7 +119,7 @@ func evalBlock(b Block, ev env.Env[Object]) (Object, error) {
 	return res, err
 }
 
-func evalBinary(b Binary, ev env.Env[Object]) (Object, error) {
+func evalBinary(b Binary, ev env.Env[Value]) (Value, error) {
 	left, err := eval(b.Left, ev)
 	if err != nil {
 		return nil, err
@@ -175,7 +173,7 @@ func evalBinary(b Binary, ev env.Env[Object]) (Object, error) {
 	return nil, ErrOperation
 }
 
-func evalAssignment(a Assignment, ev env.Env[Object]) (Object, error) {
+func evalAssignment(a Assignment, ev env.Env[Value]) (Value, error) {
 	ident, ok := a.Ident.(Variable)
 	if !ok {
 		return nil, fmt.Errorf("variable expected")
@@ -188,11 +186,11 @@ func evalAssignment(a Assignment, ev env.Env[Object]) (Object, error) {
 	return value, nil
 }
 
-func evalUnary(u Unary, ev env.Env[Object]) (Object, error) {
+func evalUnary(u Unary, ev env.Env[Value]) (Value, error) {
 	return nil, nil
 }
 
-func evalLet(e Let, ev env.Env[Object]) (Object, error) {
+func evalLet(e Let, ev env.Env[Value]) (Value, error) {
 	val, err := eval(e.Expr, ev)
 	if err == nil {
 		ev.Define(e.Ident, val)

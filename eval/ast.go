@@ -1,6 +1,6 @@
 package eval
 
-type Node interface{}
+type Expression interface{}
 
 type Primitive[T bool | float64 | string] struct {
 	Literal T

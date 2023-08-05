@@ -16,36 +16,36 @@ var (
 )
 
 type adder interface {
-	Add(Object) (Object, error)
+	Add(Value) (Value, error)
 }
 
 type suber interface {
-	Sub(Object) (Object, error)
+	Sub(Value) (Value, error)
 }
 
 type muler interface {
-	Mul(Object) (Object, error)
+	Mul(Value) (Value, error)
 }
 
 type diver interface {
-	Div(Object) (Object, error)
+	Div(Value) (Value, error)
 }
 
 type moder interface {
-	Mod(Object) (Object, error)
+	Mod(Value) (Value, error)
 }
 
 type power interface {
-	Pow(Object) (Object, error)
+	Pow(Value) (Value, error)
 }
 
-type Object interface {
-	Not() (Object, error)
+type Value interface {
+	Not() (Value, error)
 	True() bool
 	Raw() any
 }
 
-func CreateObject(value any) (Object, error) {
+func CreateValue(value any) (Value, error) {
 	switch v := value.(type) {
 	case string:
 		return CreateString(v), nil
@@ -54,16 +54,16 @@ func CreateObject(value any) (Object, error) {
 	case bool:
 		return CreateBool(v), nil
 	default:
-		return nil, fmt.Errorf("%s can not be transformed to Object")
+		return nil, fmt.Errorf("%s can not be transformed to Value")
 	}
 }
 
-func leftAndRight(left, right Object) (Object, error) {
+func leftAndRight(left, right Value) (Value, error) {
 	b := left.True() && right.True()
 	return CreateBool(b), nil
 }
 
-func leftOrRight(left, right Object) (Object, error) {
+func leftOrRight(left, right Value) (Value, error) {
 	b := left.True() || right.True()
 	return CreateBool(b), nil
 }
@@ -72,7 +72,7 @@ type real struct {
 	value float64
 }
 
-func CreateReal(f float64) Object {
+func CreateReal(f float64) Value {
 	return real{
 		value: f,
 	}
@@ -82,12 +82,12 @@ func (f real) Raw() any {
 	return f.value
 }
 
-func (f real) Rev() (Object, error) {
+func (f real) Rev() (Value, error) {
 	f.value = -f.value
 	return f, nil
 }
 
-func (f real) Not() (Object, error) {
+func (f real) Not() (Value, error) {
 	return CreateBool(!f.True()), nil
 }
 
@@ -95,7 +95,7 @@ func (f real) String() string {
 	return strconv.FormatFloat(f.value, 'g', -1, 64)
 }
 
-func (f real) Add(other Object) (Object, error) {
+func (f real) Add(other Value) (Value, error) {
 	switch x := other.(type) {
 	case real:
 		f.value += x.value
@@ -108,7 +108,7 @@ func (f real) Add(other Object) (Object, error) {
 	return f, nil
 }
 
-func (f real) Sub(other Object) (Object, error) {
+func (f real) Sub(other Value) (Value, error) {
 	switch x := other.(type) {
 	case real:
 		f.value -= x.value
@@ -118,7 +118,7 @@ func (f real) Sub(other Object) (Object, error) {
 	return f, nil
 }
 
-func (f real) Div(other Object) (Object, error) {
+func (f real) Div(other Value) (Value, error) {
 	switch x := other.(type) {
 	case real:
 		if x.value == 0 {
@@ -131,7 +131,7 @@ func (f real) Div(other Object) (Object, error) {
 	return f, nil
 }
 
-func (f real) Mul(other Object) (Object, error) {
+func (f real) Mul(other Value) (Value, error) {
 	switch x := other.(type) {
 	case real:
 		f.value *= x.value
@@ -141,7 +141,7 @@ func (f real) Mul(other Object) (Object, error) {
 	return f, nil
 }
 
-func (f real) Mod(other Object) (Object, error) {
+func (f real) Mod(other Value) (Value, error) {
 	switch x := other.(type) {
 	case real:
 		if x.value == 0 {
@@ -154,7 +154,7 @@ func (f real) Mod(other Object) (Object, error) {
 	return f, nil
 }
 
-func (f real) Pow(other Object) (Object, error) {
+func (f real) Pow(other Value) (Value, error) {
 	switch x := other.(type) {
 	case real:
 		f.value = math.Pow(f.value, x.value)
@@ -168,7 +168,7 @@ func (f real) True() bool {
 	return f.value != 0
 }
 
-func (f real) Eq(other Object) (Object, error) {
+func (f real) Eq(other Value) (Value, error) {
 	x, ok := other.(real)
 	if !ok {
 		return nil, incompatibleType("eq", f, other)
@@ -176,7 +176,7 @@ func (f real) Eq(other Object) (Object, error) {
 	return CreateBool(f.value == x.value), nil
 }
 
-func (f real) Ne(other Object) (Object, error) {
+func (f real) Ne(other Value) (Value, error) {
 	x, ok := other.(real)
 	if !ok {
 		return nil, incompatibleType("ne", f, other)
@@ -184,7 +184,7 @@ func (f real) Ne(other Object) (Object, error) {
 	return CreateBool(f.value != x.value), nil
 }
 
-func (f real) Lt(other Object) (Object, error) {
+func (f real) Lt(other Value) (Value, error) {
 	x, ok := other.(real)
 	if !ok {
 		return nil, incompatibleType("lt", f, other)
@@ -192,7 +192,7 @@ func (f real) Lt(other Object) (Object, error) {
 	return CreateBool(f.value < x.value), nil
 }
 
-func (f real) Le(other Object) (Object, error) {
+func (f real) Le(other Value) (Value, error) {
 	x, ok := other.(real)
 	if !ok {
 		return nil, incompatibleType("le", f, other)
@@ -200,7 +200,7 @@ func (f real) Le(other Object) (Object, error) {
 	return CreateBool(f.value <= x.value), nil
 }
 
-func (f real) Gt(other Object) (Object, error) {
+func (f real) Gt(other Value) (Value, error) {
 	x, ok := other.(real)
 	if !ok {
 		return nil, incompatibleType("gt", f, other)
@@ -208,7 +208,7 @@ func (f real) Gt(other Object) (Object, error) {
 	return CreateBool(f.value > x.value), nil
 }
 
-func (f real) Ge(other Object) (Object, error) {
+func (f real) Ge(other Value) (Value, error) {
 	x, ok := other.(real)
 	if !ok {
 		return nil, incompatibleType("ge", f, other)
@@ -220,7 +220,7 @@ type varchar struct {
 	str string
 }
 
-func CreateString(str string) Object {
+func CreateString(str string) Value {
 	return varchar{
 		str: str,
 	}
@@ -238,15 +238,15 @@ func (s varchar) String() string {
 	return s.str
 }
 
-func (s varchar) Rev() (Object, error) {
+func (s varchar) Rev() (Value, error) {
 	return nil, unsupportedOp("reverse", s)
 }
 
-func (s varchar) Not() (Object, error) {
+func (s varchar) Not() (Value, error) {
 	return CreateBool(!s.True()), nil
 }
 
-func (s varchar) Add(other Object) (Object, error) {
+func (s varchar) Add(other Value) (Value, error) {
 	var str string
 	switch x := other.(type) {
 	case real:
@@ -260,7 +260,7 @@ func (s varchar) Add(other Object) (Object, error) {
 	return s, nil
 }
 
-func (s varchar) Sub(other Object) (Object, error) {
+func (s varchar) Sub(other Value) (Value, error) {
 	var part int
 	switch x := other.(type) {
 	case real:
@@ -280,7 +280,7 @@ func (s varchar) Sub(other Object) (Object, error) {
 	return s, nil
 }
 
-func (s varchar) Div(other Object) (Object, error) {
+func (s varchar) Div(other Value) (Value, error) {
 	var part int
 	switch x := other.(type) {
 	case real:
@@ -296,7 +296,7 @@ func (s varchar) Div(other Object) (Object, error) {
 	return s, nil
 }
 
-func (s varchar) Mul(other Object) (Object, error) {
+func (s varchar) Mul(other Value) (Value, error) {
 	var count int
 	switch x := other.(type) {
 	case real:
@@ -308,11 +308,11 @@ func (s varchar) Mul(other Object) (Object, error) {
 	return s, nil
 }
 
-func (s varchar) Mod(_ Object) (Object, error) {
+func (s varchar) Mod(_ Value) (Value, error) {
 	return nil, unsupportedOp("modulo", s)
 }
 
-func (s varchar) Pow(_ Object) (Object, error) {
+func (s varchar) Pow(_ Value) (Value, error) {
 	return nil, unsupportedOp("power", s)
 }
 
@@ -320,7 +320,7 @@ func (s varchar) True() bool {
 	return s.str != ""
 }
 
-func (s varchar) Eq(other Object) (Object, error) {
+func (s varchar) Eq(other Value) (Value, error) {
 	x, ok := other.(varchar)
 	if !ok {
 		return nil, incompatibleType("eq", s, other)
@@ -328,7 +328,7 @@ func (s varchar) Eq(other Object) (Object, error) {
 	return CreateBool(s.str == x.str), nil
 }
 
-func (s varchar) Ne(other Object) (Object, error) {
+func (s varchar) Ne(other Value) (Value, error) {
 	x, ok := other.(varchar)
 	if !ok {
 		return nil, incompatibleType("ne", s, other)
@@ -336,7 +336,7 @@ func (s varchar) Ne(other Object) (Object, error) {
 	return CreateBool(s.str != x.str), nil
 }
 
-func (s varchar) Lt(other Object) (Object, error) {
+func (s varchar) Lt(other Value) (Value, error) {
 	x, ok := other.(varchar)
 	if !ok {
 		return nil, incompatibleType("lt", s, other)
@@ -344,7 +344,7 @@ func (s varchar) Lt(other Object) (Object, error) {
 	return CreateBool(s.str < x.str), nil
 }
 
-func (s varchar) Le(other Object) (Object, error) {
+func (s varchar) Le(other Value) (Value, error) {
 	x, ok := other.(varchar)
 	if !ok {
 		return nil, incompatibleType("le", s, other)
@@ -352,7 +352,7 @@ func (s varchar) Le(other Object) (Object, error) {
 	return CreateBool(s.str <= x.str), nil
 }
 
-func (s varchar) Gt(other Object) (Object, error) {
+func (s varchar) Gt(other Value) (Value, error) {
 	x, ok := other.(varchar)
 	if !ok {
 		return nil, incompatibleType("gt", s, other)
@@ -360,7 +360,7 @@ func (s varchar) Gt(other Object) (Object, error) {
 	return CreateBool(s.str > x.str), nil
 }
 
-func (s varchar) Ge(other Object) (Object, error) {
+func (s varchar) Ge(other Value) (Value, error) {
 	x, ok := other.(varchar)
 	if !ok {
 		return nil, incompatibleType("ge", s, other)
@@ -372,7 +372,7 @@ type boolean struct {
 	value bool
 }
 
-func CreateBool(b bool) Object {
+func CreateBool(b bool) Value {
 	return boolean{
 		value: b,
 	}
@@ -382,11 +382,11 @@ func (b boolean) Raw() any {
 	return b.value
 }
 
-func (b boolean) Rev() (Object, error) {
+func (b boolean) Rev() (Value, error) {
 	return nil, unsupportedOp("reverse", b)
 }
 
-func (b boolean) Not() (Object, error) {
+func (b boolean) Not() (Value, error) {
 	b.value = !b.value
 	return b, nil
 }
@@ -395,27 +395,27 @@ func (b boolean) String() string {
 	return strconv.FormatBool(b.value)
 }
 
-func (b boolean) Add(_ Object) (Object, error) {
+func (b boolean) Add(_ Value) (Value, error) {
 	return nil, unsupportedOp("addition", b)
 }
 
-func (b boolean) Sub(_ Object) (Object, error) {
+func (b boolean) Sub(_ Value) (Value, error) {
 	return nil, unsupportedOp("subtraction", b)
 }
 
-func (b boolean) Div(_ Object) (Object, error) {
+func (b boolean) Div(_ Value) (Value, error) {
 	return nil, unsupportedOp("division", b)
 }
 
-func (b boolean) Mul(_ Object) (Object, error) {
+func (b boolean) Mul(_ Value) (Value, error) {
 	return nil, unsupportedOp("multiply", b)
 }
 
-func (b boolean) Mod(_ Object) (Object, error) {
+func (b boolean) Mod(_ Value) (Value, error) {
 	return nil, unsupportedOp("modulo", b)
 }
 
-func (b boolean) Pow(_ Object) (Object, error) {
+func (b boolean) Pow(_ Value) (Value, error) {
 	return nil, unsupportedOp("power", b)
 }
 
@@ -423,7 +423,7 @@ func (b boolean) True() bool {
 	return b.value
 }
 
-func (b boolean) Eq(other Object) (Object, error) {
+func (b boolean) Eq(other Value) (Value, error) {
 	x, ok := other.(boolean)
 	if !ok {
 		return nil, incompatibleType("eq", b, other)
@@ -431,7 +431,7 @@ func (b boolean) Eq(other Object) (Object, error) {
 	return CreateBool(b.value == x.value), nil
 }
 
-func (b boolean) Ne(other Object) (Object, error) {
+func (b boolean) Ne(other Value) (Value, error) {
 	x, ok := other.(boolean)
 	if !ok {
 		return nil, incompatibleType("ne", b, other)
@@ -439,28 +439,28 @@ func (b boolean) Ne(other Object) (Object, error) {
 	return CreateBool(b.value != x.value), nil
 }
 
-func (b boolean) Lt(other Object) (Object, error) {
+func (b boolean) Lt(other Value) (Value, error) {
 	return nil, unsupportedOp("lt", b)
 }
 
-func (b boolean) Le(other Object) (Object, error) {
+func (b boolean) Le(other Value) (Value, error) {
 	return nil, unsupportedOp("le", b)
 }
 
-func (b boolean) Gt(other Object) (Object, error) {
+func (b boolean) Gt(other Value) (Value, error) {
 	return nil, unsupportedOp("gt", b)
 }
 
-func (b boolean) Ge(other Object) (Object, error) {
+func (b boolean) Ge(other Value) (Value, error) {
 	return nil, unsupportedOp("ge", b)
 }
 
 type array struct {
-	values []Object
+	values []Value
 }
 
-func CreateArray(list []Object) Object {
-	vs := make([]Object, len(list))
+func CreateArray(list []Value) Value {
+	vs := make([]Value, len(list))
 	copy(vs, list)
 	return array{
 		values: list,
@@ -487,15 +487,15 @@ func (a array) True() bool {
 	return len(a.values) > 0
 }
 
-func (a array) Not() (Object, error) {
+func (a array) Not() (Value, error) {
 	return CreateBool(!a.True()), nil
 }
 
-func (a array) Rev() (Object, error) {
+func (a array) Rev() (Value, error) {
 	return nil, unsupportedOp("reverse", a)
 }
 
-func (a array) Add(other Object) (Object, error) {
+func (a array) Add(other Value) (Value, error) {
 	switch x := other.(type) {
 	case array:
 		a.values = append(a.values, x.values...)
@@ -505,7 +505,7 @@ func (a array) Add(other Object) (Object, error) {
 	return a, nil
 }
 
-func (a array) Sub(other Object) (Object, error) {
+func (a array) Sub(other Value) (Value, error) {
 	var offset int
 	switch x := other.(type) {
 	case real:
@@ -514,7 +514,7 @@ func (a array) Sub(other Object) (Object, error) {
 		return nil, incompatibleType("multiply", a, other)
 	}
 	if offset > len(a.values) || -offset > len(a.values) {
-		a.values = []Object{}
+		a.values = []Value{}
 		return a, nil
 	}
 	if offset < 0 {
@@ -525,7 +525,7 @@ func (a array) Sub(other Object) (Object, error) {
 	return a, nil
 }
 
-func (a array) Div(other Object) (Object, error) {
+func (a array) Div(other Value) (Value, error) {
 	var offset int
 	switch x := other.(type) {
 	case real:
@@ -555,7 +555,7 @@ func (a array) Div(other Object) (Object, error) {
 	return arr, nil
 }
 
-func (a array) Mul(other Object) (Object, error) {
+func (a array) Mul(other Value) (Value, error) {
 	var offset int
 	switch x := other.(type) {
 	case real:
@@ -565,7 +565,7 @@ func (a array) Mul(other Object) (Object, error) {
 	}
 	offset--
 
-	vs := make([]Object, len(a.values))
+	vs := make([]Value, len(a.values))
 	copy(vs, a.values)
 	for i := 0; i < offset; i++ {
 		a.values = append(a.values, vs...)
@@ -573,15 +573,15 @@ func (a array) Mul(other Object) (Object, error) {
 	return a, nil
 }
 
-func (a array) Pow(other Object) (Object, error) {
+func (a array) Pow(other Value) (Value, error) {
 	return nil, unsupportedOp("power", a)
 }
 
-func (a array) Mod(other Object) (Object, error) {
+func (a array) Mod(other Value) (Value, error) {
 	return nil, unsupportedOp("modulo", a)
 }
 
-func (a array) Set(ix, value Object) (Object, error) {
+func (a array) Set(ix, value Value) (Value, error) {
 	x, err := a.getIndex(ix)
 	if err != nil {
 		return nil, err
@@ -590,7 +590,7 @@ func (a array) Set(ix, value Object) (Object, error) {
 	return a, nil
 }
 
-func (a array) Get(ix Object) (Object, error) {
+func (a array) Get(ix Value) (Value, error) {
 	x, err := a.getIndex(ix)
 	if err != nil {
 		return nil, err
@@ -598,7 +598,7 @@ func (a array) Get(ix Object) (Object, error) {
 	return a.values[x], nil
 }
 
-func (a array) getIndex(ix Object) (int, error) {
+func (a array) getIndex(ix Value) (int, error) {
 	var x int
 	switch p := ix.(type) {
 	case real:
@@ -615,15 +615,15 @@ func (a array) getIndex(ix Object) (int, error) {
 	return x, nil
 }
 
-func unsupportedOp(op string, val Object) error {
+func unsupportedOp(op string, val Value) error {
 	return fmt.Errorf("%s: %w for type %s", op, typeName(val))
 }
 
-func incompatibleType(op string, left, right Object) error {
+func incompatibleType(op string, left, right Value) error {
 	return fmt.Errorf("%s: %w %s/%s", op, ErrIncompatible, typeName(left), typeName(right))
 }
 
-func typeName(val Object) string {
+func typeName(val Value) string {
 	switch val.(type) {
 	case varchar:
 		return "string"
