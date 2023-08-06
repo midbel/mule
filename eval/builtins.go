@@ -7,11 +7,42 @@ import (
 
 type Object struct{}
 
-type Date struct{}
+func (_ Object) Not() (Value, error) {
+	return nil, ErrOperation
+}
 
-type Math struct{}
+func (_ Object) True() bool {
+	return false
+}
 
-type Console struct{}
+func (_ Object) Raw() any {
+	return nil
+}
+
+
+type Date struct{
+	Object
+}
+
+func (d Date) Apply(ident string, args ...Value) (Value, error) {
+	return nil, nil
+}
+
+type Math struct{
+	Object
+}
+
+func (m Math) Apply(ident string, args ...Value) (Value, error) {
+	return nil, nil
+}
+
+type Console struct{
+	Object
+}
+
+func (c Console) Apply(ident string, args ...Value) (Value, error) {
+	return nil, nil
+}
 
 func (c Console) Log(args ...Value) {
 	fmt.Fprintln(os.Stdout)

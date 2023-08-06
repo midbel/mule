@@ -24,6 +24,11 @@ func Eval(r io.Reader) (Value, error) {
 }
 
 func EvalExpr(node Expression, ev env.Env[Value]) (Value, error) {
+
+	ev.Define("Math", Math{})
+	ev.Define("Date", Date{})
+	ev.Define("console", Console{})
+
 	v, err := eval(node, ev)
 	if errors.Is(err, errReturn) {
 		err = nil

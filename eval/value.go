@@ -68,20 +68,9 @@ func leftOrRight(left, right Value) (Value, error) {
 }
 
 type function struct {
+	Object
 	args []Expression
 	body Expression
-}
-
-func (f function) Not() (Value, error) {
-	return nil, ErrOperation
-}
-
-func (f function) True() bool {
-	return false
-}
-
-func (f function) Raw() any {
-	return nil
 }
 
 type real struct {
