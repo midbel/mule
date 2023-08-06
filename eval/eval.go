@@ -43,6 +43,8 @@ func eval(node Expression, ev env.Env[Value]) (Value, error) {
 		return evalVariable(n, ev)
 	case Function:
 		return evalFunction(n, ev)
+	case ArrowFunction:
+		return evalArrow(n, ev)
 	case Chain:
 		return evalChain(n, ev)
 	case Index:
@@ -100,6 +102,10 @@ func evalBool(p Primitive[bool], _ env.Env[Value]) (Value, error) {
 
 func evalVariable(v Variable, ev env.Env[Value]) (Value, error) {
 	return ev.Resolve(v.Ident)
+}
+
+func evalArrow(f ArrowFunction, ev env.Env[Value]) (Value, error) {
+	return nil, nil
 }
 
 func evalFunction(f Function, ev env.Env[Value]) (Value, error) {

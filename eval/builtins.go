@@ -14,9 +14,9 @@ type Math struct{}
 type Console struct{}
 
 func (c Console) Log(args ...Value) {
-	fmt.Fprintln(os.Stdout, args...)
+	fmt.Fprintln(os.Stdout)
 }
 
 func (c Console) Error(args ...Value) {
-	fmt.Fprintln(os.Stderr, args...)
+	fmt.Fprintln(os.Stderr)
 }

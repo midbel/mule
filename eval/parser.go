@@ -857,6 +857,7 @@ const (
 )
 
 var bindings = map[rune]int{
+	Arrow: powAssign,
 	Assign:       powAssign,
 	AddAssign:    powAssign,
 	SubAssign:    powAssign,
