@@ -164,7 +164,11 @@ func evalCall(c Call, ev env.Env[Value]) (Value, error) {
 		}
 		tmp.Define(ag.Ident, v)
 	}
-	return eval(fn.body, tmp)
+	res, err := eval(fn.body, tmp)
+	if errors.Is(err, errReturn) {
+		err = nil
+	}
+	return res, err
 }
 
 func evalReturn(r Return, ev env.Env[Value]) (Value, error) {
