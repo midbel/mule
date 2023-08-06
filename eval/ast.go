@@ -93,6 +93,11 @@ type Argument struct {
 	Default Expression
 }
 
+type ArrowFunction struct {
+	Args Expression
+	Body Expression
+}
+
 type Function struct {
 	Name string
 	Args []Expression

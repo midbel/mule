@@ -1,18 +1,17 @@
 package eval
 
 import (
-	"os"
 	"fmt"
+	"os"
 )
 
+type Object struct{}
 
-type Object struct {}
+type Date struct{}
 
-type Date struct {}
+type Math struct{}
 
-type Math struct {}
-
-type Console struct {}
+type Console struct{}
 
 func (c Console) Log(args ...Value) {
 	fmt.Fprintln(os.Stdout, args...)

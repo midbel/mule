@@ -70,6 +70,7 @@ func NewParser(r io.Reader) *Parser {
 	p.registerInfix(Lparen, p.parseCall)
 	p.registerInfix(Dot, p.parseDot)
 	p.registerInfix(Question, p.parseTernary)
+	p.registerInfix(Arrow, p.parseArrow)
 	// p.registerInfix(Nullish, p.parseInfix)
 	// p.registerInfix(Optional, p.parseInfix)
 
@@ -178,6 +179,21 @@ func (p *Parser) parseAssignment(left Expression) (Expression, error) {
 	}
 	ag.Expr = right
 	return ag, nil
+}
+
+func (p *Parser) parseArrow(left Expression) (Expression, error) {
+	p.next()
+	var (
+		arr ArrowFunction
+		err error
+	)
+	arr.Args = left
+	if p.is(Lbrace) {
+		arr.Body, err = p.parseBlock()
+	} else {
+		arr.Body, err = p.parseExpression(powLowest)
+	}
+	return arr, err
 }
 
 func (p *Parser) parseCall(left Expression) (Expression, error) {
