@@ -15,28 +15,22 @@ var (
 	ErrAssert       = errors.New("assertion failed")
 )
 
-type adder interface {
+type Arithmetic interface {
 	Add(Value) (Value, error)
-}
-
-type suber interface {
 	Sub(Value) (Value, error)
-}
-
-type muler interface {
 	Mul(Value) (Value, error)
-}
-
-type diver interface {
 	Div(Value) (Value, error)
-}
-
-type moder interface {
 	Mod(Value) (Value, error)
+	Pow(Value) (Value, error)
 }
 
-type power interface {
-	Pow(Value) (Value, error)
+type BitwiseArithmetic interface {
+	Lshift(Value) (Value, error)
+	Rshift(Value) (Value, error)
+	And(Value) (Value, error)
+	Or(Value) (Value, error)
+	Xor(Value) (Value, error)
+	Not() (Value, error)
 }
 
 type Value interface {
@@ -66,6 +60,23 @@ func leftAndRight(left, right Value) (Value, error) {
 func leftOrRight(left, right Value) (Value, error) {
 	b := left.True() || right.True()
 	return CreateBool(b), nil
+}
+
+type function struct {
+	args []Expression
+	body Expression
+}
+
+func (f function) Not() (Value, error) {
+	return nil, ErrOperation
+}
+
+func (f function) True() bool {
+	return false
+}
+
+func (f function) Raw() any {
+	return nil
 }
 
 type real struct {

@@ -90,6 +90,7 @@ func NewParser(r io.Reader) *Parser {
 	p.registerKeyword("else", p.parseElse)
 	p.registerKeyword("switch", p.parseSwitch)
 	p.registerKeyword("while", p.parseWhile)
+	p.registerKeyword("do", p.parseDo)
 	p.registerKeyword("for", p.parseFor)
 	p.registerKeyword("function", p.parseFunction)
 	p.registerKeyword("try", p.parseTry)
@@ -345,7 +346,36 @@ func (p *Parser) parseGroup() (Expression, error) {
 	if err != nil {
 		return nil, err
 	}
+	if p.is(Comma) {
+		return p.parseSequence(expr)
+	}
 	return expr, p.expect(Rparen)
+}
+
+func (p *Parser) parseSequence(fst Expression) (Expression, error) {
+	if err := p.expect(Comma); err != nil {
+		return nil, err
+	}
+	var seq Sequence
+	seq.List = append(seq.List, fst)
+	for !p.done() && !p.is(Rparen) {
+		e, err := p.parseExpression(powLowest)
+		if err != nil {
+			return nil, err
+		}
+		seq.List = append(seq.List, e)
+		switch p.curr.Type {
+		case Comma:
+			p.next()
+			if p.is(Rparen) {
+				return nil, p.unexpected()
+			}
+		case Rparen:
+		default:
+			return nil, p.unexpected()
+		}
+	}
+	return seq, p.expect(Rparen)
 }
 
 func (p *Parser) parseUnary() (Expression, error) {
@@ -432,6 +462,31 @@ func (p *Parser) parseFor() (Expression, error) {
 	}
 	loop.Body, err = p.parseBlock()
 	return loop, err
+}
+
+func (p *Parser) parseDo() (Expression, error) {
+	p.next()
+	var (
+		loop While
+		err  error
+	)
+	loop.Do = true
+	loop.Body, err = p.parseBlock()
+	if err != nil {
+		return nil, err
+	}
+	if !p.is(Keyword) && p.curr.Literal != "while" {
+		return nil, p.unexpected()
+	}
+	p.next()
+	if err := p.expect(Lparen); err != nil {
+		return nil, err
+	}
+	loop.Cdt, err = p.parseExpression(powLowest)
+	if err != nil {
+		return nil, err
+	}
+	return loop, p.expect(Rparen)
 }
 
 func (p *Parser) parseWhile() (Expression, error) {

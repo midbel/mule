@@ -39,6 +39,10 @@ type Chain struct {
 	Next Expression
 }
 
+type Sequence struct {
+	List []Expression
+}
+
 type Null struct{}
 
 type Block struct {
@@ -138,6 +142,7 @@ type For struct {
 }
 
 type While struct {
+	Do bool
 	Cdt  Expression
 	Body Expression
 }

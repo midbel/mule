@@ -24,7 +24,11 @@ func Eval(r io.Reader) (Value, error) {
 }
 
 func EvalExpr(node Expression, ev env.Env[Value]) (Value, error) {
-	return eval(node, ev)
+	v, err := eval(node, ev)
+	if errors.Is(err, errReturn) {
+		err = nil
+	}
+	return v, err
 }
 
 func eval(node Expression, ev env.Env[Value]) (Value, error) {
@@ -37,6 +41,8 @@ func eval(node Expression, ev env.Env[Value]) (Value, error) {
 		return evalBool(n, ev)
 	case Variable:
 		return evalVariable(n, ev)
+	case Function:
+		return evalFunction(n, ev)
 	case Chain:
 		return evalChain(n, ev)
 	case Index:
@@ -74,7 +80,6 @@ func eval(node Expression, ev env.Env[Value]) (Value, error) {
 	case Throw:
 	case Catch:
 		return evalCatch(n, ev)
-	case Function:
 	default:
 		return nil, fmt.Errorf("%T unsupported node type", node)
 	}
@@ -95,6 +100,16 @@ func evalBool(p Primitive[bool], _ env.Env[Value]) (Value, error) {
 
 func evalVariable(v Variable, ev env.Env[Value]) (Value, error) {
 	return ev.Resolve(v.Ident)
+}
+
+func evalFunction(f Function, ev env.Env[Value]) (Value, error) {
+	var fn function
+	fn.args = append(fn.args, f.Args...)
+	fn.body = f.Body
+	if f.Name != "" {
+		ev.Define(f.Name, fn)
+	}
+	return fn, nil
 }
 
 func evalChain(c Chain, ev env.Env[Value]) (Value, error) {
@@ -122,7 +137,34 @@ func evalHash(h Hash, ev env.Env[Value]) (Value, error) {
 }
 
 func evalCall(c Call, ev env.Env[Value]) (Value, error) {
-	return nil, nil
+	id, ok := c.Ident.(Variable)
+	if !ok {
+		return nil, fmt.Errorf("identifier is not a variable")
+	}
+	value, err := ev.Resolve(id.Ident)
+	if err != nil {
+		return nil, err
+	}
+	fn, ok := value.(function)
+	if !ok {
+		return nil, fmt.Errorf("value is not a callable")
+	}
+	if len(c.Args) != len(fn.args) {
+		return nil, fmt.Errorf("invalid number of arguments given")
+	}
+	tmp := env.EnclosedEnv[Value](ev)
+	for i, a := range fn.args {
+		ag, ok := a.(Argument)
+		if !ok {
+			return nil, fmt.Errorf("invalid argument given")
+		}
+		v, err := eval(c.Args[i], ev)
+		if err != nil {
+			return nil, err
+		}
+		tmp.Define(ag.Ident, v)
+	}
+	return eval(fn.body, tmp)
 }
 
 func evalReturn(r Return, ev env.Env[Value]) (Value, error) {
@@ -142,6 +184,9 @@ func evalBlock(b Block, ev env.Env[Value]) (Value, error) {
 	for i := range b.List {
 		res, err = eval(b.List[i], tmp)
 		if err != nil {
+			if errors.Is(err, errReturn) {
+				break
+			}
 			return nil, err
 		}
 	}
@@ -159,27 +204,27 @@ func evalBinary(b Binary, ev env.Env[Value]) (Value, error) {
 	}
 	switch b.Op {
 	case Add:
-		if a, ok := left.(adder); ok {
+		if a, ok := left.(Arithmetic); ok {
 			return a.Add(right)
 		}
 	case Sub:
-		if s, ok := left.(suber); ok {
+		if s, ok := left.(Arithmetic); ok {
 			return s.Sub(right)
 		}
 	case Mul:
-		if m, ok := left.(muler); ok {
+		if m, ok := left.(Arithmetic); ok {
 			return m.Mul(right)
 		}
 	case Div:
-		if d, ok := left.(diver); ok {
+		if d, ok := left.(Arithmetic); ok {
 			return d.Div(right)
 		}
 	case Pow:
-		if p, ok := left.(power); ok {
+		if p, ok := left.(Arithmetic); ok {
 			return p.Pow(right)
 		}
 	case Mod:
-		if m, ok := left.(moder); ok {
+		if m, ok := left.(Arithmetic); ok {
 			return m.Mod(right)
 		}
 	case Lshift:
