@@ -142,7 +142,7 @@ type For struct {
 }
 
 type While struct {
-	Do bool
+	Do   bool
 	Cdt  Expression
 	Body Expression
 }

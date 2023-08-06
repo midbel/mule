@@ -290,7 +290,38 @@ func evalIf(i If, ev env.Env[Value]) (Value, error) {
 	return nil, nil
 }
 
+func evalDo(w While, ev env.Env[Value]) (Value, error) {
+	var (
+		res Value
+		err error
+	)
+	for i := 0; ; i++ {
+		if i > 0 {
+			v, err := eval(w.Cdt, ev)
+			if err != nil {
+				return nil, err
+			}
+			if !v.True() {
+				break
+			}
+		}
+		res, err = eval(w.Body, env.EnclosedEnv[Value](ev))
+		if err != nil {
+			if errors.Is(err, errBreak) {
+				return res, err
+			} else if errors.Is(err, errContinue) {
+				continue
+			}
+			return nil, err
+		}
+	}
+	return res, err
+}
+
 func evalWhile(w While, ev env.Env[Value]) (Value, error) {
+	if w.Do {
+		return evalDo(w, ev)
+	}
 	var (
 		res Value
 		err error
@@ -305,6 +336,11 @@ func evalWhile(w While, ev env.Env[Value]) (Value, error) {
 		}
 		res, err = eval(w.Body, env.EnclosedEnv[Value](ev))
 		if err != nil {
+			if errors.Is(err, errBreak) {
+				return res, err
+			} else if errors.Is(err, errContinue) {
+				continue
+			}
 			return nil, err
 		}
 	}

@@ -15,6 +15,11 @@ var (
 	ErrAssert       = errors.New("assertion failed")
 )
 
+type Comparable interface {
+	Eq(Value) (Value, error)
+	Lt(Value) (Value, error)
+}
+
 type Arithmetic interface {
 	Add(Value) (Value, error)
 	Sub(Value) (Value, error)
