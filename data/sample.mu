@@ -7,13 +7,13 @@ collection test {
 		cache-control   no-cache
 	}
 
-	beforeEach <<SCRIPT
+	beforeEach <<EOF
 	console.log(`start request ${requestName}`)
-	SCRIPT
+	EOF
 
-	afterEach <<SCRIPT
-	console.log(`done request ${requestName} ${requestStatu}`)
-	SCRIPT
+	afterEach <<EOF
+	console.log(`done request ${requestName} ${requestStatus}`)
+	EOF
 
 	get demo {
 

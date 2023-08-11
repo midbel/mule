@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	"github.com/midbel/enjoy/env"
+	"github.com/midbel/enjoy/value"
 )
 
 type Info struct {
@@ -27,6 +28,11 @@ type Collection struct {
 	query       Bag
 	requests    []Request
 	collections []*Collection
+
+	after      value.Evaluable
+	afterEach  value.Evaluable
+	before     value.Evaluable
+	beforeEach value.Evaluable
 }
 
 func Open(file string) (*Collection, error) {

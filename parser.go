@@ -41,6 +41,10 @@ func NewParser(r io.Reader) *Parser {
 		"headers":    p.parseCollectionHeaders,
 		"query":      p.parseCollectionQuery,
 		"tls":        p.parseCollectionTLS,
+		"beforeEach": p.parseCollectionScript,
+		"afterEach":  p.parseCollectionScript,
+		"before":     p.parseCollectionScript,
+		"after":      p.parseCollectionScript,
 		"get":        p.parseRequest,
 		"post":       p.parseRequest,
 		"put":        p.parseRequest,
@@ -265,9 +269,10 @@ func (p *Parser) parseScript(ev env.Environ[string]) (value.Evaluable, error) {
 	}
 	str, err := w.Expand(ev)
 	if err == nil {
+		fmt.Println(w)
 		n, err := parser.ParseString(str)
 		if err != nil {
-			return nil, err
+			return nil, fmt.Errorf("enjoy: %s", err)
 		}
 		return eval.EvaluableNode(n), nil
 	}
@@ -430,6 +435,12 @@ func (p *Parser) parseCollectionTLS(collect *Collection) error {
 		return err
 	}
 	return nil
+}
+
+func (p *Parser) parseCollectionScript(collect *Collection) error {
+	p.next()
+	_, err := p.parseScript(collect)
+	return err
 }
 
 func (p *Parser) parseCollectionQuery(collect *Collection) error {
