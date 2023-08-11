@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"sort"
+	"strings"
 	"unicode/utf8"
 )
 
@@ -17,6 +18,10 @@ var keywords = []string{
 	"default",
 	"query",
 	"cookie",
+	"before",
+	"beforeEach",
+	"after",
+	"aferEach",
 	// HTTP methods
 	"get",
 	"post",
@@ -210,14 +215,18 @@ func (s *Scanner) scanHeredoc(tok *Token) {
 		return
 	}
 	s.reset()
+
+	var valid bool
 	for !s.done() {
 		s.skip(isBlank)
+		s.reset()
 		for !s.done() && !isNL(s.char) {
 			s.write()
 			s.read()
 		}
 		line := s.literal()
-		if line == delim {
+		if delim == strings.TrimSpace(line) {
+			valid = true
 			break
 		}
 		if len(line) == 0 {
@@ -226,6 +235,9 @@ func (s *Scanner) scanHeredoc(tok *Token) {
 		body.WriteString(line)
 	}
 	tok.Type = String
+	if !valid {
+		tok.Type = Invalid
+	}
 	tok.Literal = body.String()
 }
 
