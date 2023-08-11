@@ -8,7 +8,7 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/midbel/mule/env"
+	"github.com/midbel/enjoy/env"
 )
 
 type Info struct {
@@ -22,7 +22,7 @@ type Collection struct {
 
 	parent *Collection
 
-	env         env.Env[string]
+	env         env.Environ[string]
 	headers     Bag
 	query       Bag
 	requests    []Request
@@ -157,8 +157,13 @@ func (c *Collection) Resolve(key string) (string, error) {
 	return "", fmt.Errorf("%s: variable not defined", key)
 }
 
-func (c *Collection) Define(key, value string) {
-	c.env.Define(key, value)
+func (c *Collection) Define(key, value string, _ bool) error {
+	c.env.Define(key, value, false)
+	return nil
+}
+
+func (c *Collection) Assign(key, value string) error {
+	return nil
 }
 
 func (c *Collection) AddRequest(req Request) {

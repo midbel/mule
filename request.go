@@ -7,8 +7,8 @@ import (
 	"net/url"
 	"strings"
 
-	"github.com/midbel/mule/env"
-	"github.com/midbel/mule/eval"
+	"github.com/midbel/enjoy/env"
+	"github.com/midbel/enjoy/value"
 )
 
 type Request struct {
@@ -31,8 +31,8 @@ type Request struct {
 	cookies []Bag
 	expect  func(*http.Response) error
 
-	pre  eval.Expression
-	post eval.Expression
+	pre  value.Evaluable
+	post value.Evaluable
 }
 
 func Prepare(name, method string) Request {
@@ -47,7 +47,7 @@ func Prepare(name, method string) Request {
 	}
 }
 
-func (r Request) Depends(ev env.Env[string]) ([]string, error) {
+func (r Request) Depends(ev env.Environ[string]) ([]string, error) {
 	var list []string
 	for i := range r.depends {
 		str, err := r.depends[i].Expand(ev)
@@ -59,7 +59,7 @@ func (r Request) Depends(ev env.Env[string]) ([]string, error) {
 	return list, nil
 }
 
-func (r Request) Prepare(ev env.Env[string]) (*http.Request, error) {
+func (r Request) Prepare(ev env.Environ[string]) (*http.Request, error) {
 	req, err := r.getRequest(ev)
 	if err != nil {
 		return nil, err
@@ -67,7 +67,7 @@ func (r Request) Prepare(ev env.Env[string]) (*http.Request, error) {
 	return req, r.setHeaders(req, ev)
 }
 
-func (r Request) getRequest(ev env.Env[string]) (*http.Request, error) {
+func (r Request) getRequest(ev env.Environ[string]) (*http.Request, error) {
 	var body io.Reader
 	if r.body != nil {
 		tmp, err := r.body.Expand(ev)
@@ -88,7 +88,7 @@ func (r Request) getRequest(ev env.Env[string]) (*http.Request, error) {
 	return http.NewRequest(r.method, uri.String(), body)
 }
 
-func (r Request) setHeaders(req *http.Request, ev env.Env[string]) error {
+func (r Request) setHeaders(req *http.Request, ev env.Environ[string]) error {
 	hdr, err := r.headers.Header(ev)
 	if err != nil {
 		return err
@@ -108,7 +108,7 @@ func (r Request) setHeaders(req *http.Request, ev env.Env[string]) error {
 	return r.attachCookies(req, ev)
 }
 
-func (r Request) attachCookies(req *http.Request, ev env.Env[string]) error {
+func (r Request) attachCookies(req *http.Request, ev env.Environ[string]) error {
 	for _, c := range r.cookies {
 		cook, err := c.Cookie(ev)
 		if err != nil {
@@ -144,7 +144,7 @@ func (b Bag) Merge(other Bag) Bag {
 	return b
 }
 
-func (b Bag) Header(e env.Env[string]) (http.Header, error) {
+func (b Bag) Header(e env.Environ[string]) (http.Header, error) {
 	all := make(http.Header)
 	for k, vs := range b {
 		for i := range vs {
@@ -158,7 +158,7 @@ func (b Bag) Header(e env.Env[string]) (http.Header, error) {
 	return all, nil
 }
 
-func (b Bag) Values(e env.Env[string]) (url.Values, error) {
+func (b Bag) Values(e env.Environ[string]) (url.Values, error) {
 	all := make(url.Values)
 	for k, vs := range b {
 		for i := range vs {
@@ -172,7 +172,7 @@ func (b Bag) Values(e env.Env[string]) (url.Values, error) {
 	return all, nil
 }
 
-func (b Bag) ValuesWith(e env.Env[string], other url.Values) (url.Values, error) {
+func (b Bag) ValuesWith(e env.Environ[string], other url.Values) (url.Values, error) {
 	all, err := b.Values(e)
 	if err != nil {
 		return nil, err
@@ -183,7 +183,7 @@ func (b Bag) ValuesWith(e env.Env[string], other url.Values) (url.Values, error)
 	return all, nil
 }
 
-func (b Bag) Cookie(e env.Env[string]) (*http.Cookie, error) {
+func (b Bag) Cookie(e env.Environ[string]) (*http.Cookie, error) {
 	var (
 		cook http.Cookie
 		err  error

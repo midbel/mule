@@ -8,8 +8,10 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/midbel/mule/env"
-	"github.com/midbel/mule/eval"
+	"github.com/midbel/enjoy/env"
+	"github.com/midbel/enjoy/eval"
+	"github.com/midbel/enjoy/parser"
+	"github.com/midbel/enjoy/value"
 )
 
 type Parser struct {
@@ -256,19 +258,23 @@ func (p *Parser) parseRequest(collect *Collection) error {
 	return p.expect(Rbrace)
 }
 
-func (p *Parser) parseScript(ev env.Env[string]) (eval.Expression, error) {
+func (p *Parser) parseScript(ev env.Environ[string]) (value.Evaluable, error) {
 	w, err := p.parseWord()
 	if err != nil {
-		return "", err
+		return nil, err
 	}
 	str, err := w.Expand(ev)
 	if err == nil {
-		return eval.ParseString(str)
+		n, err := parser.ParseString(str)
+		if err != nil {
+			return nil, err
+		}
+		return eval.EvaluableNode(n), nil
 	}
-	return "", err
+	return nil, err
 }
 
-func (p *Parser) parseExpect(ev env.Env[string]) (ExpectFunc, error) {
+func (p *Parser) parseExpect(ev env.Environ[string]) (ExpectFunc, error) {
 	w, err := p.parseWord()
 	if err != nil {
 		return nil, err
@@ -402,14 +408,14 @@ func (p *Parser) parseVariables(collect *Collection) error {
 		default:
 			return p.unexpected()
 		}
-		collect.Define(ident, value)
+		collect.Define(ident, value, false)
 		p.next()
 		p.skip(EOL)
 	}
 	return p.expect(Rbrace)
 }
 
-func (p *Parser) parseTLS(env env.Env[string]) (interface{}, error) {
+func (p *Parser) parseTLS(env env.Environ[string]) (interface{}, error) {
 	if err := p.expect(Lbrace); err != nil {
 		return nil, err
 	}
