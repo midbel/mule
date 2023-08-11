@@ -21,7 +21,7 @@ var keywords = []string{
 	"before",
 	"beforeEach",
 	"after",
-	"aferEach",
+	"afterEach",
 	// HTTP methods
 	"get",
 	"post",

@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 	"os"
 	"sort"
 	"strings"
@@ -23,6 +24,7 @@ type Collection struct {
 
 	parent *Collection
 
+	base        *url.URL
 	env         env.Environ[string]
 	headers     Bag
 	query       Bag
@@ -90,12 +92,31 @@ func (c *Collection) Execute(name string, w io.Writer) error {
 	if err != nil {
 		return err
 	}
+
+	ctx := Combine(c)
+	ctx.SetRequestName(name)
+
+	if r.before != nil {
+		_, err := r.before.Eval(ctx)
+		if err != nil {
+			return err
+		}
+	}
+
 	res, err := http.DefaultClient.Do(req)
 	if err != nil {
 		return err
 	}
 	defer res.Body.Close()
 	_, err = io.Copy(w, res.Body)
+
+	if r.after != nil {
+		ctx.SetResponseCode(res.StatusCode)
+		_, err := r.after.Eval(ctx)
+		if err != nil {
+			return err
+		}
+	}
 	return err
 }
 

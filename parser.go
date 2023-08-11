@@ -239,10 +239,10 @@ func (p *Parser) parseRequest(collect *Collection) error {
 			req.user, err = p.parseWord()
 		case "password":
 			req.pass, err = p.parseWord()
-		case "pre":
-			req.pre, err = p.parseScript(collect)
-		case "post":
-			req.post, err = p.parseScript(collect)
+		case "before":
+			req.before, err = p.parseScript(collect)
+		case "after":
+			req.after, err = p.parseScript(collect)
 		case "expect":
 			req.expect, err = p.parseExpect(collect)
 		case "depends":
@@ -269,7 +269,6 @@ func (p *Parser) parseScript(ev env.Environ[string]) (value.Evaluable, error) {
 	}
 	str, err := w.Expand(ev)
 	if err == nil {
-		fmt.Println(w)
 		n, err := parser.ParseString(str)
 		if err != nil {
 			return nil, fmt.Errorf("enjoy: %s", err)
@@ -438,9 +437,24 @@ func (p *Parser) parseCollectionTLS(collect *Collection) error {
 }
 
 func (p *Parser) parseCollectionScript(collect *Collection) error {
+	ident := p.curr.Literal
 	p.next()
-	_, err := p.parseScript(collect)
-	return err
+	ev, err := p.parseScript(collect)
+	if err != nil {
+		return err
+	}
+	switch ident {
+	case "before":
+		collect.before = ev
+	case "beforeEach":
+		collect.beforeEach = ev
+	case "after":
+		collect.after = ev
+	case "afterEach":
+		collect.afterEach = ev
+	default:
+	}
+	return nil
 }
 
 func (p *Parser) parseCollectionQuery(collect *Collection) error {

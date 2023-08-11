@@ -25,6 +25,14 @@ collection test {
 			format v1
 		}
 
+		before <<BEFORE
+		console.log(`start request ${requestName}`)
+		BEFORE
+
+		after <<AFTER
+		console.log(`done request ${requestName} ${requestStatus}`)
+		AFTER
+
 		username test
 		password test
 

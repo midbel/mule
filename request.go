@@ -31,8 +31,8 @@ type Request struct {
 	cookies []Bag
 	expect  func(*http.Response) error
 
-	pre  value.Evaluable
-	post value.Evaluable
+	before value.Evaluable
+	after  value.Evaluable
 }
 
 func Prepare(name, method string) Request {
