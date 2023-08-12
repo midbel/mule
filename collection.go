@@ -3,8 +3,6 @@ package mule
 import (
 	"fmt"
 	"io"
-	"net/http"
-	"net/url"
 	"os"
 	"sort"
 	"strings"
@@ -24,7 +22,7 @@ type Collection struct {
 
 	parent *Collection
 
-	base        *url.URL
+	base        Word
 	env         env.Environ[string]
 	headers     Bag
 	query       Bag
@@ -73,73 +71,83 @@ func (c *Collection) Path() []string {
 	return parts
 }
 
-func (c *Collection) Execute(name string, w io.Writer) error {
-	r, err := c.Find(name)
+func (c *Collection) Run(name string, w io.Writer) error {
+	x, err := c.Find(name, c)
 	if err != nil {
 		return err
 	}
-	others, err := r.Depends(c)
-	if err != nil {
-		return err
-	}
-	for _, n := range others {
-		if err := c.Execute(n, w); err != nil {
-			return err
-		}
-	}
-
-	req, err := r.Prepare(c)
-	if err != nil {
-		return err
-	}
-
-	ctx := Combine(c)
-	ctx.SetRequestName(name)
-
-	if r.before != nil {
-		_, err := r.before.Eval(ctx)
-		if err != nil {
-			return err
-		}
-	}
-
-	res, err := http.DefaultClient.Do(req)
-	if err != nil {
-		return err
-	}
-	defer res.Body.Close()
-	_, err = io.Copy(w, res.Body)
-
-	if r.after != nil {
-		ctx.SetResponseCode(res.StatusCode)
-		_, err := r.after.Eval(ctx)
-		if err != nil {
-			return err
-		}
-	}
-	return err
+	return x.Execute(w, env.EmptyEnv[value.Value]())
 }
 
-func (c *Collection) Find(name string) (Request, error) {
+func (c *Collection) Find(name string, resolv Resolver) (Executer, error) {
 	var (
 		rest  string
 		found bool
-		req   Request
 	)
 	name, rest, found = strings.Cut(name, ".")
 	if !found {
 		req, err := c.GetRequest(name)
-		if err != nil {
-			return req, err
+		if err == nil {
+			return ExecuterFromRequest(req, c, resolv)
 		}
-		return req, nil
+		if c.Name == name {
+			return ExecuterFromCollection(c, resolv)
+		}
+		return nil, err
 	}
 	sub, err := c.GetCollection(name)
 	if err != nil {
-		return req, err
+		return nil, err
 	}
-	return sub.Find(rest)
+	return sub.Find(rest, resolv)
 }
+
+// func (c *Collection) Execute2(name string, w io.Writer) error {
+// 	r, err := c.Find(name)
+// 	if err != nil {
+// 		return err
+// 	}
+// 	others, err := r.Depends(c)
+// 	if err != nil {
+// 		return err
+// 	}
+// 	for _, n := range others {
+// 		if err := c.Execute(n, w); err != nil {
+// 			return err
+// 		}
+// 	}
+
+// 	req, err := r.Prepare(c)
+// 	if err != nil {
+// 		return err
+// 	}
+
+// 	ctx := Combine(c)
+// 	ctx.SetRequestName(name)
+
+// 	if r.before != nil {
+// 		_, err := r.before.Eval(ctx)
+// 		if err != nil {
+// 			return err
+// 		}
+// 	}
+
+// 	res, err := http.DefaultClient.Do(req)
+// 	if err != nil {
+// 		return err
+// 	}
+// 	defer res.Body.Close()
+// 	_, err = io.Copy(w, res.Body)
+
+// 	if r.after != nil {
+// 		ctx.SetResponseCode(res.StatusCode)
+// 		_, err := r.after.Eval(ctx)
+// 		if err != nil {
+// 			return err
+// 		}
+// 	}
+// 	return err
+// }
 
 func (c *Collection) GetCollection(name string) (*Collection, error) {
 	sort.Slice(c.collections, func(i, j int) bool {

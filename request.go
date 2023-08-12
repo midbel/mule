@@ -47,6 +47,10 @@ func Prepare(name, method string) Request {
 	}
 }
 
+func (r Request) Execute(w io.Writer) error {
+	return nil
+}
+
 func (r Request) Depends(ev env.Environ[string]) ([]string, error) {
 	var list []string
 	for i := range r.depends {

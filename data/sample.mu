@@ -7,14 +7,6 @@ collection test {
 		cache-control   no-cache
 	}
 
-	beforeEach <<EOF
-	console.log(`start request ${requestName}`)
-	EOF
-
-	afterEach <<EOF
-	console.log(`done request ${requestName} ${requestStatus}`)
-	EOF
-
 	get demo {
 
 		depends 'test.test'

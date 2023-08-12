@@ -20,7 +20,7 @@ func main() {
 	switch flag.Arg(0) {
 	case "help":
 	default:
-		err = c.Execute(flag.Arg(0), os.Stdout)
+		err = c.Run(flag.Arg(0), os.Stdout)
 	}
 	if err != nil {
 		fmt.Fprintln(os.Stderr, err)
