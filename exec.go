@@ -20,49 +20,6 @@ type Body interface {
 	Open() (io.ReadCloser, error)
 }
 
-func ExecuterFromRequest(req Request, col *Collection, resolv Resolver) (Executer, error) {
-	var (
-		sg  single
-		err error
-	)
-	sg.Name = req.Name
-	sg.expect = expectNothing
-	sg.req, err = req.getRequest(col.env)
-	if err != nil {
-		return nil, err
-	}
-	depends, err := req.Depends(col.env)
-	if err != nil {
-		return nil, err
-	}
-	for _, name := range  depends {
-		e, err := resolv.Find(name, resolv)
-		if err != nil {
-			return nil, err
-		}
-		sg.deps = append(sg.deps, e)
-	}
-	return sg, nil
-}
-
-func ExecuterFromCollection(col *Collection, resolv Resolver) (Executer, error) {
-	ch := chain{
-		Name:       col.Name,
-		before:     col.before,
-		after:      col.after,
-		beforeEach: col.beforeEach,
-		afterEach:  col.afterEach,
-	}
-	for _, r := range col.requests {
-		e, err := ExecuterFromRequest(r, col, resolv)
-		if err != nil {
-			return nil, err
-		}
-		ch.executers = append(ch.executers, e)
-	}
-	return ch, nil
-}
-
 type single struct {
 	Name   string
 	req    *http.Request

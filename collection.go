@@ -88,10 +88,10 @@ func (c *Collection) Find(name string, resolv Resolver) (Executer, error) {
 	if !found {
 		req, err := c.GetRequest(name)
 		if err == nil {
-			return ExecuterFromRequest(req, c, resolv)
+			return c.FromRequest(req, resolv)
 		}
 		if c.Name == name {
-			return ExecuterFromCollection(c, resolv)
+			return c.FromSelf(resolv)
 		}
 		return nil, err
 	}
@@ -102,52 +102,48 @@ func (c *Collection) Find(name string, resolv Resolver) (Executer, error) {
 	return sub.Find(rest, resolv)
 }
 
-// func (c *Collection) Execute2(name string, w io.Writer) error {
-// 	r, err := c.Find(name)
-// 	if err != nil {
-// 		return err
-// 	}
-// 	others, err := r.Depends(c)
-// 	if err != nil {
-// 		return err
-// 	}
-// 	for _, n := range others {
-// 		if err := c.Execute(n, w); err != nil {
-// 			return err
-// 		}
-// 	}
+func (c *Collection) FromRequest(req Request, resolv Resolver) (Executer, error) {
+	var (
+		sg  single
+		err error
+	)
+	sg.Name = req.Name
+	sg.expect = expectNothing
+	sg.req, err = req.getRequest(c.env)
+	if err != nil {
+		return nil, err
+	}
+	depends, err := req.Depends(c.env)
+	if err != nil {
+		return nil, err
+	}
+	for _, name := range  depends {
+		e, err := resolv.Find(name, resolv)
+		if err != nil {
+			return nil, err
+		}
+		sg.deps = append(sg.deps, e)
+	}
+	return sg, nil
+}
 
-// 	req, err := r.Prepare(c)
-// 	if err != nil {
-// 		return err
-// 	}
-
-// 	ctx := Combine(c)
-// 	ctx.SetRequestName(name)
-
-// 	if r.before != nil {
-// 		_, err := r.before.Eval(ctx)
-// 		if err != nil {
-// 			return err
-// 		}
-// 	}
-
-// 	res, err := http.DefaultClient.Do(req)
-// 	if err != nil {
-// 		return err
-// 	}
-// 	defer res.Body.Close()
-// 	_, err = io.Copy(w, res.Body)
-
-// 	if r.after != nil {
-// 		ctx.SetResponseCode(res.StatusCode)
-// 		_, err := r.after.Eval(ctx)
-// 		if err != nil {
-// 			return err
-// 		}
-// 	}
-// 	return err
-// }
+func (c *Collection) FromSelf(resolv Resolver) (Executer, error) {
+	ch := chain{
+		Name:       c.Name,
+		before:     c.before,
+		after:      c.after,
+		beforeEach: c.beforeEach,
+		afterEach:  c.afterEach,
+	}
+	for _, r := range c.requests {
+		e, err := c.FromRequest(r, resolv)
+		if err != nil {
+			return nil, err
+		}
+		ch.executers = append(ch.executers, e)
+	}
+	return ch, nil
+}
 
 func (c *Collection) GetCollection(name string) (*Collection, error) {
 	sort.Slice(c.collections, func(i, j int) bool {

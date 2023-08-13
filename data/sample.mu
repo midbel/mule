@@ -1,8 +1,11 @@
+headers {
+	accept          application/json
+	content-type    application/json
+}
+
 collection test {
 
 	headers {
-		accept          application/json
-		content-type    application/json
 		accept-encoding gzip
 		cache-control   no-cache
 	}
