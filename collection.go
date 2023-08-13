@@ -99,25 +99,31 @@ func (c *Collection) Find(name string, resolv Resolver) (Executer, error) {
 	if err != nil {
 		return nil, err
 	}
+	sub.headers = sub.headers.Merge(c.headers)
 	return sub.Find(rest, resolv)
 }
 
 func (c *Collection) FromRequest(req Request, resolv Resolver) (Executer, error) {
-	var (
-		sg  single
-		err error
-	)
-	sg.Name = req.Name
-	sg.expect = expectNothing
-	sg.req, err = req.getRequest(c.env)
-	if err != nil {
+	req.headers = req.headers.Merge(c.headers)
+
+	sg := single{
+		Name:   req.Name,
+		expect: expectNothing,
+	}
+
+	var err error
+	if sg.req, err = req.Prepare(c.env); err != nil {
 		return nil, err
 	}
+	if req.expect != nil {
+		sg.expect = req.expect
+	}
+
 	depends, err := req.Depends(c.env)
 	if err != nil {
 		return nil, err
 	}
-	for _, name := range  depends {
+	for _, name := range depends {
 		e, err := resolv.Find(name, resolv)
 		if err != nil {
 			return nil, err

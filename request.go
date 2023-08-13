@@ -3,9 +3,9 @@ package mule
 import (
 	"fmt"
 	"io"
-	"os"
 	"net/http"
 	"net/url"
+	"os"
 	"strings"
 
 	"github.com/midbel/enjoy/env"

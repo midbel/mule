@@ -124,3 +124,7 @@ type NamedBag struct {
 	Name string
 	Bag
 }
+
+type frozenBag struct {
+	Bag
+}
