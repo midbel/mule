@@ -1,6 +1,9 @@
 package mule
 
 import (
+	"os"
+	"strings"
+
 	"github.com/midbel/enjoy/env"
 	"github.com/midbel/enjoy/eval"
 	"github.com/midbel/enjoy/value"
@@ -13,63 +16,88 @@ const (
 	resBody   = "responseBody"
 )
 
-type scriptEnv struct {
-	vars env.Environ[string]
-	env.Environ[value.Value]
+type envVars struct{}
+
+func createEnvVars() value.Value {
+	return envVars{}
 }
 
-func Script(str env.Environ[string], val env.Environ[value.Value]) env.Environ[value.Value] {
-	return scriptEnv{
-		vars:    str,
-		Environ: val,
-	}
+func (_ envVars) True() bool {
+	return true
 }
 
-func (e scriptEnv) Reverse() env.Environ[string] {
-	return Mule(e.vars, e.Environ)
+func (_ envVars) Type() string {
+	return "object"
 }
 
-func (e scriptEnv) Resolve(ident string) (value.Value, error) {
-	v, err := e.Environ.Resolve(ident)
-	if err == nil {
-		return v, err
-	}
-	s, err := e.vars.Resolve(ident)
-	if err != nil {
-		return nil, err
-	}
+func (_ envVars) String() string {
+	return "<environ>"
+}
+
+func (v envVars) Get(prop string) (value.Value, error) {
+	n := strings.ToUpper(prop)
+	s := os.Getenv(n)
 	return value.CreateString(s), nil
 }
 
-type muleEnv struct {
-	vars env.Environ[value.Value]
-	env.Environ[string]
-}
-
-func DefaultMule(str env.Environ[string]) env.Environ[string] {
-	e := env.EnclosedEnv[value.Value](eval.Default())
-	return Mule(str, e)
-}
-
-func Mule(str env.Environ[string], val env.Environ[value.Value]) env.Environ[string] {
-	return muleEnv{
-		vars:    val,
-		Environ: str,
+func (v envVars) Call(fn string, args []value.Value) (value.Value, error) {
+	switch fn {
+	case "get":
+		n := strings.ToUpper(args[0].String())
+		s := os.Getenv(n)
+		return value.CreateString(s), nil
+	default:
+		return nil, value.ErrOperation
 	}
 }
 
-func (e muleEnv) Reverse() env.Environ[value.Value] {
-	return Script(e.Environ, e.vars)
+type muleVars struct {
+	context env.Environ[string]
 }
 
-func (e muleEnv) Resolve(ident string) (string, error) {
-	s, err := e.Environ.Resolve(ident)
-	if err == nil {
-		return s, err
+func createMuleVars(ev env.Environ[string]) value.Value {
+	return muleVars{
+		context: ev,
 	}
-	v, err := e.vars.Resolve(ident)
-	if err != nil {
-		return "", err
+}
+
+func (_ muleVars) True() bool {
+	return true
+}
+
+func (_ muleVars) Type() string {
+	return "object"
+}
+
+func (_ muleVars) String() string {
+	return "<variables>"
+}
+
+func (v muleVars) Call(fn string, args []value.Value) (value.Value, error) {
+	switch fn {
+	case "set":
+		err := v.context.Assign(args[0].String(), args[1].String())
+		return value.Undefined(), err
+	case "get":
+		s, err := v.context.Resolve(args[0].String())
+		return value.CreateString(s), err
+	default:
+		return nil, value.ErrOperation
 	}
-	return v.String(), nil
+}
+
+func prepareMule(ev env.Environ[string]) value.Value {
+	obj := value.CreateGlobal("mule")
+	obj.RegisterProp("variables", createMuleVars(ev))
+	obj.RegisterProp("environ", createEnvVars())
+
+	return obj
+}
+
+func prepareContext(ev env.Environ[string]) env.Environ[value.Value] {
+	top := eval.Default()
+	sub := env.EnclosedEnv[value.Value](top)
+	sub.Define("mule", prepareMule(ev), true)
+
+	return env.EnclosedEnv[value.Value](env.Immutable(sub))
 }

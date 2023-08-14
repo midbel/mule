@@ -7,7 +7,6 @@ import (
 	"net/http"
 	"net/url"
 	"os"
-	"strconv"
 	"strings"
 
 	"github.com/midbel/enjoy/env"
@@ -57,20 +56,12 @@ func (r Request) Execute(ev env.Environ[string]) (*http.Response, error) {
 		return nil, err
 	}
 
-	ev.Define(reqUri, req.URL.String(), true)
-	ev.Define(reqName, r.Name, true)
-
-	var rev env.Environ[value.Value]
-	if r, ok := ev.(interface {
-		Reverse() env.Environ[value.Value]
-	}); ok {
-		rev = r.Reverse()
-	} else {
-		rev = env.EmptyEnv[value.Value]()
-	}
+	ctx := prepareContext(ev)
+	ctx.Define(reqUri, value.CreateString(req.URL.String()), true)
+	ctx.Define(reqName, value.CreateString(r.Name), true)
 
 	if r.before != nil {
-		if _, err := r.before.Eval(rev); err != nil {
+		if _, err := r.before.Eval(ctx); err != nil {
 			return nil, err
 		}
 	}
@@ -90,9 +81,9 @@ func (r Request) Execute(ev env.Environ[string]) (*http.Response, error) {
 	res.Body = io.NopCloser(&buf)
 
 	if r.after != nil {
-		ev.Define(resBody, str.String(), true)
-		ev.Define(reqStatus, strconv.Itoa(res.StatusCode), true)
-		if _, err := r.after.Eval(rev); err != nil {
+		ctx.Define(resBody, value.CreateString(str.String()), true)
+		ctx.Define(reqStatus, value.CreateFloat(float64(res.StatusCode)), true)
+		if _, err := r.after.Eval(ctx); err != nil {
 			return nil, err
 		}
 	}

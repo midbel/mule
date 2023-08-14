@@ -72,8 +72,8 @@ func (c *Collection) Path() []string {
 }
 
 func (c *Collection) Run(name string, w io.Writer) error {
-	data := DefaultMule(c)
-	return c.runWithEnv(name, data, w)
+	// data := DefaultMule(c)
+	return c.runWithEnv(name, c, w)
 }
 
 func (c *Collection) runWithEnv(name string, ev env.Environ[string], w io.Writer) error {

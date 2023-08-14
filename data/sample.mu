@@ -25,7 +25,10 @@ collection test {
 
 		before <<BEFORE
 		console.log(`start request ${requestName}`)
-		console.log(`query to ${endpoint} with params ${version}`)
+		console.log(`query to ${mule.variables.get('endpoint')} with params ${mule.variables.get('version')}`)
+		console.log(mule.environ.get('HOME'))
+		console.log(mule.environ.shell)
+		console.log(mule.environ)
 		BEFORE
 
 		after <<AFTER
