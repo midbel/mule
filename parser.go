@@ -318,7 +318,6 @@ func (p *Parser) parseQuote() (Word, error) {
 	if err := p.expect(Quote); err != nil {
 		return nil, err
 	}
-	p.next()
 	var ws compound
 	for !p.done() && !p.is(Quote) {
 		w, err := p.parseWord()

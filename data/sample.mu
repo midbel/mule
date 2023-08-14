@@ -3,6 +3,11 @@ headers {
 	content-type    application/json
 }
 
+variables {
+	version 'v1.0.1'
+	endpoint demo
+}
+
 collection test {
 
 	headers {
@@ -12,20 +17,23 @@ collection test {
 
 	get demo {
 
-		depends 'test.test'
-
-		url http://localhost:9090/demo
+		url "http://localhost:9090/${endpoint}"
 
 		query {
-			format v1
+			format ${version}
 		}
 
 		before <<BEFORE
 		console.log(`start request ${requestName}`)
+		console.log(`query to ${endpoint} with params ${version}`)
 		BEFORE
 
 		after <<AFTER
 		console.log(`done request ${requestName} ${requestStatus}`)
+		const obj = JSON.parse(responseBody)
+		console.log(obj.id)
+		console.log(obj.timestamp)
+		console.log(obj.headers)
 		AFTER
 
 		username test

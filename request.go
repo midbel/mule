@@ -1,11 +1,13 @@
 package mule
 
 import (
+	"bytes"
 	"fmt"
 	"io"
 	"net/http"
 	"net/url"
 	"os"
+	"strconv"
 	"strings"
 
 	"github.com/midbel/enjoy/env"
@@ -43,9 +45,58 @@ func Prepare(name, method string) Request {
 	return Request{
 		Info:    info,
 		method:  method,
+		expect:  expectNothing,
 		headers: make(Bag),
 		query:   make(Bag),
 	}
+}
+
+func (r Request) Execute(ev env.Environ[string]) (*http.Response, error) {
+	req, err := r.Prepare(ev)
+	if err != nil {
+		return nil, err
+	}
+
+	ev.Define(reqUri, req.URL.String(), true)
+	ev.Define(reqName, r.Name, true)
+
+	var rev env.Environ[value.Value]
+	if r, ok := ev.(interface {
+		Reverse() env.Environ[value.Value]
+	}); ok {
+		rev = r.Reverse()
+	} else {
+		rev = env.EmptyEnv[value.Value]()
+	}
+
+	if r.before != nil {
+		if _, err := r.before.Eval(rev); err != nil {
+			return nil, err
+		}
+	}
+	res, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	var (
+		str strings.Builder
+		buf bytes.Buffer
+		ws  = io.MultiWriter(&str, &buf)
+	)
+	if _, err := io.Copy(ws, res.Body); err != nil {
+		return nil, err
+	}
+	res.Body.Close()
+	res.Body = io.NopCloser(&buf)
+
+	if r.after != nil {
+		ev.Define(resBody, str.String(), true)
+		ev.Define(reqStatus, strconv.Itoa(res.StatusCode), true)
+		if _, err := r.after.Eval(rev); err != nil {
+			return nil, err
+		}
+	}
+	return res, r.expect(res)
 }
 
 func (r Request) Depends(ev env.Environ[string]) ([]string, error) {

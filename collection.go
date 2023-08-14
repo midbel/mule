@@ -72,83 +72,56 @@ func (c *Collection) Path() []string {
 }
 
 func (c *Collection) Run(name string, w io.Writer) error {
-	x, err := c.Find(name, c)
+	data := DefaultMule(c)
+	return c.runWithEnv(name, data, w)
+}
+
+func (c *Collection) runWithEnv(name string, ev env.Environ[string], w io.Writer) error {
+	req, err := c.Find(name)
 	if err != nil {
 		return err
 	}
-	return x.Execute(w, env.EmptyEnv[value.Value]())
+	return c.execute(req, ev, w)
 }
 
-func (c *Collection) Find(name string, resolv Resolver) (Executer, error) {
+func (c *Collection) execute(q Request, ev env.Environ[string], w io.Writer) error {
+	depends, err := q.Depends(ev)
+	if err != nil {
+		return err
+	}
+	for _, d := range depends {
+		if err := c.runWithEnv(d, ev, w); err != nil {
+			return err
+		}
+	}
+	res, err := q.Execute(ev)
+	if err != nil {
+		return err
+	}
+	defer res.Body.Close()
+	io.Copy(w, res.Body)
+	return nil
+}
+
+func (c *Collection) Find(name string) (Request, error) {
 	var (
 		rest  string
 		found bool
 	)
 	name, rest, found = strings.Cut(name, ".")
 	if !found {
-		req, err := c.GetRequest(name)
+		q, err := c.GetRequest(name)
 		if err == nil {
-			return c.FromRequest(req, resolv)
+			q.headers = q.headers.Merge(c.headers)
 		}
-		if c.Name == name {
-			return c.FromSelf(resolv)
-		}
-		return nil, err
+		return q, nil
 	}
 	sub, err := c.GetCollection(name)
 	if err != nil {
-		return nil, err
+		return Request{}, err
 	}
 	sub.headers = sub.headers.Merge(c.headers)
-	return sub.Find(rest, resolv)
-}
-
-func (c *Collection) FromRequest(req Request, resolv Resolver) (Executer, error) {
-	req.headers = req.headers.Merge(c.headers)
-
-	sg := single{
-		Name:   req.Name,
-		expect: expectNothing,
-	}
-
-	var err error
-	if sg.req, err = req.Prepare(c.env); err != nil {
-		return nil, err
-	}
-	if req.expect != nil {
-		sg.expect = req.expect
-	}
-
-	depends, err := req.Depends(c.env)
-	if err != nil {
-		return nil, err
-	}
-	for _, name := range depends {
-		e, err := resolv.Find(name, resolv)
-		if err != nil {
-			return nil, err
-		}
-		sg.deps = append(sg.deps, e)
-	}
-	return sg, nil
-}
-
-func (c *Collection) FromSelf(resolv Resolver) (Executer, error) {
-	ch := chain{
-		Name:       c.Name,
-		before:     c.before,
-		after:      c.after,
-		beforeEach: c.beforeEach,
-		afterEach:  c.afterEach,
-	}
-	for _, r := range c.requests {
-		e, err := c.FromRequest(r, resolv)
-		if err != nil {
-			return nil, err
-		}
-		ch.executers = append(ch.executers, e)
-	}
-	return ch, nil
+	return sub.Find(rest)
 }
 
 func (c *Collection) GetCollection(name string) (*Collection, error) {
