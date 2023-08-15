@@ -120,6 +120,16 @@ func (c *Collection) Find(name string) (Request, error) {
 	if !found {
 		q, err := c.GetRequest(name)
 		if err == nil {
+			if c.base != nil {
+				var ws compound
+				ws = append(ws, c.base)
+				if w, ok := q.location.(compound); ok {
+					ws = append(ws, w...)
+				} else {
+					ws = append(ws, q.location)
+				}
+				q.location = ws
+			}
 			q.headers = q.headers.Merge(c.headers)
 		}
 		return q, nil
