@@ -102,28 +102,36 @@ func (r Request) Depends(ev env.Environ[string]) ([]string, error) {
 	return list, nil
 }
 
-func (r Request) Prepare(ev env.Environ[string]) (*http.Request, error) {
-	req, err := r.getRequest(ev)
+func (r Request) Prepare(root *Collection) (*http.Request, error) {
+	req, err := r.getRequest(root)
 	if err != nil {
 		return nil, err
 	}
-	return req, r.setHeaders(req, ev)
+	return req, r.setHeaders(req, root)
 }
 
-func (r Request) getRequest(ev env.Environ[string]) (*http.Request, error) {
+func (r Request) getRequest(root *Collection) (*http.Request, error) {
 	var body io.Reader
 	if r.body != nil {
-		tmp, err := r.body.Expand(ev)
+		tmp, err := r.body.Expand(root)
 		if err != nil {
 			return nil, err
 		}
 		body = strings.NewReader(tmp)
 	}
-	uri, err := r.location.ExpandURL(ev)
+	uri, err := r.location.ExpandURL(root)
 	if err != nil {
 		return nil, err
 	}
-	query, err := r.query.ValuesWith(ev, uri.Query())
+	if uri.Host == "" && root.base != nil {
+		parent, err := root.base.ExpandURL(root)
+		if err != nil {
+			return nil, err
+		}
+		uri.Host = parent.Host
+		uri.Scheme = parent.Scheme
+	}
+	query, err := r.query.ValuesWith(root, uri.Query())
 	if err != nil {
 		return nil, err
 	}

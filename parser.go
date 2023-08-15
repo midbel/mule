@@ -36,6 +36,7 @@ func NewParser(r io.Reader) *Parser {
 		"include": p.parseIncludeMacro,
 	}
 	p.dispatch = map[string]func(*Collection) error{
+		"url": p.parseCollectionURL,
 		"variables":  p.parseVariables,
 		"collection": p.parseCollection,
 		"headers":    p.parseCollectionHeaders,
@@ -182,6 +183,13 @@ func (p *Parser) parseCollection(parent *Collection) error {
 	}
 	parent.AddCollection(curr)
 	return p.expect(Rbrace)
+}
+
+func (p *Parser) parseCollectionURL(collect *Collection) error {
+	p.next()
+	var err error
+	collect.base, err = p.parseWord()
+	return err
 }
 
 func (p *Parser) parseRequest(collect *Collection) error {

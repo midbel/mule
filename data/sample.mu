@@ -19,9 +19,11 @@ collection test {
 		cache-control   no-cache
 	}
 
+	url http://localhost:9090/
+
 	get demo {
 
-		url "http://localhost:9090/${endpoint}"
+		url ${endpoint}
 
 		depends 'test.test'
 
