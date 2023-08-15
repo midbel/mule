@@ -59,6 +59,15 @@ func Enclosed(name string, parent *Collection) *Collection {
 	}
 }
 
+func (c *Collection) Collections() []string {
+	var list []string
+	for _, i := range c.collections {
+		list = append(list, i.Name)
+		list = append(list, i.Collections()...)
+	}
+	return list
+}
+
 func (c *Collection) Path() []string {
 	var (
 		parts []string
@@ -72,7 +81,6 @@ func (c *Collection) Path() []string {
 }
 
 func (c *Collection) Run(name string, w io.Writer) error {
-	// data := DefaultMule(c)
 	return c.runWithEnv(name, c, w)
 }
 
@@ -94,7 +102,7 @@ func (c *Collection) execute(q Request, ev env.Environ[string], w io.Writer) err
 			return err
 		}
 	}
-	res, err := q.Execute(ev)
+	res, err := q.Execute(c)
 	if err != nil {
 		return err
 	}

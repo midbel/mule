@@ -8,6 +8,10 @@ variables {
 	endpoint demo
 }
 
+collection check {}
+
+collection abitofall {}
+
 collection test {
 
 	headers {
@@ -19,24 +23,21 @@ collection test {
 
 		url "http://localhost:9090/${endpoint}"
 
+		depends 'test.test'
+
 		query {
 			format ${version}
 		}
 
 		before <<BEFORE
-		console.log(`start request ${requestName}`)
-		console.log(`query to ${mule.variables.get('endpoint')} with params ${mule.variables.get('version')}`)
-		console.log(mule.environ.get('HOME'))
-		console.log(mule.environ.shell)
-		console.log(mule.environ)
+		console.log(mule.collections)
+		console.log(`start request ${requestName} to ${requestUri}`)
 		BEFORE
 
 		after <<AFTER
 		console.log(`done request ${requestName} ${requestStatus}`)
 		const obj = JSON.parse(responseBody)
 		console.log(obj.id)
-		console.log(obj.timestamp)
-		console.log(obj.headers)
 		AFTER
 
 		username test

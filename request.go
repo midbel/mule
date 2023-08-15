@@ -50,13 +50,13 @@ func Prepare(name, method string) Request {
 	}
 }
 
-func (r Request) Execute(ev env.Environ[string]) (*http.Response, error) {
-	req, err := r.Prepare(ev)
+func (r Request) Execute(root *Collection) (*http.Response, error) {
+	req, err := r.Prepare(root)
 	if err != nil {
 		return nil, err
 	}
 
-	ctx := prepareContext(ev)
+	ctx := prepareContext(root)
 	ctx.Define(reqUri, value.CreateString(req.URL.String()), true)
 	ctx.Define(reqName, value.CreateString(r.Name), true)
 

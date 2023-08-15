@@ -173,8 +173,8 @@ func (p *Parser) parseCollection(parent *Collection) error {
 		return err
 	}
 	defer p.skip(EOL)
+	p.skip(EOL)
 	for !p.done() && !p.is(Rbrace) {
-		p.skip(EOL)
 		if err := p.startParse(curr); err != nil {
 			return err
 		}

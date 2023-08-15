@@ -86,18 +86,39 @@ func (v muleVars) Call(fn string, args []value.Value) (value.Value, error) {
 	}
 }
 
-func prepareMule(ev env.Environ[string]) value.Value {
-	obj := value.CreateGlobal("mule")
-	obj.RegisterProp("variables", createMuleVars(ev))
+func prepareMule(root *Collection) value.Value {
+	obj := muleContext{
+		Global: value.CreateGlobal("mule"),
+		root:   root,
+	}
+	obj.RegisterProp("variables", createMuleVars(root))
 	obj.RegisterProp("environ", createEnvVars())
 
-	return obj
+	return &obj
 }
 
-func prepareContext(ev env.Environ[string]) env.Environ[value.Value] {
+func prepareContext(root *Collection) env.Environ[value.Value] {
 	top := eval.Default()
 	sub := env.EnclosedEnv[value.Value](top)
-	sub.Define("mule", prepareMule(ev), true)
+	sub.Define("mule", prepareMule(root), true)
 
 	return env.EnclosedEnv[value.Value](env.Immutable(sub))
+}
+
+type muleContext struct {
+	value.Global
+	root *Collection
+}
+
+func (c *muleContext) Get(prop string) (value.Value, error) {
+	switch prop {
+	case "collections":
+		var list []value.Value
+		for _, c := range c.root.Collections() {
+			list = append(list, value.CreateString(c))
+		}
+		return value.CreateArray(list), nil
+	default:
+		return value.Undefined(), nil
+	}
 }
