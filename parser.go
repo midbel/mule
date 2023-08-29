@@ -36,7 +36,7 @@ func NewParser(r io.Reader) *Parser {
 		"include": p.parseIncludeMacro,
 	}
 	p.dispatch = map[string]func(*Collection) error{
-		"url": p.parseCollectionURL,
+		"url":        p.parseCollectionURL,
 		"variables":  p.parseVariables,
 		"collection": p.parseCollection,
 		"headers":    p.parseCollectionHeaders,
