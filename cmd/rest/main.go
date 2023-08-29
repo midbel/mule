@@ -66,16 +66,10 @@ func Prepare(file string) (http.Handler, error) {
 	if err != nil {
 		return nil, err
 	}
-	fn := func(w http.ResponseWriter, r *http.Request) {
-		limit, err := getLimitFromRequest(r, len(data))
-		fmt.Println(limit, err)
-		if err != nil {
-			w.WriteHeader(http.StatusBadRequest)
-			return
-		}
-		json.NewEncoder(w).Encode(data[limit.Offset : limit.Offset+limit.Count])
+	h := handler{
+		Data: data,
 	}
-	return http.HandlerFunc(fn), nil
+	return h, nil
 }
 
 type Limit struct {
@@ -83,10 +77,39 @@ type Limit struct {
 	Count  int
 }
 
-func getLimitFromRequest(r *http.Request, size int) (Limit, error) {
+type handler struct {
+	Data []Data
+}
+
+func (h handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	h.setHeadersCORS(w)
+	if r.Method == http.MethodOptions {
+		return
+	}
+	limit, err := h.getLimitFromRequest(r)
+	if err != nil {
+		w.WriteHeader(http.StatusBadRequest)
+		return
+	}
+	json.NewEncoder(w).Encode(h.Data[limit.Offset : limit.Offset+limit.Count])
+}
+
+func (h handler) setHeadersCORS(w http.ResponseWriter) {
+	w.Header().Set("Access-Control-Allow-Origin", "*")
+	w.Header().Set("Access-Control-Allow-Credentials", "true")
+	w.Header().Add("Access-Control-Allow-Methods", "GET")
+	w.Header().Add("Access-Control-Allow-Methods", "OPTIONS")
+	w.Header().Add("Access-Control-Allow-Headers", "Accept")
+	w.Header().Add("Access-Control-Allow-Headers", "Accept-Language")
+	w.Header().Add("Access-Control-Allow-Headers", "Content-Language")
+	w.Header().Add("Access-Control-Allow-Headers", "Origin")
+}
+
+func (h handler) getLimitFromRequest(r *http.Request) (Limit, error) {
 	var (
 		lim    Limit
 		err    error
+		size   = len(h.Data)
 		q      = r.URL.Query()
 		offset = q.Get("offset")
 		count  = q.Get("count")
