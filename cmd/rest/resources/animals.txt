@@ -1,0 +1,15 @@
+bird
+bear
+beaver
+dog
+cat
+tiger
+lion
+mouse
+cow
+horse
+eagle
+fish
+whale
+dolphin
+rat
