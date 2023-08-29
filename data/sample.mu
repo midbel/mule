@@ -61,7 +61,7 @@ collection test {
 
 		headers {
 			Authorization "bearer 123"
-			User-Agent     'mule 0.1' 
+			User-Agent     'mule 0.1'
 		}
 
 	}

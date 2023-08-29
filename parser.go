@@ -241,7 +241,7 @@ func (p *Parser) parseRequest(collect *Collection) error {
 		case "query":
 			req.query, err = p.parseBag()
 		case "body":
-			req.body, err = p.parseWord()
+			req.body, err = p.parseBody()
 		case "cookie":
 		case "username":
 			req.user, err = p.parseWord()
@@ -263,11 +263,13 @@ func (p *Parser) parseRequest(collect *Collection) error {
 		}
 		p.skip(EOL)
 	}
-	if req.location == nil {
-		return fmt.Errorf("%s: missing url in request definition", req.Name)
-	}
 	collect.AddRequest(req)
 	return p.expect(Rbrace)
+}
+
+func (p *Parser) parseBody() (Body, error) {
+	defer p.next()
+	return PrepareBody(p.curr.Literal)
 }
 
 func (p *Parser) parseScript(ev env.Environ[string]) (value.Evaluable, error) {

@@ -28,7 +28,7 @@ type Request struct {
 	pass     Word
 	query    Bag
 	headers  Bag
-	body     Word
+	body     Body
 
 	cookies []Bag
 	expect  func(*http.Response) error
@@ -113,11 +113,12 @@ func (r Request) Prepare(root *Collection) (*http.Request, error) {
 func (r Request) getRequest(root *Collection) (*http.Request, error) {
 	var body io.Reader
 	if r.body != nil {
-		tmp, err := r.body.Expand(root)
+		tmp, err := r.body.Open()
 		if err != nil {
 			return nil, err
 		}
-		body = strings.NewReader(tmp)
+		defer tmp.Close()
+		body = tmp
 	}
 	uri, err := r.location.ExpandURL(root)
 	if err != nil {
@@ -171,6 +172,18 @@ func (r Request) attachCookies(req *http.Request, ev env.Environ[string]) error 
 		req.AddCookie(cook)
 	}
 	return nil
+}
+
+type Body interface {
+	Open() (io.ReadCloser, error)
+}
+
+func PrepareBody(str string) (Body, error) {
+	s, err := os.Stat(str)
+	if err == nil && s.Mode().IsRegular() {
+		return stringBody(str), nil
+	}
+	return stringBody(str), nil
 }
 
 type stringBody string
