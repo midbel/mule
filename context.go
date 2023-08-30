@@ -16,19 +16,21 @@ const (
 	resBody   = "responseBody"
 )
 
-func prepareContext(root *Collection) env.Environ[value.Value] {
-	top := eval.Default()
-	sub := env.EnclosedEnv[value.Value](top)
-	return env.EnclosedEnv[value.Value](env.Immutable(sub))
-}
-
-type muleContext struct {
+type Context struct {
 	value.Global
 	root *Collection
 }
 
-func prepareMule(root *Collection) value.Value {
-	obj := muleContext{
+func prepareContext(ctx *Context) env.Environ[value.Value] {
+	top := eval.Default()
+	sub := env.EnclosedEnv[value.Value](top)
+	sub.Define("mule", ctx, true)
+	
+	return env.EnclosedEnv[value.Value](env.Immutable(sub))
+}
+
+func PrepareContext(root *Collection) *Context {
+	obj := Context{
 		Global: value.CreateGlobal("mule"),
 		root:   root,
 	}
@@ -38,7 +40,7 @@ func prepareMule(root *Collection) value.Value {
 	return &obj
 }
 
-func (c *muleContext) Get(prop string) (value.Value, error) {
+func (c *Context) Get(prop string) (value.Value, error) {
 	switch prop {
 	case "collections":
 		var list []value.Value
