@@ -1,7 +1,6 @@
 package mule
 
 import (
-	"bytes"
 	"fmt"
 	"io"
 	"net/http"
@@ -60,34 +59,51 @@ func (r Request) Execute(root *Collection) (*http.Response, error) {
 	ctx.Define(reqUri, value.CreateString(req.URL.String()), true)
 	ctx.Define(reqName, value.CreateString(r.Name), true)
 
-	if r.before != nil {
-		if _, err := r.before.Eval(ctx); err != nil {
-			return nil, err
-		}
+	if err := r.executeBefore(root, ctx); err != nil {
+		return nil, err
 	}
+
 	res, err := http.DefaultClient.Do(req)
 	if err != nil {
 		return nil, err
 	}
-	var (
-		str strings.Builder
-		buf bytes.Buffer
-		ws  = io.MultiWriter(&str, &buf)
-	)
-	if _, err := io.Copy(ws, res.Body); err != nil {
+
+	ctx.Define(reqStatus, value.CreateFloat(float64(res.StatusCode)), true)
+	if err := r.executeAfter(root, ctx); err != nil {
 		return nil, err
 	}
-	res.Body.Close()
-	res.Body = io.NopCloser(&buf)
 
-	if r.after != nil {
-		ctx.Define(resBody, value.CreateString(str.String()), true)
-		ctx.Define(reqStatus, value.CreateFloat(float64(res.StatusCode)), true)
-		if _, err := r.after.Eval(ctx); err != nil {
-			return nil, err
+	return res, r.expect(res)
+}
+
+func (r Request) executeBefore(root *Collection, ctx env.Environ[value.Value]) error {
+	for _, s := range root.beforeEach {
+		if _, err := s.Eval(ctx); err != nil {
+			return err
 		}
 	}
-	return res, r.expect(res)
+	if r.before != nil {
+		_, err := r.before.Eval(ctx)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (r Request) executeAfter(root *Collection, ctx env.Environ[value.Value]) error {
+	for _, s := range root.afterEach {
+		if _, err := s.Eval(ctx); err != nil {
+			return err
+		}
+	}
+	if r.after != nil {
+		_, err := r.after.Eval(ctx)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 func (r Request) Depends(ev env.Environ[string]) ([]string, error) {
@@ -103,6 +119,12 @@ func (r Request) Depends(ev env.Environ[string]) ([]string, error) {
 }
 
 func (r Request) Prepare(root *Collection) (*http.Request, error) {
+	if r.user == nil && root.user != nil {
+		r.user = root.user
+	}
+	if r.pass == nil && root.pass != nil {
+		r.pass = root.pass
+	}
 	req, err := r.getRequest(root)
 	if err != nil {
 		return nil, err

@@ -23,16 +23,16 @@ type Collection struct {
 	parent *Collection
 
 	base        Word
+	user        Word
+	pass        Word
 	env         env.Environ[string]
 	headers     Bag
 	query       Bag
 	requests    []Request
 	collections []*Collection
 
-	after      value.Evaluable
-	afterEach  value.Evaluable
-	before     value.Evaluable
-	beforeEach value.Evaluable
+	afterEach  []value.Evaluable
+	beforeEach []value.Evaluable
 }
 
 func Open(file string) (*Collection, error) {

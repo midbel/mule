@@ -11,6 +11,8 @@ import (
 
 var keywords = []string{
 	// configuration block
+	"username",
+	"password",
 	"collection",
 	"variables",
 	"headers",

@@ -37,6 +37,8 @@ func NewParser(r io.Reader) *Parser {
 	}
 	p.dispatch = map[string]func(*Collection) error{
 		"url":        p.parseCollectionURL,
+		"username":   p.parseCollectionUser,
+		"password":   p.parseCollectionPass,
 		"variables":  p.parseVariables,
 		"collection": p.parseCollection,
 		"headers":    p.parseCollectionHeaders,
@@ -183,6 +185,22 @@ func (p *Parser) parseCollection(parent *Collection) error {
 	}
 	parent.AddCollection(curr)
 	return p.expect(Rbrace)
+}
+
+func (p *Parser) parseCollectionUser(collect *Collection) error {
+	p.next()
+
+	var err error
+	collect.user, err = p.parseWord()
+	return err
+}
+
+func (p *Parser) parseCollectionPass(collect *Collection) error {
+	p.next()
+
+	var err error
+	collect.pass, err = p.parseWord()
+	return err
 }
 
 func (p *Parser) parseCollectionURL(collect *Collection) error {
@@ -453,14 +471,10 @@ func (p *Parser) parseCollectionScript(collect *Collection) error {
 		return err
 	}
 	switch ident {
-	case "before":
-		collect.before = ev
 	case "beforeEach":
-		collect.beforeEach = ev
-	case "after":
-		collect.after = ev
+		collect.beforeEach = append(collect.beforeEach, ev)
 	case "afterEach":
-		collect.afterEach = ev
+		collect.afterEach = append(collect.afterEach, ev)
 	default:
 	}
 	return nil

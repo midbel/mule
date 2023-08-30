@@ -44,7 +44,7 @@ func main() {
 		Route string
 		Data  string
 	}{
-		{Route: "/pets/", Data: "animals.txt"},
+		{Route: "/animals/", Data: "animals.txt"},
 		{Route: "/cars/", Data: "cars.txt"},
 		{Route: "/colors/", Data: "colors.txt"},
 		{Route: "/companies/", Data: "companies.txt"},

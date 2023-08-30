@@ -100,8 +100,6 @@ func prepareMule(root *Collection) value.Value {
 func prepareContext(root *Collection) env.Environ[value.Value] {
 	top := eval.Default()
 	sub := env.EnclosedEnv[value.Value](top)
-	sub.Define("mule", prepareMule(root), true)
-
 	return env.EnclosedEnv[value.Value](env.Immutable(sub))
 }
 
