@@ -513,7 +513,8 @@ func (p *Parser) expect(kind rune) error {
 }
 
 func (p *Parser) unexpected() error {
-	return fmt.Errorf("unexpected token %s", p.curr)
+	pos := p.curr.Position
+	return fmt.Errorf("%d,%d: unexpected token %s", pos.Line, pos.Column, p.curr)
 }
 
 func (p *Parser) is(kind rune) bool {

@@ -274,7 +274,7 @@ func (s *Scanner) scanVariable(tok *Token) {
 	tok.Type = Variable
 	if brace && s.char != rbrace {
 		tok.Type = Invalid
-	} else {
+	} else if brace {
 		s.read()
 	}
 }

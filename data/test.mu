@@ -3,6 +3,10 @@ headers {
   accept "text/xml"
 }
 
+variables {
+  five 5
+}
+
 username foobar
 password "tmp123!"
 
@@ -19,8 +23,8 @@ collection demo {
     }
 
     query {
-      offset 5
-      count  5
+      offset $five
+      count  $five
     }
 
     expect 200
@@ -32,6 +36,9 @@ collection demo {
     after <<SCRIPT
     console.log("done query:", requestName, responseStatus)
     console.log("response body", responseBody)
+
+    const list = JSON.parse(responseBody)
+    console.log(list.find( x => x.label == 'fish').label)
     SCRIPT
   }
 
