@@ -1,6 +1,7 @@
 package mule
 
 import (
+	"bytes"
 	"fmt"
 	"io"
 	"net/http"
@@ -67,12 +68,23 @@ func (r Request) Execute(root *Collection) (*http.Response, error) {
 	if err != nil {
 		return nil, err
 	}
+	defer res.Body.Close()
 
-	ctx.Define(reqStatus, value.CreateFloat(float64(res.StatusCode)), true)
-	if err := r.executeAfter(root, ctx); err != nil {
+	var (
+		tmp bytes.Buffer
+		str bytes.Buffer
+	)
+	if _, err := io.Copy(io.MultiWriter(&tmp, &str), res.Body); err != nil {
 		return nil, err
 	}
 
+	body := strings.TrimSpace(str.String())
+	ctx.Define(resStatus, value.CreateFloat(float64(res.StatusCode)), true)
+	ctx.Define(resBody, value.CreateString(body), true)
+	if err := r.executeAfter(root, ctx); err != nil {
+		return nil, err
+	}
+	res.Body = io.NopCloser(&tmp)
 	return res, r.expect(res)
 }
 

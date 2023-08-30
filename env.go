@@ -11,8 +11,8 @@ import (
 
 const (
 	reqUri    = "requestUri"
-	reqStatus = "requestStatus"
 	reqName   = "requestName"
+	resStatus = "responseStatus"
 	resBody   = "responseBody"
 )
 
