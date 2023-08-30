@@ -5,8 +5,8 @@ import (
 	"fmt"
 	"io"
 	"net/http"
-	"net/url"
 	"os"
+	"slices"
 	"strings"
 
 	"github.com/midbel/enjoy/env"
@@ -86,36 +86,6 @@ func (r Request) Execute(root *Collection) (*http.Response, error) {
 	}
 	res.Body = io.NopCloser(&tmp)
 	return res, r.expect(res)
-}
-
-func (r Request) executeBefore(root *Collection, ctx env.Environ[value.Value]) error {
-	for _, s := range root.beforeEach {
-		if _, err := s.Eval(ctx); err != nil {
-			return err
-		}
-	}
-	if r.before != nil {
-		_, err := r.before.Eval(ctx)
-		if err != nil {
-			return err
-		}
-	}
-	return nil
-}
-
-func (r Request) executeAfter(root *Collection, ctx env.Environ[value.Value]) error {
-	for _, s := range root.afterEach {
-		if _, err := s.Eval(ctx); err != nil {
-			return err
-		}
-	}
-	if r.after != nil {
-		_, err := r.after.Eval(ctx)
-		if err != nil {
-			return err
-		}
-	}
-	return nil
 }
 
 func (r Request) Depends(ev env.Environ[string]) ([]string, error) {
@@ -208,6 +178,31 @@ func (r Request) attachCookies(req *http.Request, ev env.Environ[string]) error 
 	return nil
 }
 
+func (r Request) executeScripts(scripts []value.Evaluable, ctx env.Environ[value.Value]) error {
+	for _, s := range scripts {
+		if _, err := s.Eval(ctx); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (r Request) executeBefore(root *Collection, ctx env.Environ[value.Value]) error {
+	tmp := slices.Clone(root.beforeEach)
+	if r.before != nil {
+		tmp = append(tmp, r.before)
+	}
+	return r.executeScripts(tmp, ctx)
+}
+
+func (r Request) executeAfter(root *Collection, ctx env.Environ[value.Value]) error {
+	tmp := slices.Clone(root.afterEach)
+	if r.after != nil {
+		tmp = append(tmp, r.after)
+	}
+	return r.executeScripts(tmp, ctx)
+}
+
 type Body interface {
 	Open() (io.ReadCloser, error)
 }
@@ -273,18 +268,4 @@ func expectCodeRange(ident string) (ExpectFunc, error) {
 		}
 		return fmt.Errorf("expected status code in range %d - %d! got %d", fc, tc, r.StatusCode)
 	}, nil
-}
-
-func mergeHeaders(fst, snd http.Header) http.Header {
-	if len(fst) > 0 || len(snd) == 0 {
-		return fst
-	}
-	return snd
-}
-
-func mergeQuery(fst, snd url.Values) url.Values {
-	if len(fst) > 0 || len(snd) == 0 {
-		return fst
-	}
-	return snd
 }

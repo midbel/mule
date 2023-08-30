@@ -16,6 +16,41 @@ const (
 	resBody   = "responseBody"
 )
 
+func prepareContext(root *Collection) env.Environ[value.Value] {
+	top := eval.Default()
+	sub := env.EnclosedEnv[value.Value](top)
+	return env.EnclosedEnv[value.Value](env.Immutable(sub))
+}
+
+type muleContext struct {
+	value.Global
+	root *Collection
+}
+
+func prepareMule(root *Collection) value.Value {
+	obj := muleContext{
+		Global: value.CreateGlobal("mule"),
+		root:   root,
+	}
+	obj.RegisterProp("variables", createMuleVars(root))
+	obj.RegisterProp("environ", createEnvVars())
+
+	return &obj
+}
+
+func (c *muleContext) Get(prop string) (value.Value, error) {
+	switch prop {
+	case "collections":
+		var list []value.Value
+		for _, c := range c.root.Collections() {
+			list = append(list, value.CreateString(c))
+		}
+		return value.CreateArray(list), nil
+	default:
+		return value.Undefined(), nil
+	}
+}
+
 type envVars struct{}
 
 func createEnvVars() value.Value {
@@ -43,9 +78,7 @@ func (v envVars) Get(prop string) (value.Value, error) {
 func (v envVars) Call(fn string, args []value.Value) (value.Value, error) {
 	switch fn {
 	case "get":
-		n := strings.ToUpper(args[0].String())
-		s := os.Getenv(n)
-		return value.CreateString(s), nil
+		return v.Get(args[0].String())
 	default:
 		return nil, value.ErrOperation
 	}
@@ -83,40 +116,5 @@ func (v muleVars) Call(fn string, args []value.Value) (value.Value, error) {
 		return value.CreateString(s), err
 	default:
 		return nil, value.ErrOperation
-	}
-}
-
-func prepareMule(root *Collection) value.Value {
-	obj := muleContext{
-		Global: value.CreateGlobal("mule"),
-		root:   root,
-	}
-	obj.RegisterProp("variables", createMuleVars(root))
-	obj.RegisterProp("environ", createEnvVars())
-
-	return &obj
-}
-
-func prepareContext(root *Collection) env.Environ[value.Value] {
-	top := eval.Default()
-	sub := env.EnclosedEnv[value.Value](top)
-	return env.EnclosedEnv[value.Value](env.Immutable(sub))
-}
-
-type muleContext struct {
-	value.Global
-	root *Collection
-}
-
-func (c *muleContext) Get(prop string) (value.Value, error) {
-	switch prop {
-	case "collections":
-		var list []value.Value
-		for _, c := range c.root.Collections() {
-			list = append(list, value.CreateString(c))
-		}
-		return value.CreateArray(list), nil
-	default:
-		return value.Undefined(), nil
 	}
 }
