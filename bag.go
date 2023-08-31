@@ -27,13 +27,6 @@ func (b Bag) Clone() Bag {
 	return g
 }
 
-func (b Bag) MergeForce(other Bag) Bag {
-	g := make(Bag)
-	maps.Copy(g, other)
-	maps.Copy(g, b)
-	return g
-}
-
 func (b Bag) Merge(other Bag) Bag {
 	g := make(Bag)
 	maps.Copy(g, b)
