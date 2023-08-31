@@ -1,6 +1,7 @@
 package mule
 
 import (
+	"fmt"
 	"os"
 	"strings"
 
@@ -21,11 +22,11 @@ type Context struct {
 	root *Collection
 }
 
-func prepareContext(ctx *Context) env.Environ[value.Value] {
+func MuleEnv(ctx *Context) env.Environ[value.Value] {
 	top := eval.Default()
 	sub := env.EnclosedEnv[value.Value](top)
 	sub.Define("mule", ctx, true)
-	
+
 	return env.EnclosedEnv[value.Value](env.Immutable(sub))
 }
 
@@ -49,7 +50,7 @@ func (c *Context) Get(prop string) (value.Value, error) {
 		}
 		return value.CreateArray(list), nil
 	default:
-		return value.Undefined(), nil
+		return c.Global.Get(prop)
 	}
 }
 
@@ -78,6 +79,7 @@ func (v envVars) Get(prop string) (value.Value, error) {
 }
 
 func (v envVars) Call(fn string, args []value.Value) (value.Value, error) {
+	fmt.Println("call envVars", fn)
 	switch fn {
 	case "get":
 		return v.Get(args[0].String())

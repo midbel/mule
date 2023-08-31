@@ -81,28 +81,29 @@ func (c *Collection) Path() []string {
 }
 
 func (c *Collection) Run(name string, w io.Writer) error {
-	return c.runWithEnv(name, c, w)
+	ctx := PrepareContext(c)
+	return c.runWithEnv(name, ctx, w)
 }
 
-func (c *Collection) runWithEnv(name string, ev env.Environ[string], w io.Writer) error {
+func (c *Collection) runWithEnv(name string, ctx *Context, w io.Writer) error {
 	req, err := c.Find(name)
 	if err != nil {
 		return err
 	}
-	return c.execute(req, ev, w)
+	return c.execute(req, ctx, w)
 }
 
-func (c *Collection) execute(q Request, ev env.Environ[string], w io.Writer) error {
-	depends, err := q.Depends(ev)
+func (c *Collection) execute(q Request, ctx *Context, w io.Writer) error {
+	depends, err := q.Depends(ctx.root)
 	if err != nil {
 		return err
 	}
 	for _, d := range depends {
-		if err := c.runWithEnv(d, ev, w); err != nil {
+		if err := c.runWithEnv(d, ctx, w); err != nil {
 			return err
 		}
 	}
-	res, err := q.Execute(c)
+	res, err := q.Execute(ctx)
 	if err != nil {
 		return err
 	}

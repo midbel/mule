@@ -50,17 +50,17 @@ func Prepare(name, method string) Request {
 	}
 }
 
-func (r Request) Execute(root *Collection) (*http.Response, error) {
-	req, err := r.Prepare(root)
+func (r Request) Execute(ctx *Context) (*http.Response, error) {
+	req, err := r.Prepare(ctx.root)
 	if err != nil {
 		return nil, err
 	}
 
-	ctx := prepareContext(root)
-	ctx.Define(reqUri, value.CreateString(req.URL.String()), true)
-	ctx.Define(reqName, value.CreateString(r.Name), true)
+	mule := MuleEnv(ctx)
+	mule.Define(reqUri, value.CreateString(req.URL.String()), true)
+	mule.Define(reqName, value.CreateString(r.Name), true)
 
-	if err := r.executeBefore(root, ctx); err != nil {
+	if err := r.executeBefore(ctx.root, mule); err != nil {
 		return nil, err
 	}
 
@@ -79,9 +79,9 @@ func (r Request) Execute(root *Collection) (*http.Response, error) {
 	}
 
 	body := strings.TrimSpace(str.String())
-	ctx.Define(resStatus, value.CreateFloat(float64(res.StatusCode)), true)
-	ctx.Define(resBody, value.CreateString(body), true)
-	if err := r.executeAfter(root, ctx); err != nil {
+	mule.Define(resStatus, value.CreateFloat(float64(res.StatusCode)), true)
+	mule.Define(resBody, value.CreateString(body), true)
+	if err := r.executeAfter(ctx.root, mule); err != nil {
 		return nil, err
 	}
 	res.Body = io.NopCloser(&tmp)
