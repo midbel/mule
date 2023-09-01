@@ -12,9 +12,9 @@ import (
 )
 
 type Info struct {
-	Name    string
-	Summary string
-	Desc    string
+	Name  string
+	Usage string
+	Desc  string
 }
 
 type Collection struct {
