@@ -12,9 +12,11 @@ import (
 )
 
 type Info struct {
-	Name  string
-	Usage string
-	Desc  string
+	Name     string
+	Usage    string
+	Help     string
+	Version  string
+	Disabled bool
 }
 
 type Collection struct {
@@ -62,6 +64,9 @@ func Enclosed(name string, parent *Collection) *Collection {
 func (c *Collection) Collections() []string {
 	var list []string
 	for _, i := range c.collections {
+		if i.Disabled {
+			continue
+		}
 		list = append(list, i.Name)
 		list = append(list, i.Collections()...)
 	}
@@ -113,6 +118,10 @@ func (c *Collection) execute(q Request, ctx *Context, w io.Writer) error {
 }
 
 func (c *Collection) Find(name string) (Request, error) {
+	if c.Disabled {
+		var req Request
+		return req, fmt.Errorf("%s: collection disabled", c.Name)
+	}
 	var (
 		rest  string
 		found bool
@@ -121,6 +130,9 @@ func (c *Collection) Find(name string) (Request, error) {
 	if !found {
 		q, err := c.GetRequest(name)
 		if err == nil {
+			if q.Disabled {
+				return q, fmt.Errorf("%s: request disabled", q.Name)
+			}
 			if c.base != nil {
 				var ws compound
 				ws = append(ws, c.base)
