@@ -5,41 +5,66 @@ import (
 	"maps"
 	"net/http"
 	"net/url"
+	"slices"
 
 	"github.com/midbel/enjoy/env"
 )
 
-type Bag map[string][]Word
+type Bag interface {
+	Add(string, Word)
+	Set(string, Word)
+	Clone() Bag
+	Merge(Bag) Bag
 
-func (b Bag) Add(key string, value Word) {
+	Cookie(env.Environ[string]) (*http.Cookie, error)
+	Header(env.Environ[string]) (http.Header, error)
+	Values(env.Environ[string]) (url.Values, error)
+	ValuesWith(env.Environ[string], url.Values) (url.Values, error)
+
+	pairs() []pair
+}
+
+type pair struct {
+	Key  string
+	List []Word
+}
+
+type stdBag map[string][]Word
+
+func Standard() Bag {
+	return make(stdBag)
+}
+
+func (b stdBag) Add(key string, value Word) {
 	b[key] = append(b[key], value)
 }
 
-func (b Bag) Set(key string, value Word) {
+func (b stdBag) Set(key string, value Word) {
 	b[key] = []Word{value}
 }
 
-func (b Bag) Clone() Bag {
-	g := make(Bag)
+func (b stdBag) Clone() Bag {
+	g := make(stdBag)
 	for k, vs := range b {
 		g[k] = append(g[k], vs...)
 	}
 	return g
 }
 
-func (b Bag) Merge(other Bag) Bag {
-	g := make(Bag)
+func (b stdBag) Merge(other Bag) Bag {
+	g := make(stdBag)
 	maps.Copy(g, b)
-	for k, v := range other {
-		if _, ok := g[k]; ok {
+
+	for _, p := range other.pairs() {
+		if _, ok := g[p.Key]; ok {
 			continue
 		}
-		g[k] = append(g[k], v...)
+		g[p.Key] = append(g[p.Key], p.List...)
 	}
 	return g
 }
 
-func (b Bag) Header(e env.Environ[string]) (http.Header, error) {
+func (b stdBag) Header(e env.Environ[string]) (http.Header, error) {
 	all := make(http.Header)
 	for k, vs := range b {
 		for i := range vs {
@@ -53,7 +78,7 @@ func (b Bag) Header(e env.Environ[string]) (http.Header, error) {
 	return all, nil
 }
 
-func (b Bag) Values(e env.Environ[string]) (url.Values, error) {
+func (b stdBag) Values(e env.Environ[string]) (url.Values, error) {
 	all := make(url.Values)
 	for k, vs := range b {
 		for i := range vs {
@@ -67,7 +92,7 @@ func (b Bag) Values(e env.Environ[string]) (url.Values, error) {
 	return all, nil
 }
 
-func (b Bag) ValuesWith(e env.Environ[string], other url.Values) (url.Values, error) {
+func (b stdBag) ValuesWith(e env.Environ[string], other url.Values) (url.Values, error) {
 	all, err := b.Values(e)
 	if err != nil {
 		return nil, err
@@ -78,7 +103,7 @@ func (b Bag) ValuesWith(e env.Environ[string], other url.Values) (url.Values, er
 	return all, nil
 }
 
-func (b Bag) Cookie(e env.Environ[string]) (*http.Cookie, error) {
+func (b stdBag) Cookie(e env.Environ[string]) (*http.Cookie, error) {
 	var (
 		cook http.Cookie
 		err  error
@@ -113,11 +138,36 @@ func (b Bag) Cookie(e env.Environ[string]) (*http.Cookie, error) {
 	return &cook, nil
 }
 
-type NamedBag struct {
-	Name string
+func (b stdBag) pairs() []pair {
+	var list []pair
+	for k, vs := range b {
+		p := pair{
+			Key:  k,
+			List: slices.Clone(vs),
+		}
+		list = append(list, p)
+	}
+	return list
+}
+
+type namedBag struct {
+	name string
 	Bag
 }
 
 type frozenBag struct {
 	Bag
+}
+
+func Freeze(b Bag) Bag {
+	if _, ok := b.(frozenBag); ok {
+		return b
+	}
+	return frozenBag{
+		Bag: b,
+	}
+}
+
+func (b frozenBag) Merge(_ Bag) Bag {
+	return b
 }

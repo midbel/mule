@@ -55,6 +55,7 @@ const (
 	Dot
 	Lbrace
 	Rbrace
+	Frozen
 	Invalid
 )
 
@@ -80,6 +81,8 @@ func (t Token) String() string {
 		return "<lbrace>"
 	case Rbrace:
 		return "<rbrace>"
+	case Frozen:
+		return "<frozen>"
 	case Keyword:
 		prefix = "keyword"
 	case Macro:
@@ -343,6 +346,8 @@ func (s *Scanner) scanPunct(tok *Token) {
 		tok.Type = Rbrace
 	case dot:
 		tok.Type = Dot
+	case star:
+		tok.Type = Frozen
 	default:
 		tok.Type = Invalid
 	}
@@ -427,6 +432,7 @@ const (
 	dollar     = '$'
 	langle     = '<'
 	arobase    = '@'
+	star       = '*'
 )
 
 func isMacro(r rune) bool {
@@ -442,7 +448,7 @@ func isDelim(r rune) bool {
 }
 
 func isPunct(r rune) bool {
-	return r == dot || r == lbrace || r == rbrace
+	return r == dot || r == star || r == lbrace || r == rbrace
 }
 
 func isComment(r rune) bool {

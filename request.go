@@ -45,8 +45,8 @@ func Prepare(name, method string) Request {
 		Info:    info,
 		method:  method,
 		expect:  expectNothing,
-		headers: make(Bag),
-		query:   make(Bag),
+		headers: Standard(),
+		query:   Standard(),
 	}
 }
 

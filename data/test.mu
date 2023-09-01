@@ -17,12 +17,12 @@ collection demo {
   get animals {
 
     url "/animals/"
-    headers {
+    headers* {
       accept "text/xml;q=0.7"
       accept "application/json;q=0.8"
     }
 
-    query {
+    query* {
       offset $five
       count  $five
     }

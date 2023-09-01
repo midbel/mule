@@ -131,6 +131,7 @@ func (c *Collection) Find(name string) (Request, error) {
 				}
 				q.location = ws
 			}
+			q.query = q.query.Merge(c.query)
 			q.headers = q.headers.Merge(c.headers)
 		}
 		return q, nil

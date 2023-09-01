@@ -391,12 +391,17 @@ func (p *Parser) parseDepends() ([]Word, error) {
 }
 
 func (p *Parser) parseBag() (Bag, error) {
+	var frozen bool
+	if p.is(Frozen) {
+		p.next()
+		frozen = true
+	}
 	if err := p.expect(Lbrace); err != nil {
 		return nil, err
 	}
 	defer p.skip(EOL)
 	var (
-		bag = make(Bag)
+		bag = Standard()
 		err error
 	)
 	for !p.done() && !p.is(Rbrace) {
@@ -407,6 +412,9 @@ func (p *Parser) parseBag() (Bag, error) {
 			return nil, err
 		}
 		p.skip(EOL)
+	}
+	if frozen {
+		bag = Freeze(bag)
 	}
 	return bag, p.expect(Rbrace)
 }
