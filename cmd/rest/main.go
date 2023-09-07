@@ -2,6 +2,8 @@ package main
 
 import (
 	"bufio"
+	"crypto/tls"
+	"crypto/x509"
 	"embed"
 	"encoding/json"
 	"encoding/xml"
@@ -33,12 +35,59 @@ func New(id int, name string) Data {
 	}
 }
 
+func getTLS(server, ca, opt string) (*tls.Config, error) {
+	pool, err := x509.SystemCertPool()
+	if err != nil {
+		return nil, err
+	}
+	cfg := &tls.Config{
+		ServerName: server,
+		ClientCAs:  pool,
+	}
+	if ca != "" {
+		pem, err := os.ReadFile(ca)
+		if err != nil {
+			return nil, err
+		}
+		cfg.ClientCAs = x509.NewCertPool()
+		cfg.ClientCAs.AppendCertsFromPEM(pem)
+	}
+	switch opt {
+	default:
+		cfg.ClientAuth = tls.NoClientCert
+	case "client-request":
+		cfg.ClientAuth = tls.RequestClientCert
+	case "client-any":
+		cfg.ClientAuth = tls.RequireAnyClientCert
+	case "verify-cert":
+		cfg.ClientAuth = tls.VerifyClientCertIfGiven
+	case "require-verify":
+		cfg.ClientAuth = tls.RequireAndVerifyClientCert
+	}
+	return cfg, nil
+}
+
 func main() {
 	var (
 		addr      = flag.String("a", ":9001", "listening address")
 		forceAuth = flag.Bool("x", false, "enable authentication")
+		certFile  = flag.String("cert-file", "", "certificate file")
+		certKey   = flag.String("cert-key", "", "certificate key")
+		certCA    = flag.String("cert-ca", "", "certificate ca")
+		certOpt   = flag.String("cert-opt", "", "certificate option")
+		server    = flag.String("server-name", "localhost", "server name")
 	)
 	flag.Parse()
+
+	config, err := getTLS(*server, *certCA, *certOpt)
+	if err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		os.Exit(2)
+	}
+	serv := http.Server{
+		Addr:      *addr,
+		TLSConfig: config,
+	}
 
 	set := []struct {
 		Route string
@@ -63,9 +112,14 @@ func main() {
 		}
 		http.Handle(s.Route, h)
 	}
-	if err := http.ListenAndServe(*addr, nil); err != nil {
+	if *certFile != "" && *certKey != "" {
+		err = serv.ListenAndServeTLS(*certFile, *certKey)
+	} else {
+		err = serv.ListenAndServe()
+	}
+	if err != nil {
 		fmt.Fprintln(os.Stderr, err)
-		os.Exit(1)
+		os.Exit(3)
 	}
 }
 
