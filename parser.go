@@ -536,9 +536,9 @@ func (p *Parser) parseTLS(env env.Environ[string]) (TLSConfig, error) {
 			cfg.Config.ServerName, err = p.parseString(env)
 		case "insecure":
 			cfg.Config.InsecureSkipVerify, err = p.parseBool(env)
-		case "tlsMinVersion":
+		case "minVersion":
 			cfg.Config.MinVersion, err = p.parseVersionTLS(env)
-		case "tlsMaxVersion":
+		case "maxVersion":
 			cfg.Config.MaxVersion, err = p.parseVersionTLS(env)
 		default:
 			return cfg, p.unexpected()
@@ -546,6 +546,13 @@ func (p *Parser) parseTLS(env env.Environ[string]) (TLSConfig, error) {
 		if err != nil {
 			return cfg, err
 		}
+	}
+	if cfg.certFile != "" && cfg.certKey != "" {
+		cert, err := tls.LoadX509KeyPair(cfg.certFile, cfg.certKey)
+		if err != nil {
+			return cfg, err
+		}
+		cfg.Config.Certificates = append(cfg.Config.Certificates, cert)
 	}
 	return cfg, p.expect(Rbrace)
 }
