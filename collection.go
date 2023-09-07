@@ -6,6 +6,7 @@ import (
 	"os"
 	"sort"
 	"strings"
+	"crypto/tls"
 
 	"github.com/midbel/enjoy/env"
 	"github.com/midbel/enjoy/value"
@@ -17,6 +18,13 @@ type Info struct {
 	Help     string
 	Version  string
 	Disabled bool
+}
+
+type TLSConfig struct {
+	certFile string
+	certKey string
+
+	Config *tls.Config
 }
 
 type Collection struct {

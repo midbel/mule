@@ -7,6 +7,9 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"crypto/x509"
+	"crypto/tls"
+	"strings"
 
 	"github.com/midbel/enjoy/env"
 	"github.com/midbel/enjoy/eval"
@@ -322,6 +325,51 @@ func (p *Parser) parseExpect(ev env.Environ[string]) (ExpectFunc, error) {
 	return expectCodeRange(str)
 }
 
+func (p *Parser) parseString(ev env.Environ[string]) (string, error) {
+	w, err := p.parseWord()
+	if err != nil {
+		return "", err
+	}
+	return w.Expand(ev)
+}
+
+func (p *Parser) parseBool(ev env.Environ[string]) (bool, error) {
+	w, err := p.parseWord()
+	if err != nil {
+		return false, err
+	}
+	return w.ExpandBool(ev)
+}
+
+func (p *Parser) parseCertPool(ev env.Environ[string]) (*x509.CertPool, error) {
+	return nil, nil
+}
+
+func (p *Parser) parseVersionTLS(ev env.Environ[string]) (uint16, error) {
+	w, err := p.parseWord()
+	if err != nil {
+		return 0, err
+	}
+	str, err := w.Expand(ev)
+	if err != nil {
+		return 0, err
+	}
+	var version uint16
+	switch strings.ToLower(str) {
+	default:
+		return 0, fmt.Errorf("unsupported TLS version")
+	case "tls-1.0":
+		version = tls.VersionTLS10
+	case "tls-1.1":
+		version = tls.VersionTLS11
+	case "tls-1.2":
+		version = tls.VersionTLS12
+	case "tls-1.3":
+		version = tls.VersionTLS13
+	}
+	return version, nil
+}
+
 func (p *Parser) parseWord() (Word, error) {
 	switch {
 	case p.is(Macro):
@@ -454,13 +502,52 @@ func (p *Parser) parseVariables(collect *Collection) error {
 	return p.expect(Rbrace)
 }
 
-func (p *Parser) parseTLS(env env.Environ[string]) (interface{}, error) {
+func (p *Parser) parseTLS(env env.Environ[string]) (TLSConfig, error) {
+	var (
+		cfg TLSConfig
+		track = createTracker()
+	)
 	if err := p.expect(Lbrace); err != nil {
-		return nil, err
+		return cfg, err
 	}
 	defer p.skip(EOL)
 
-	return nil, p.expect(Rbrace)
+	for !p.done() && !p.is(Rbrace) {
+		p.skip(EOL)
+		if !p.is(Ident) && !p.is(Keyword) {
+			return cfg, p.unexpected()
+		}
+		var (
+			kw  = p.curr.Literal
+			err error
+		)
+		if err = track.Seen(kw); err != nil {
+			return cfg, nil
+		}
+		p.next()
+		switch kw {
+		case "certFile":
+			cfg.certFile, err = p.parseString(env)
+		case "certKey":
+			cfg.certKey, err = p.parseString(env)
+		case "certCA":
+			cfg.Config.RootCAs, err = p.parseCertPool(env)
+		case "serverName":
+			cfg.Config.ServerName, err = p.parseString(env)
+		case "insecure":
+			cfg.Config.InsecureSkipVerify, err = p.parseBool(env)
+		case "tlsMinVersion":
+			cfg.Config.MinVersion, err = p.parseVersionTLS(env)
+		case "tlsMaxVersion":
+			cfg.Config.MaxVersion, err = p.parseVersionTLS(env)
+		default:
+			return cfg, p.unexpected()
+		}
+		if err != nil {
+			return cfg, err
+		}
+	}
+	return cfg, p.expect(Rbrace)
 }
 
 func (p *Parser) parseCollectionTLS(collect *Collection) error {
