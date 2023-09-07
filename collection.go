@@ -20,18 +20,12 @@ type Info struct {
 	Disabled bool
 }
 
-type TLSConfig struct {
-	certFile string
-	certKey  string
-
-	Config *tls.Config
-}
-
 type Collection struct {
 	Info
 
 	parent *Collection
 
+	config      *tls.Config
 	base        Word
 	user        Word
 	pass        Word

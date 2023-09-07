@@ -2,6 +2,7 @@ package mule
 
 import (
 	"bytes"
+	"crypto/tls"
 	"fmt"
 	"io"
 	"net/http"
@@ -22,6 +23,7 @@ type Request struct {
 	depends []Word
 	retry   Word
 	timeout Word
+	config  *tls.Config
 
 	location Word
 	user     Word
@@ -64,7 +66,13 @@ func (r Request) Execute(ctx *Context) (*http.Response, error) {
 		return nil, err
 	}
 
-	res, err := http.DefaultClient.Do(req)
+	var client http.Client
+	if cfg := r.getTLS(ctx.root.config); cfg != nil {
+		client.Transport = &http.Transport{
+			TLSClientConfig: cfg,
+		}
+	}
+	res, err := client.Do(req)
 	if err != nil {
 		return nil, err
 	}
@@ -112,6 +120,10 @@ func (r Request) Prepare(root *Collection) (*http.Request, error) {
 		return nil, err
 	}
 	return req, r.setHeaders(req, root)
+}
+
+func (r Request) getTLS(parent *tls.Config) *tls.Config {
+	return r.config
 }
 
 func (r Request) getRequest(root *Collection) (*http.Request, error) {

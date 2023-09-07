@@ -17,6 +17,13 @@ import (
 	"github.com/midbel/enjoy/value"
 )
 
+type tlsConfig struct {
+	certFile string
+	certKey  string
+
+	Config *tls.Config
+}
+
 type Parser struct {
 	dispatch map[string]func(*Collection) error
 	macros   map[string]func() (interface{}, error)
@@ -276,6 +283,8 @@ func (p *Parser) parseRequest(collect *Collection) error {
 			req.expect, err = p.parseExpect(collect)
 		case "depends":
 			req.depends, err = p.parseDepends()
+		case "tls":
+			req.config, err = p.parseTLS(collect)
 		default:
 			return p.unexpected()
 		}
@@ -502,27 +511,26 @@ func (p *Parser) parseVariables(collect *Collection) error {
 	return p.expect(Rbrace)
 }
 
-func (p *Parser) parseTLS(env env.Environ[string]) (TLSConfig, error) {
-	var (
-		cfg   TLSConfig
-		track = createTracker()
-	)
+func (p *Parser) parseTLS(env env.Environ[string]) (*tls.Config, error) {
 	if err := p.expect(Lbrace); err != nil {
-		return cfg, err
+		return nil, err
 	}
 	defer p.skip(EOL)
-
+	var (
+		cfg   tlsConfig
+		track = createTracker()
+	)
 	for !p.done() && !p.is(Rbrace) {
 		p.skip(EOL)
 		if !p.is(Ident) && !p.is(Keyword) {
-			return cfg, p.unexpected()
+			return nil, p.unexpected()
 		}
 		var (
 			kw  = p.curr.Literal
 			err error
 		)
 		if err = track.Seen(kw); err != nil {
-			return cfg, nil
+			return nil, err
 		}
 		p.next()
 		switch kw {
@@ -541,28 +549,29 @@ func (p *Parser) parseTLS(env env.Environ[string]) (TLSConfig, error) {
 		case "maxVersion":
 			cfg.Config.MaxVersion, err = p.parseVersionTLS(env)
 		default:
-			return cfg, p.unexpected()
+			return nil, p.unexpected()
 		}
 		if err != nil {
-			return cfg, err
+			return nil, err
 		}
 	}
 	if cfg.certFile != "" && cfg.certKey != "" {
 		cert, err := tls.LoadX509KeyPair(cfg.certFile, cfg.certKey)
 		if err != nil {
-			return cfg, err
+			return nil, err
 		}
 		cfg.Config.Certificates = append(cfg.Config.Certificates, cert)
 	}
-	return cfg, p.expect(Rbrace)
+	return cfg.Config, p.expect(Rbrace)
 }
 
 func (p *Parser) parseCollectionTLS(collect *Collection) error {
 	p.next()
-	if _, err := p.parseTLS(collect); err != nil {
-		return err
+	cfg, err := p.parseTLS(collect)
+	if err == nil {
+		collect.config = cfg
 	}
-	return nil
+	return err
 }
 
 func (p *Parser) parseCollectionScript(collect *Collection) error {
