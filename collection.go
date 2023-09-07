@@ -1,12 +1,12 @@
 package mule
 
 import (
+	"crypto/tls"
 	"fmt"
 	"io"
 	"os"
 	"sort"
 	"strings"
-	"crypto/tls"
 
 	"github.com/midbel/enjoy/env"
 	"github.com/midbel/enjoy/value"
@@ -22,7 +22,7 @@ type Info struct {
 
 type TLSConfig struct {
 	certFile string
-	certKey string
+	certKey  string
 
 	Config *tls.Config
 }

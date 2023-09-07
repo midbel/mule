@@ -1,14 +1,14 @@
 package mule
 
 import (
+	"crypto/tls"
+	"crypto/x509"
 	"fmt"
 	"io"
 	"net/http"
 	"net/url"
 	"os"
 	"path/filepath"
-	"crypto/x509"
-	"crypto/tls"
 	"strings"
 
 	"github.com/midbel/enjoy/env"
@@ -504,7 +504,7 @@ func (p *Parser) parseVariables(collect *Collection) error {
 
 func (p *Parser) parseTLS(env env.Environ[string]) (TLSConfig, error) {
 	var (
-		cfg TLSConfig
+		cfg   TLSConfig
 		track = createTracker()
 	)
 	if err := p.expect(Lbrace); err != nil {
