@@ -3,7 +3,7 @@ package main
 import (
 	"crypto/rand"
 	"crypto/rsa"
-  "crypto/tls"
+	"crypto/tls"
 	"crypto/x509"
 	"crypto/x509/pkix"
 	"encoding/pem"
@@ -20,13 +20,14 @@ var now = time.Now()
 
 func main() {
 	var (
-		client = flag.Bool("c", false, "generate a client certificate")
-		server = flag.String("s", "localhost", "server name")
-		org    = flag.String("o", "midbel", "organization name")
-		dir    = flag.String("d", "", "certificate directory")
-		root   = flag.Bool("r", false, "certificate root")
-		bits   = flag.Int("b", 2048, "size of RSA key to generate")
-		ttl    = flag.Duration("t", time.Hour*24, "time to life of generated certificate")
+		client  = flag.Bool("c", false, "generate a client certificate")
+		server  = flag.String("s", "localhost", "server name")
+		subject = flag.String("subject", "", "certificate subject")
+		issuer  = flag.String("issuer", "", "certificate issuer")
+		dir     = flag.String("d", "", "certificate directory")
+		root    = flag.Bool("r", false, "certificate root")
+		bits    = flag.Int("b", 2048, "size of RSA key to generate")
+		ttl     = flag.Duration("t", time.Hour*24, "time to life of generated certificate")
 	)
 	flag.Parse()
 
@@ -43,11 +44,8 @@ func main() {
 
 	cert := x509.Certificate{
 		SerialNumber: getSerialNumber(),
-		Subject: pkix.Name{
-			Organization: []string{*org},
-		},
-		NotBefore: now,
-		NotAfter:  now.Add(*ttl),
+		NotBefore:    now,
+		NotAfter:     now.Add(*ttl),
 
 		KeyUsage:              getKeyUsage(*client, *root),
 		ExtKeyUsage:           []x509.ExtKeyUsage{getExtKeyUsage(*client)},
@@ -55,21 +53,32 @@ func main() {
 		IsCA:                  !*client && *root,
 	}
 
-  if !*client {
-    if ip := net.ParseIP(*server); ip == nil {
-      cert.DNSNames = append(cert.DNSNames, *server)
-      } else {
-        cert.IPAddresses = append(cert.IPAddresses, ip)
-      }
-  }
-  var parent *x509.Certificate
-  if *client {
-    parent, err = loadParentCertificate(flag.Arg(0))
-    if err != nil {
-      fmt.Fprintln(os.Stderr, err)
-      os.Exit(2)
-    }
-  }
+	if *subject != "" {
+		cert.Subject = pkix.Name{
+			Organization: []string{*subject},
+		}
+	}
+	if *issuer != "" {
+		cert.Issuer = pkix.Name{
+			Organization: []string{*issuer},
+		}
+	}
+
+	if !*client {
+		if ip := net.ParseIP(*server); ip == nil {
+			cert.DNSNames = append(cert.DNSNames, *server)
+		} else {
+			cert.IPAddresses = append(cert.IPAddresses, ip)
+		}
+	}
+	var parent *x509.Certificate
+	if *client {
+		parent, err = loadParentCertificate(flag.Arg(0))
+		if err != nil {
+			fmt.Fprintln(os.Stderr, err)
+			os.Exit(2)
+		}
+	}
 
 	if err := writeCertificate(&cert, parent, priv, *dir); err != nil {
 		fmt.Fprintln(os.Stderr, err)
@@ -78,11 +87,11 @@ func main() {
 }
 
 func loadParentCertificate(dir string) (*x509.Certificate, error) {
-  cert, err := tls.LoadX509KeyPair(filepath.Join(dir, "cert.pem"), filepath.Join(dir, "key.pem"))
-  if err != nil {
-    return nil, err
-  }
-  return cert.Leaf, nil
+	cert, err := tls.LoadX509KeyPair(filepath.Join(dir, "cert.pem"), filepath.Join(dir, "key.pem"))
+	if err != nil {
+		return nil, err
+	}
+	return cert.Leaf, nil
 }
 
 func writeCertificate(cert, root *x509.Certificate, priv any, dir string) error {
@@ -90,9 +99,9 @@ func writeCertificate(cert, root *x509.Certificate, priv any, dir string) error 
 	if !ok {
 		return fmt.Errorf("unexpected private key type")
 	}
-  if root == nil {
-    root = cert
-  }
+	if root == nil {
+		root = cert
+	}
 	der, err := x509.CreateCertificate(rand.Reader, cert, root, &key.PublicKey, priv)
 	if err != nil {
 		return err
@@ -142,10 +151,10 @@ func getSerialNumber() *big.Int {
 }
 
 func getExtKeyUsage(client bool) x509.ExtKeyUsage {
-  if client {
-    return x509.ExtKeyUsageClientAuth
-  }
-  return x509.ExtKeyUsageServerAuth
+	if client {
+		return x509.ExtKeyUsageClientAuth
+	}
+	return x509.ExtKeyUsageServerAuth
 }
 
 func getKeyUsage(client, ca bool) x509.KeyUsage {
