@@ -52,6 +52,9 @@ func (b stdBag) Clone() Bag {
 }
 
 func (b stdBag) Merge(other Bag) Bag {
+	if other == nil {
+		return b
+	}
 	g := make(stdBag)
 	maps.Copy(g, b)
 

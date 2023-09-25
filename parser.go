@@ -21,7 +21,7 @@ type tlsConfig struct {
 	certFile string
 	certKey  string
 
-	Config *tls.Config
+	Config tls.Config
 }
 
 type Parser struct {
@@ -554,6 +554,7 @@ func (p *Parser) parseTLS(env env.Environ[string]) (*tls.Config, error) {
 		if err != nil {
 			return nil, err
 		}
+		p.skip(EOL)
 	}
 	if cfg.certFile != "" && cfg.certKey != "" {
 		cert, err := tls.LoadX509KeyPair(cfg.certFile, cfg.certKey)
@@ -562,7 +563,7 @@ func (p *Parser) parseTLS(env env.Environ[string]) (*tls.Config, error) {
 		}
 		cfg.Config.Certificates = append(cfg.Config.Certificates, cert)
 	}
-	return cfg.Config, p.expect(Rbrace)
+	return &cfg.Config, p.expect(Rbrace)
 }
 
 func (p *Parser) parseCollectionTLS(collect *Collection) error {
