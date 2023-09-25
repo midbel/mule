@@ -35,22 +35,48 @@ func New(id int, name string) Data {
 	}
 }
 
+func LoadCertPool(ca string) (*x509.CertPool, error) {
+	if ca == "" {
+		return x509.SystemCertPool()
+	}
+	pool := x509.NewCertPool()
+	i, err := os.Stat(ca)
+	if err != nil {
+		return nil, err
+	}
+	if i.Mode().IsRegular() {
+		pem, err := os.ReadFile(ca)
+		if err != nil {
+			return nil, err
+		}
+		pool.AppendCertsFromPEM(pem)
+		return pool, nil
+	}
+	if !i.IsDir() {
+		return nil, fmt.Errorf("can not read certificates from %s", ca)
+	}
+	files, err := os.ReadDir(ca)
+	if err != nil {
+		return nil, err
+	}
+	for _, f := range files {
+		pem, err := os.ReadFile(filepath.Join(ca, f.Name()))
+		if err != nil {
+			return nil, err
+		}
+		pool.AppendCertsFromPEM(pem)
+	}
+	return pool, nil
+}
+
 func getTLS(server, ca, opt string) (*tls.Config, error) {
-	pool, err := x509.SystemCertPool()
+	pool, err := LoadCertPool(ca)
 	if err != nil {
 		return nil, err
 	}
 	cfg := &tls.Config{
 		ServerName: server,
 		ClientCAs:  pool,
-	}
-	if ca != "" {
-		pem, err := os.ReadFile(ca)
-		if err != nil {
-			return nil, err
-		}
-		cfg.ClientCAs = x509.NewCertPool()
-		cfg.ClientCAs.AppendCertsFromPEM(pem)
 	}
 	switch opt {
 	default:
