@@ -46,7 +46,6 @@ func main() {
 		SerialNumber: getSerialNumber(),
 		NotBefore:    now,
 		NotAfter:     now.Add(*ttl),
-
 		KeyUsage:              getKeyUsage(*client, *root),
 		ExtKeyUsage:           []x509.ExtKeyUsage{getExtKeyUsage(*client)},
 		BasicConstraintsValid: true,
@@ -73,21 +72,24 @@ func main() {
 	}
 	var parent *x509.Certificate
 	if *client {
-		parent, err = loadParentCertificate(flag.Arg(0))
+		parent, err = loadParentCertificate(flag.Arg(0), flag.Arg(1))
 		if err != nil {
 			fmt.Fprintln(os.Stderr, err)
 			os.Exit(2)
 		}
 	}
-
 	if err := writeCertificate(&cert, parent, priv, *dir); err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(2)
 	}
 }
 
-func loadParentCertificate(dir string) (*x509.Certificate, error) {
-	cert, err := tls.LoadX509KeyPair(filepath.Join(dir, "cert.pem"), filepath.Join(dir, "key.pem"))
+func loadParentCertificate(cert, key string) (*x509.Certificate, error) {
+  if key == "" {
+    dir := filepath.Dir(cert)
+    key = filepath.Join(dir, "key.pem")
+  }
+	cert, err := tls.LoadX509KeyPair(cert, key)
 	if err != nil {
 		return nil, err
 	}
