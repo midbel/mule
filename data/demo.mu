@@ -15,6 +15,14 @@ collection basic {
 
 	get animals {
 	  url '/animals/'
+
+		before <<SCRIPT
+		console.log(`start running ${requestName}`)
+		SCRIPT
+
+		after <<SCRIPT
+		console.log(`done running ${requestName} with status ${responseStatus} (${requestDuration} sec)`)
+		SCRIPT
 	}
 
 	get colors {

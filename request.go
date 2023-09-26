@@ -1,6 +1,7 @@
 package mule
 
 import (
+	"bytes"
 	"crypto/tls"
 	"fmt"
 	"io"
@@ -8,6 +9,7 @@ import (
 	"os"
 	"slices"
 	"strings"
+	"time"
 
 	"github.com/midbel/enjoy/env"
 	"github.com/midbel/enjoy/value"
@@ -51,8 +53,8 @@ func Prepare(name, method string) Request {
 	}
 }
 
-func (r Request) Execute(root *Collection) (*http.Response, error) {
-	req, err := r.Prepare(root)
+func (r Request) Execute(ctx *Context) (*http.Response, error) {
+	req, err := r.Prepare(ctx.root)
 	if err != nil {
 		return nil, err
 	}
@@ -60,53 +62,43 @@ func (r Request) Execute(root *Collection) (*http.Response, error) {
 		defer req.Body.Close()
 	}
 
-	client := r.getClient(root.config)
-	return client.Do(req)
-}
+	mule := MuleEnv(ctx)
+	mule.Define(reqUri, value.CreateString(req.URL.String()), true)
+	mule.Define(reqName, value.CreateString(r.Name), true)
 
-// func (r Request) Execute(ctx *Context) (*http.Response, error) {
-// 	req, err := r.Prepare(ctx.root)
-// 	if err != nil {
-// 		return nil, err
-// 	}
-//
-// 	mule := MuleEnv(ctx)
-// 	mule.Define(reqUri, value.CreateString(req.URL.String()), true)
-// 	mule.Define(reqName, value.CreateString(r.Name), true)
-//
-// 	if err := r.executeBefore(ctx.root, mule); err != nil {
-// 		return nil, err
-// 	}
-//
-// 	var client http.Client
-// 	if cfg := r.getTLS(ctx.root.config); cfg != nil {
-// 		client.Transport = &http.Transport{
-// 			TLSClientConfig: cfg,
-// 		}
-// 	}
-// 	res, err := client.Do(req)
-// 	if err != nil {
-// 		return nil, err
-// 	}
-// 	defer res.Body.Close()
-//
-// 	var (
-// 		tmp bytes.Buffer
-// 		str bytes.Buffer
-// 	)
-// 	if _, err := io.Copy(io.MultiWriter(&tmp, &str), res.Body); err != nil {
-// 		return nil, err
-// 	}
-//
-// 	body := strings.TrimSpace(str.String())
-// 	mule.Define(resStatus, value.CreateFloat(float64(res.StatusCode)), true)
-// 	mule.Define(resBody, value.CreateString(body), true)
-// 	if err := r.executeAfter(ctx.root, mule); err != nil {
-// 		return nil, err
-// 	}
-// 	res.Body = io.NopCloser(&tmp)
-// 	return res, r.expect(res)
-// }
+	if err := r.executeBefore(ctx.root, mule); err != nil {
+		return nil, err
+	}
+
+	var (
+		client = r.getClient(ctx.root.config)
+		now = time.Now()
+		elapsed time.Duration
+	)
+	res, err := client.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	elapsed = time.Since(now)
+	defer res.Body.Close()
+
+	var (
+		tmp bytes.Buffer
+		str bytes.Buffer
+	)
+	if _, err := io.Copy(io.MultiWriter(&tmp, &str), res.Body); err != nil {
+		return nil, err
+	}
+	body := strings.TrimSpace(str.String())
+	mule.Define(reqDuration, value.CreateFloat(elapsed.Seconds()), true)
+	mule.Define(resStatus, value.CreateFloat(float64(res.StatusCode)), true)
+	mule.Define(resBody, value.CreateString(body), true)
+	if err := r.executeAfter(ctx.root, mule); err != nil {
+		return nil, err
+	}
+	res.Body = io.NopCloser(&tmp)
+	return res, r.expect(res)
+}
 
 func (r Request) Depends(ev env.Environ[string]) ([]string, error) {
 	var list []string

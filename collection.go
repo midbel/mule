@@ -115,12 +115,13 @@ func (c *Collection) execute(q Request, w io.Writer) error {
 	if err != nil {
 		return err
 	}
+	ctx := MuleContext(c)
 	for _, d := range depends {
 		if err := c.Run(d, w); err != nil {
 			return err
 		}
 	}
-	res, err := q.Execute(c)
+	res, err := q.Execute(ctx)
 	if err != nil {
 		return err
 	}

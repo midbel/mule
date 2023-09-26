@@ -1,7 +1,6 @@
 package mule
 
 import (
-	"fmt"
 	"os"
 	"strings"
 
@@ -13,6 +12,7 @@ import (
 const (
 	reqUri    = "requestUri"
 	reqName   = "requestName"
+	reqDuration   = "requestDuration"
 	resStatus = "responseStatus"
 	resBody   = "responseBody"
 )
@@ -30,7 +30,7 @@ func MuleEnv(ctx *Context) env.Environ[value.Value] {
 	return env.EnclosedEnv[value.Value](env.Immutable(sub))
 }
 
-func PrepareContext(root *Collection) *Context {
+func MuleContext(root *Collection) *Context {
 	obj := Context{
 		Global: value.CreateGlobal("mule"),
 		root:   root,
@@ -79,7 +79,6 @@ func (v envVars) Get(prop string) (value.Value, error) {
 }
 
 func (v envVars) Call(fn string, args []value.Value) (value.Value, error) {
-	fmt.Println("call envVars", fn)
 	switch fn {
 	case "get":
 		return v.Get(args[0].String())
