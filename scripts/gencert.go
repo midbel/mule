@@ -43,9 +43,9 @@ func main() {
 	}
 
 	cert := x509.Certificate{
-		SerialNumber: getSerialNumber(),
-		NotBefore:    now,
-		NotAfter:     now.Add(*ttl),
+		SerialNumber:          getSerialNumber(),
+		NotBefore:             now,
+		NotAfter:              now.Add(*ttl),
 		KeyUsage:              getKeyUsage(*client, *root),
 		ExtKeyUsage:           []x509.ExtKeyUsage{getExtKeyUsage(*client)},
 		BasicConstraintsValid: true,
@@ -85,15 +85,15 @@ func main() {
 }
 
 func loadParentCertificate(cert, key string) (*x509.Certificate, error) {
-  if key == "" {
-    dir := filepath.Dir(cert)
-    key = filepath.Join(dir, "key.pem")
-  }
-	cert, err := tls.LoadX509KeyPair(cert, key)
+	if key == "" {
+		dir := filepath.Dir(cert)
+		key = filepath.Join(dir, "key.pem")
+	}
+	pair, err := tls.LoadX509KeyPair(cert, key)
 	if err != nil {
 		return nil, err
 	}
-	return cert.Leaf, nil
+	return pair.Leaf, nil
 }
 
 func writeCertificate(cert, root *x509.Certificate, priv any, dir string) error {
