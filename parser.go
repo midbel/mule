@@ -351,7 +351,24 @@ func (p *Parser) parseBool(ev env.Environ[string]) (bool, error) {
 }
 
 func (p *Parser) parseCertPool(ev env.Environ[string]) (*x509.CertPool, error) {
-	return nil, nil
+	if p.is(EOL) {
+		return x509.SystemCertPool()
+	}
+	w, err := p.parseWord()
+	if err != nil {
+		return nil, err
+	}
+	str, err := w.Expand(ev)
+	if err != nil {
+		return nil, err
+	}
+	cert, err := os.ReadFile(str)
+	if err != nil {
+		return nil, err
+	}
+	pool := x509.NewCertPool()
+	pool.AppendCertsFromPEM(cert)
+	return pool, nil
 }
 
 func (p *Parser) parseVersionTLS(ev env.Environ[string]) (uint16, error) {

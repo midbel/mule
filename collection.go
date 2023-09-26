@@ -154,7 +154,9 @@ func (c *Collection) Find(name string) (Request, error) {
 	if err != nil {
 		return Request{}, err
 	}
-	sub.headers = sub.headers.Merge(c.headers)
+	if sub.headers != nil {
+		sub.headers = sub.headers.Merge(c.headers)
+	}
 	return sub.Find(rest)
 }
 

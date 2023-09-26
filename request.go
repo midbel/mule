@@ -123,7 +123,6 @@ func (r Request) Prepare(root *Collection) (*http.Request, error) {
 }
 
 func (r Request) getTLS(parent *tls.Config) *tls.Config {
-	parent.InsecureSkipVerify = true
 	return parent
 }
 
