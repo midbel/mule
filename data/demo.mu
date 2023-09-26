@@ -11,18 +11,18 @@ collection basic {
 		insecure true
 	}
 
+	beforeEach <<SCRIPT
+	console.log(`start running ${requestName}`)
+	SCRIPT
+
+	afterEach <<SCRIPT
+	console.log(`done running ${requestName} with status ${responseStatus} (${requestDuration} sec)`)
+	SCRIPT
+
 	url https://localhost:9001
 
 	get animals {
 	  url '/animals/'
-
-		before <<SCRIPT
-		console.log(`start running ${requestName}`)
-		SCRIPT
-
-		after <<SCRIPT
-		console.log(`done running ${requestName} with status ${responseStatus} (${requestDuration} sec)`)
-		SCRIPT
 	}
 
 	get colors {
