@@ -5,8 +5,9 @@ headers {
 
 collection basic {
 	tls {
-	  certFile 'tmp/tls/demo/cert.pem'
-	  certKey  'tmp/tls/demo/key.pem'
+	  certFile 'tmp/tls/client1/cert.pem'
+	  certKey  'tmp/tls/client1/key.pem'
+		certCA   'tmp/tls/ca/'
 		insecure true
 	}
 

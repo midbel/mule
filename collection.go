@@ -88,41 +88,8 @@ func (c *Collection) Path() []string {
 }
 
 func (c *Collection) Run(name string, w io.Writer) error {
-	ctx := PrepareContext(c)
-	return c.runWithEnv(name, ctx, w)
-}
-
-func (c *Collection) runWithEnv(name string, ctx *Context, w io.Writer) error {
-	req, err := c.Find(name)
-	if err != nil {
-		return err
-	}
-	return c.execute(req, ctx, w)
-}
-
-func (c *Collection) execute(q Request, ctx *Context, w io.Writer) error {
-	depends, err := q.Depends(ctx.root)
-	if err != nil {
-		return err
-	}
-	for _, d := range depends {
-		if err := c.runWithEnv(d, ctx, w); err != nil {
-			return err
-		}
-	}
-	res, err := q.Execute(ctx)
-	if err != nil {
-		return err
-	}
-	defer res.Body.Close()
-	io.Copy(w, res.Body)
-	return nil
-}
-
-func (c *Collection) Find(name string) (Request, error) {
 	if c.Disabled {
-		var req Request
-		return req, fmt.Errorf("%s: collection disabled", c.Name)
+		return fmt.Errorf("%s: collection disabled", c.Name)
 	}
 	var (
 		rest  string
@@ -131,33 +98,35 @@ func (c *Collection) Find(name string) (Request, error) {
 	name, rest, found = strings.Cut(name, ".")
 	if !found {
 		q, err := c.GetRequest(name)
-		if err == nil {
-			if q.Disabled {
-				return q, fmt.Errorf("%s: request disabled", q.Name)
-			}
-			if c.base != nil {
-				var ws compound
-				ws = append(ws, c.base)
-				if w, ok := q.location.(compound); ok {
-					ws = append(ws, w...)
-				} else {
-					ws = append(ws, q.location)
-				}
-				q.location = ws
-			}
-			q.query = q.query.Merge(c.query)
-			q.headers = q.headers.Merge(c.headers)
+		if err != nil {
+			return err
 		}
-		return q, nil
+		return c.execute(q, w)
 	}
-	sub, err := c.GetCollection(name)
+	other, err := c.GetCollection(name)
 	if err != nil {
-		return Request{}, err
+		return err
 	}
-	if sub.headers != nil {
-		sub.headers = sub.headers.Merge(c.headers)
+	return other.Run(rest, w)
+}
+
+func (c *Collection) execute(q Request, w io.Writer) error {
+	depends, err := q.Depends(c)
+	if err != nil {
+		return err
 	}
-	return sub.Find(rest)
+	for _, d := range depends {
+		if err := c.Run(d, w); err != nil {
+			return err
+		}
+	}
+	res, err := q.Execute(c)
+	if err != nil {
+		return err
+	}
+	defer res.Body.Close()
+	io.Copy(w, res.Body)
+	return nil
 }
 
 func (c *Collection) GetCollection(name string) (*Collection, error) {
@@ -172,7 +141,13 @@ func (c *Collection) GetCollection(name string) (*Collection, error) {
 	if !ok {
 		return nil, fmt.Errorf("%s: collection not defined", name)
 	}
-	return c.collections[i], nil
+	other := c.collections[i]
+	if other.headers != nil {
+		other.headers = other.headers.Merge(c.headers)
+	} else {
+		other.headers = c.headers
+	}
+	return other, nil
 }
 
 func (c *Collection) GetRequest(name string) (Request, error) {
@@ -189,7 +164,23 @@ func (c *Collection) GetRequest(name string) (Request, error) {
 	if !ok {
 		return req, fmt.Errorf("%s: request not defined", name)
 	}
-	return c.requests[i], nil
+	req = c.requests[i]
+	if req.Disabled {
+		return req, fmt.Errorf("%s: request disabled", name)
+	}
+	if c.base != nil {
+		var ws compound
+		ws = append(ws, c.base)
+		if w, ok := req.location.(compound); ok {
+			ws = append(ws, w...)
+		} else {
+			ws = append(ws, req.location)
+		}
+		req.location = ws
+	}
+	req.query = req.query.Merge(c.query)
+	req.headers = req.headers.Merge(c.headers)
+	return req, nil
 }
 
 func (c *Collection) Resolve(key string) (string, error) {

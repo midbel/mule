@@ -362,12 +362,31 @@ func (p *Parser) parseCertPool(ev env.Environ[string]) (*x509.CertPool, error) {
 	if err != nil {
 		return nil, err
 	}
-	cert, err := os.ReadFile(str)
-	if err != nil {
-		return nil, err
-	}
 	pool := x509.NewCertPool()
-	pool.AppendCertsFromPEM(cert)
+	if i, err := os.Stat(str); err == nil {
+		if i.Mode().IsRegular() {
+			cert, err := os.ReadFile(str)
+			if err != nil {
+				return nil, err
+			}
+			pool.AppendCertsFromPEM(cert)
+			return pool, nil
+		} else if i.IsDir() {
+			files, err := os.ReadDir(str)
+			if err != nil {
+				return nil, err
+			}
+			for _, f := range files {
+				cert, err := os.ReadFile(filepath.Join(str, f.Name()))
+				if err != nil {
+					return nil, err
+				}
+				pool.AppendCertsFromPEM(cert)
+			}
+		} else {
+			return nil, fmt.Errorf("certificates can not be loaded from %s", i.Name())
+		}
+	}
 	return pool, nil
 }
 
