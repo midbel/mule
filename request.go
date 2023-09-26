@@ -56,13 +56,11 @@ func (r Request) Execute(root *Collection) (*http.Response, error) {
 	if err != nil {
 		return nil, err
 	}
-
-	var client http.Client
-	if cfg := r.getTLS(root.config); cfg != nil {
-		client.Transport = &http.Transport{
-			TLSClientConfig: cfg,
-		}
+	if req.Body != nil {
+		defer req.Body.Close()
 	}
+
+	client := r.getClient(root.config)
 	return client.Do(req)
 }
 
@@ -136,6 +134,16 @@ func (r Request) Prepare(root *Collection) (*http.Request, error) {
 	return req, r.setHeaders(req, root)
 }
 
+func (r Request) getClient(root *tls.Config) http.Client {
+	var client http.Client
+	if cfg := r.getTLS(root); cfg != nil {
+		client.Transport = &http.Transport{
+			TLSClientConfig: cfg,
+		}
+	}
+	return client
+}
+
 func (r Request) getTLS(parent *tls.Config) *tls.Config {
 	if r.config != nil {
 		return r.config
@@ -150,7 +158,6 @@ func (r Request) getRequest(root *Collection) (*http.Request, error) {
 		if err != nil {
 			return nil, err
 		}
-		defer tmp.Close()
 		body = tmp
 	}
 	uri, err := r.location.ExpandURL(root)
