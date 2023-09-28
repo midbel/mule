@@ -12,14 +12,14 @@ collection basic {
 	}
 
 	beforeEach <<SCRIPT
-	console.log(`start running ${requestName}`)
+	console.log(`start running ${requestName}: ${mule.request.url}`)
 	SCRIPT
 
 	afterEach <<SCRIPT
 	console.log(`done running ${requestName} with status ${responseStatus} (${requestDuration} sec)`)
 	SCRIPT
 
-	url https://localhost:9001
+	url http://localhost:9001
 
 	get animals {
 	  url '/animals/'

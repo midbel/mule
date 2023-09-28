@@ -62,6 +62,9 @@ func (r Request) Execute(ctx *Context) (*http.Response, error) {
 		defer req.Body.Close()
 	}
 
+	ctx.RegisterProp("request", createRequestValue(req))
+	ctx.RegisterProp("response", value.Undefined())
+
 	mule := MuleEnv(ctx)
 	mule.Define(reqUri, value.CreateString(req.URL.String()), true)
 	mule.Define(reqName, value.CreateString(r.Name), true)
@@ -71,8 +74,8 @@ func (r Request) Execute(ctx *Context) (*http.Response, error) {
 	}
 
 	var (
-		client = r.getClient(ctx.root.config)
-		now = time.Now()
+		client  = r.getClient(ctx.root.config)
+		now     = time.Now()
 		elapsed time.Duration
 	)
 	res, err := client.Do(req)
@@ -81,6 +84,8 @@ func (r Request) Execute(ctx *Context) (*http.Response, error) {
 	}
 	elapsed = time.Since(now)
 	defer res.Body.Close()
+
+	ctx.RegisterProp("response", createResponseValue(res))
 
 	var (
 		tmp bytes.Buffer
