@@ -12,6 +12,7 @@ collection basic {
 	}
 
 	beforeEach <<SCRIPT
+	mule.request.url = 'http://localhost:10001/empty'
 	console.log(`start running ${requestName}: ${mule.request.url}`)
 	SCRIPT
 

@@ -1,7 +1,10 @@
 package mule
 
 import (
+	"fmt"
+	"io"
 	"net/http"
+	"net/url"
 	"os"
 	"strings"
 
@@ -116,6 +119,21 @@ func (r requestValue) Get(prop string) (value.Value, error) {
 }
 
 func (r requestValue) Set(prop string, val value.Value) error {
+	switch prop {
+	case "url":
+		u, err := url.Parse(val.String())
+		if err != nil {
+			return err
+		}
+		r.req.URL = u
+	case "body":
+		if r.req.Body != nil {
+			r.req.Body.Close()
+		}
+		tmp := strings.NewReader(val.String())
+		r.req.Body = io.NopCloser(tmp)
+	default:
+	}
 	return nil
 }
 
