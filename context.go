@@ -1,7 +1,6 @@
 package mule
 
 import (
-	"fmt"
 	"io"
 	"net/http"
 	"net/url"
