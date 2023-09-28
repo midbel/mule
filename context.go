@@ -67,20 +67,81 @@ func createResponseValue(res *http.Response) value.Value {
 	}
 }
 
-func (r responseValue) True() bool {
+func (_ responseValue) True() bool {
 	return true
 }
 
-func (r responseValue) Type() string {
+func (_ responseValue) Type() string {
 	return "object"
 }
 
-func (r responseValue) String() string {
+func (_ responseValue) String() string {
 	return "<response>"
 }
 
 func (r responseValue) Get(prop string) (value.Value, error) {
-	return value.Undefined(), nil
+	switch prop {
+	case "headers":
+		list := make(map[string]value.Value)
+		for k, v := range r.res.Header {
+			list[k] = value.CreateString(v[0])
+		}
+		return value.CreateObject(list), nil
+	case "status":
+		return value.CreateString(r.res.Status), nil
+	case "code":
+		return value.CreateFloat(float64(r.res.StatusCode)), nil
+	case "contentLength":
+		return value.CreateFloat(float64(r.res.ContentLength)), nil
+	default:
+		return value.Undefined(), nil
+	}
+}
+
+type headersValue struct {
+	req *http.Request
+}
+
+func createHeadersValue(req *http.Request) value.Value {
+	return headersValue{
+		req: req,
+	}
+}
+
+func (_ headersValue) True() bool {
+	return true
+}
+
+func (_ headersValue) Type() string {
+	return "object"
+}
+
+func (_ headersValue) String() string {
+	return "<headers>"
+}
+
+func (h headersValue) Get(prop string) (value.Value, error) {
+	values := h.req.Header.Values(prop)
+	if len(values) == 1 {
+		return value.CreateString(values[0]), nil
+	}
+	var arr []value.Value
+	for i := range values {
+		arr = append(arr, value.CreateString(values[i]))
+	}
+	return value.CreateArray(arr), nil
+}
+
+func (h headersValue) Set(prop string, val value.Value) error {
+	switch v := val.(type) {
+	case *value.Array:
+		// for i := range v {
+		// 	h.req.Header.Add(prop, v[i].String())
+		// }
+	default:
+		h.req.Header.Add(prop, v.String())
+	}
+	return nil
 }
 
 type requestValue struct {
@@ -93,15 +154,15 @@ func createRequestValue(req *http.Request) value.Value {
 	}
 }
 
-func (r requestValue) True() bool {
+func (_ requestValue) True() bool {
 	return true
 }
 
-func (r requestValue) Type() string {
+func (_ requestValue) Type() string {
 	return "object"
 }
 
-func (r requestValue) String() string {
+func (_ requestValue) String() string {
 	return "<request>"
 }
 
@@ -112,6 +173,8 @@ func (r requestValue) Get(prop string) (value.Value, error) {
 	case "url":
 		s := r.req.URL.String()
 		return value.CreateString(s), nil
+	case "headers":
+		return createHeadersValue(r.req), nil
 	default:
 		return value.Undefined(), nil
 	}

@@ -12,12 +12,12 @@ collection basic {
 	}
 
 	beforeEach <<SCRIPT
-	mule.request.url = 'http://localhost:10001/empty'
 	console.log(`start running ${requestName}: ${mule.request.url}`)
 	SCRIPT
 
 	afterEach <<SCRIPT
 	console.log(`done running ${requestName} with status ${responseStatus} (${requestDuration} sec)`)
+	console.log(mule.response.headers)
 	SCRIPT
 
 	url http://localhost:9001
