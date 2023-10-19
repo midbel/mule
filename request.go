@@ -62,10 +62,6 @@ func (r Request) Execute(ctx *Context) (*http.Response, error) {
 		defer req.Body.Close()
 	}
 
-	if res, err := ctx.Reusable(req); err == nil {
-		return res, err
-	}
-
 	ctx.RegisterProp("request", createRequestValue(req))
 	ctx.RegisterProp("response", value.Undefined())
 
@@ -76,17 +72,24 @@ func (r Request) Execute(ctx *Context) (*http.Response, error) {
 	if err := r.executeBefore(ctx.root, mule); err != nil {
 		return nil, err
 	}
-
 	var (
-		client  = r.getClient(ctx.root.config)
-		now     = time.Now()
 		elapsed time.Duration
+		res     *http.Response
 	)
-	res, err := client.Do(req)
-	if err != nil {
-		return nil, err
+	if res, err = ctx.Reusable(req); err != nil {
+		var (
+			client = r.getClient(ctx.root.config)
+			now    = time.Now()
+		)
+		res, err = client.Do(req)
+		if err != nil {
+			return nil, err
+		}
+		elapsed = time.Since(now)
+		if err = ctx.Store(res); err != nil {
+			return nil, err
+		}
 	}
-	elapsed = time.Since(now)
 	defer res.Body.Close()
 
 	ctx.RegisterProp("response", createResponseValue(res))

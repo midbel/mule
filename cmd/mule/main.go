@@ -4,8 +4,8 @@ import (
 	"flag"
 	"fmt"
 	"io"
-	"os"
 	"net/http"
+	"os"
 
 	"github.com/midbel/mule"
 )
