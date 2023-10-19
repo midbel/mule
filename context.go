@@ -1,16 +1,20 @@
 package mule
 
 import (
+	"bytes"
 	"io"
 	"net/http"
 	"net/url"
 	"os"
 	"strings"
 
+	 bolt "go.etcd.io/bbolt"
 	"github.com/midbel/enjoy/env"
 	"github.com/midbel/enjoy/eval"
 	"github.com/midbel/enjoy/value"
 )
+
+var errReusable = errors.New("request not reusable")
 
 const (
 	reqUri      = "requestUri"
@@ -23,6 +27,7 @@ const (
 type Context struct {
 	value.Global
 	root *Collection
+	cache *bolt.DB
 }
 
 func MuleEnv(ctx *Context) env.Environ[value.Value] {
@@ -33,7 +38,7 @@ func MuleEnv(ctx *Context) env.Environ[value.Value] {
 	return env.EnclosedEnv[value.Value](env.Immutable(sub))
 }
 
-func MuleContext(root *Collection) *Context {
+func MuleContext(root *Collection) (*Context, error) {
 	obj := Context{
 		Global: value.CreateGlobal("mule"),
 		root:   root,
@@ -41,7 +46,50 @@ func MuleContext(root *Collection) *Context {
 	obj.RegisterProp("variables", createMuleVars(root))
 	obj.RegisterProp("environ", createEnvVars())
 
-	return &obj
+	db, err := bolt.Open(".mule.db", 0600, nil)
+	if err != nil {
+		return nil, err
+	}
+	obj.cache = db
+
+	return &obj, nil
+}
+
+func (c *Context) Close() error {
+	if c.cache != nil {
+		return c.cache.Close()
+	}
+	return nil
+}
+
+func (c *Context) Cache(res *http.Response) error {
+	return nil
+}
+
+func (c *Context) Reusable(req *http.Request) (*http.Response, error) {
+	if req.Method != http.MethodGet {
+		return nil, errReusable
+	}
+	body, err := c.reusable(req.URL.String())
+	if err != nil {
+		return nil, err
+	}
+	var res http.Response
+	res.StatusCode = http.StatusNotModified
+	res.Status = http.StatusText(res.StatusCode)
+	res.Proto = "HTTP/1.0"
+	res.ProtoMajor = 1
+	res.ProtoMinor = 0
+	res.Header = make(http.Header)
+	res.Body = io.NopCloser(bytes.NewReader(body))
+	res.ContentLength = 0
+	res.Uncompressed = true
+	res.Request = req
+	return &res, nil
+}
+
+func (c *Context) reusable(url string) ([]byte, error) {
+	return nil, nil
 }
 
 func (c *Context) Get(prop string) (value.Value, error) {

@@ -62,6 +62,10 @@ func (r Request) Execute(ctx *Context) (*http.Response, error) {
 		defer req.Body.Close()
 	}
 
+	if res, err := ctx.Reusable(req); err == nil {
+		return res, err
+	}
+
 	ctx.RegisterProp("request", createRequestValue(req))
 	ctx.RegisterProp("response", value.Undefined())
 

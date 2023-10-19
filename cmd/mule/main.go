@@ -5,14 +5,18 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"net/http"
 
 	"github.com/midbel/mule"
 )
 
 func main() {
 	var (
-		file  = flag.String("f", "sample.mu", "read request from file")
-		print = flag.Bool("p", false, "print response to stdout")
+		file = flag.String("f", "sample.mu", "read request from file")
+		// reuse = flag.Duration("r", time.Second*10, "reuse data if not older than given time")
+		print  = flag.Bool("p", false, "print response to stdout")
+		listen = flag.Bool("l", false, "listen")
+		addr   = flag.String("a", ":9000", "listening address")
 	)
 
 	flag.Parse()
@@ -22,8 +26,23 @@ func main() {
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)
 	}
-	var out io.Writer = io.Discard
-	if *print {
+	if *listen {
+		err = runListen(c, *addr)
+	} else {
+		err = runExecute(c, *print)
+	}
+}
+
+func runListen(c *mule.Collection, addr string) error {
+	return http.ListenAndServe(addr, nil)
+}
+
+func runExecute(c *mule.Collection, print bool) error {
+	var (
+		out io.Writer = io.Discard
+		err error
+	)
+	if print {
 		out = os.Stdout
 	}
 	switch flag.Arg(0) {
@@ -31,8 +50,5 @@ func main() {
 	default:
 		err = c.Run(flag.Arg(0), out)
 	}
-	if err != nil {
-		fmt.Fprintln(os.Stderr, err)
-		os.Exit(1)
-	}
+	return err
 }
