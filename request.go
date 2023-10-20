@@ -74,22 +74,14 @@ func (r Request) Execute(ctx *Context) (*http.Response, error) {
 	}
 	var (
 		elapsed time.Duration
-		res     *http.Response
+		client = r.getClient(ctx.root.config)
+		now    = time.Now()
 	)
-	if res, err = ctx.Reusable(req); err != nil {
-		var (
-			client = r.getClient(ctx.root.config)
-			now    = time.Now()
-		)
-		res, err = client.Do(req)
-		if err != nil {
-			return nil, err
-		}
-		elapsed = time.Since(now)
-		if err = ctx.Store(res); err != nil {
-			return nil, err
-		}
+	res, err := client.Do(req)
+	if err != nil {
+		return nil, err
 	}
+	elapsed = time.Since(now)
 	defer res.Body.Close()
 
 	ctx.RegisterProp("response", createResponseValue(res))

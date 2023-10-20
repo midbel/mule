@@ -56,13 +56,13 @@ func MuleContext(root *Collection) (*Context, error) {
 	return &obj, nil
 }
 
-func (c *Context) Store(res *http.Response) error {
+func (c *Context) Store(url string, res *http.Response) error {
 	defer res.Body.Close()
 	data, err := io.ReadAll(res.Body)
 	if err != nil {
 		return err
 	}
-	if err := c.Cache.Put("", data); err != nil {
+	if err := c.Cache.Put(url, data); err != nil {
 		return err
 	}
 	res.Body = io.NopCloser(bytes.NewReader(data))
@@ -84,7 +84,7 @@ func (c *Context) Reusable(req *http.Request) (*http.Response, error) {
 	res.ProtoMajor = 1
 	res.ProtoMinor = 1
 	res.Header = make(http.Header)
-	res.Body = io.NopCloser(bytes.NewReader(body))
+	res.Body = io.NopCloser(bytes.NewReader(body.Data))
 	res.ContentLength = 0
 	res.Uncompressed = true
 	res.Request = req

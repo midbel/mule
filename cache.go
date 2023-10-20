@@ -1,15 +1,23 @@
 package mule
 
 import (
+	"crypto/md5"
 	"encoding/json"
+	"fmt"
 	"io"
 	"time"
 
 	bolt "go.etcd.io/bbolt"
 )
 
+type Entry struct {
+	When time.Time
+	Data []byte
+	Sum  string
+}
+
 type Cache interface {
-	Get(string, time.Duration) ([]byte, error)
+	Get(string, time.Duration) (Entry, error)
 	Put(string, []byte) error
 	io.Closer
 }
@@ -35,25 +43,20 @@ func Bolt() (Cache, error) {
 	}, nil
 }
 
-func (b boltCache) Get(key string, ttl time.Duration) ([]byte, error) {
-	var data []byte
-	return data, b.DB.View(func(tx *bolt.Tx) error {
+func (b boltCache) Get(key string, ttl time.Duration) (Entry, error) {
+	var e Entry
+	return e, b.DB.View(func(tx *bolt.Tx) error {
 		b := tx.Bucket([]byte("data"))
 		if b == nil {
 			return errReusable
 		}
-		c := struct {
-			When time.Time
-			Data []byte
-		}{}
-		if err := json.Unmarshal(b.Get([]byte(key)), &c); err != nil {
+		if err := json.Unmarshal(b.Get([]byte(key)), &e); err != nil {
 			return errReusable
 		}
-		if time.Since(c.When) >= ttl {
+		if time.Since(e.When) >= ttl {
 			b.Delete([]byte(key))
 			return errReusable
 		}
-		data = c.Data
 		return nil
 	})
 }
@@ -64,14 +67,12 @@ func (b boltCache) Put(key string, data []byte) error {
 		if b == nil {
 			return errReusable
 		}
-		c := struct {
-			When time.Time
-			Data []byte
-		}{
+		e := Entry {
 			When: time.Now(),
 			Data: data,
+			Sum: fmt.Sprintf("%x", md5.Sum(data)),
 		}
-		data, err := json.Marshal(c)
+		data, err := json.Marshal(e)
 		if err == nil {
 			err = b.Put([]byte(key), data)
 		}
