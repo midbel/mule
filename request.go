@@ -74,8 +74,8 @@ func (r Request) Execute(ctx *Context) (*http.Response, error) {
 	}
 	var (
 		elapsed time.Duration
-		client = r.getClient(ctx.root.config)
-		now    = time.Now()
+		client  = r.getClient(ctx.root.config)
+		now     = time.Now()
 	)
 	res, err := client.Do(req)
 	if err != nil {

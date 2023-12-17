@@ -12,8 +12,7 @@ import (
 
 func main() {
 	var (
-		file = flag.String("f", "sample.mu", "read request from file")
-		// reuse = flag.Duration("r", time.Second*10, "reuse data if not older than given time")
+		file   = flag.String("f", "sample.mu", "read request from file")
 		print  = flag.Bool("p", false, "print response to stdout")
 		listen = flag.Bool("l", false, "listen")
 		addr   = flag.String("a", ":9000", "listening address")
