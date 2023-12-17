@@ -1,14 +1,12 @@
 package mule
 
 import (
-	"bytes"
 	"errors"
 	"io"
 	"net/http"
 	"net/url"
 	"os"
 	"strings"
-	"time"
 
 	"github.com/midbel/enjoy/env"
 	"github.com/midbel/enjoy/eval"
@@ -28,7 +26,6 @@ const (
 type Context struct {
 	value.Global
 	root *Collection
-	Cache
 }
 
 func MuleEnv(ctx *Context) env.Environ[value.Value] {
@@ -47,48 +44,7 @@ func MuleContext(root *Collection) (*Context, error) {
 	obj.RegisterProp("variables", createMuleVars(root))
 	obj.RegisterProp("environ", createEnvVars())
 
-	cache, err := Bolt()
-	if err != nil {
-		return nil, err
-	}
-	obj.Cache = cache
-
 	return &obj, nil
-}
-
-func (c *Context) Store(url string, res *http.Response) error {
-	defer res.Body.Close()
-	data, err := io.ReadAll(res.Body)
-	if err != nil {
-		return err
-	}
-	if err := c.Cache.Put(url, data); err != nil {
-		return err
-	}
-	res.Body = io.NopCloser(bytes.NewReader(data))
-	return nil
-}
-
-func (c *Context) Reusable(req *http.Request) (*http.Response, error) {
-	if req.Method != http.MethodGet {
-		return nil, errReusable
-	}
-	body, err := c.Cache.Get(req.URL.String(), time.Second*5)
-	if err != nil {
-		return nil, err
-	}
-	var res http.Response
-	res.StatusCode = http.StatusNotModified
-	res.Status = http.StatusText(res.StatusCode)
-	res.Proto = "HTTP/1.1"
-	res.ProtoMajor = 1
-	res.ProtoMinor = 1
-	res.Header = make(http.Header)
-	res.Body = io.NopCloser(bytes.NewReader(body.Data))
-	res.ContentLength = 0
-	res.Uncompressed = true
-	res.Request = req
-	return &res, nil
 }
 
 func (c *Context) Get(prop string) (value.Value, error) {
