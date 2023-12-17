@@ -39,6 +39,10 @@ func MuleContext(root *Collection) (*Context, error) {
 	return &obj, nil
 }
 
+// func (c *Context) Execute(req Request) (*http.Response, error) {
+// 	return nil, nil
+// }
+
 func (c *Context) Get(prop string) (value.Value, error) {
 	switch prop {
 	case "collections":
