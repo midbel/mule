@@ -23,17 +23,17 @@ const (
 	resBody     = "responseBody"
 )
 
-type Context struct {
-	value.Global
-	root *Collection
-}
-
 func MuleEnv(ctx *Context) env.Environ[value.Value] {
 	top := eval.Default()
 	sub := env.EnclosedEnv[value.Value](top)
 	sub.Define("mule", ctx, true)
 
 	return env.EnclosedEnv[value.Value](env.Immutable(sub))
+}
+
+type Context struct {
+	value.Global
+	root *Collection
 }
 
 func MuleContext(root *Collection) (*Context, error) {
@@ -57,6 +57,13 @@ func (c *Context) Get(prop string) (value.Value, error) {
 		return value.CreateArray(list), nil
 	default:
 		return c.Global.Get(prop)
+	}
+}
+
+func (c *Context) Call(fn string, args []value.Value) (value.Value, error) {
+	switch fn {
+	default:
+		return nil, value.ErrOperation
 	}
 }
 
