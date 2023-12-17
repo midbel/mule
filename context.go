@@ -23,14 +23,6 @@ const (
 	resBody     = "responseBody"
 )
 
-func MuleEnv(ctx *Context) env.Environ[value.Value] {
-	top := eval.Default()
-	sub := env.EnclosedEnv[value.Value](top)
-	sub.Define("mule", ctx, true)
-
-	return env.EnclosedEnv[value.Value](env.Immutable(sub))
-}
-
 type Context struct {
 	value.Global
 	root *Collection
@@ -275,4 +267,12 @@ func (v muleVars) Call(fn string, args []value.Value) (value.Value, error) {
 	default:
 		return nil, value.ErrOperation
 	}
+}
+
+func muleEnv(ctx *Context) env.Environ[value.Value] {
+	top := eval.Default()
+	sub := env.EnclosedEnv[value.Value](top)
+	sub.Define("mule", ctx, true)
+
+	return env.EnclosedEnv[value.Value](env.Immutable(sub))
 }

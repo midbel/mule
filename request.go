@@ -65,7 +65,7 @@ func (r Request) Execute(ctx *Context) (*http.Response, error) {
 	ctx.RegisterProp("request", createRequestValue(req))
 	ctx.RegisterProp("response", value.Undefined())
 
-	mule := MuleEnv(ctx)
+	mule := muleEnv(ctx)
 	mule.Define(reqUri, value.CreateString(req.URL.String()), true)
 	mule.Define(reqName, value.CreateString(r.Name), true)
 
