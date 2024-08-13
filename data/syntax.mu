@@ -28,24 +28,24 @@ collection name {
 		page  1
 	}
 
-	before <<<SCRIPT
+	before <<SCRIPT
 	SCRIPT
 
-	after <<<SCRIPT
+	after <<SCRIPT
 	SCRIPT
 
-	beforeEach <<<SCRIPT
+	beforeEach <<SCRIPT
 	SCRIPT
 
-	afterEach <<<SCRIPT
+	afterEach <<SCRIPT
 	SCRIPT
 
 	get request {
 		depends r1 r2
 		expect  200
 		url http://localhost
-		username foobar
-		password foobar
+		username foobar1
+		password foobar2
 
 		retry 100
 		timeout 100
@@ -64,11 +64,11 @@ collection name {
 
 		}
 
-		body @readfile body.json
+		body @readfile `body.json ${var}`
 
 		headers {
 			accept "application/json"
-			accept-encoding gz
+			accept-encoding gz lz
 		}
 		query {
 			order time
@@ -76,10 +76,10 @@ collection name {
 			page  1
 		}
 
-		before <<<SCRIPT
+		before <<SCRIPT
 		SCRIPT
 
-		after <<<SCRIPT
+		after <<SCRIPT
 		SCRIPT
 	}
 }
