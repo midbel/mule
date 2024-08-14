@@ -174,7 +174,7 @@ func (s *Scanner) Scan() Token {
 	case isHeredoc(s.char, s.peek()):
 		s.scanHeredoc(&tok)
 	default:
-		tok.Type = Invalid
+		s.scanLiteral(&tok)
 	}
 
 	return tok
@@ -197,6 +197,7 @@ func (s *Scanner) scanComment(tok *Token) {
 		s.write()
 		s.read()
 	}
+	s.skip(isBlank)
 	tok.Literal = s.literal()
 	tok.Type = Comment
 }
@@ -221,6 +222,15 @@ func (s *Scanner) scanVerbatim(tok *Token) {
 	}
 	tok.Type = String
 	tok.Literal = s.literal()
+}
+
+func (s *Scanner) scanLiteral(tok *Token) {
+	for !s.done() && !isBlank(s.char) && !isTemplate(s.char) {
+		s.write()
+		s.read()
+	}
+	tok.Literal = s.literal()
+	tok.Type = String
 }
 
 func (s *Scanner) scanString(tok *Token) {
@@ -342,6 +352,9 @@ func (s *Scanner) scanPunct(tok *Token) {
 		tok.Type = Invalid
 	}
 	s.read()
+	if tok.Type == Lbrace || tok.Type == Rbrace {
+		s.skip(isBlank)
+	}
 }
 
 func (s *Scanner) done() bool {

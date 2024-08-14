@@ -8,22 +8,36 @@ import (
 	"net/url"
 )
 
+type Environment interface {
+	Define(string, []string)
+	Resolve(string) ([]string, error)
+}
+
 type Env struct {
+	parent Environment
 	values map[string][]string
 }
 
-func Environ() *Env {
+func Empty() Environment {
+	return Enclosed(nil)
+}
+
+func Enclosed(parent Environment) Environment {
 	return &Env{
+		parent: parent,
 		values: make(map[string][]string),
 	}
 }
 
 func (e *Env) Resolve(ident string) ([]string, error) {
 	vs, ok := e.values[ident]
-	if !ok {
-		return nil, fmt.Errorf("%s: undefined variable", ident)
+	if ok {
+		return vs, nil
 	}
-	return vs, nil
+	if e.parent != nil {
+		return e.parent.Resolve(ident)
+	}
+	return nil, fmt.Errorf("%s: undefined variable", ident)
 }
 
 func (e *Env) Define(ident string, values []string) {
@@ -33,7 +47,7 @@ func (e *Env) Define(ident string, values []string) {
 type Common struct {
 	Name string
 
-	Url     string
+	URL     url.URL
 	User    string
 	Pass    string
 	Retry   int
@@ -47,7 +61,7 @@ type Common struct {
 
 type Collection struct {
 	Common
-	Env *Env
+	Environment
 	// scripts to be run
 	BeforeAll  string
 	BeforeEach string
@@ -55,47 +69,30 @@ type Collection struct {
 	AfterEach  string
 
 	// collection of requests
-	Requests []*Request
-
-	parent      *Collection
+	Requests    []*Request
 	Collections []*Collection
 }
 
 func Open(file string) (*Collection, error) {
-	return nil, nil
+	return Root(), nil
 }
 
-func Empty(name string) *Collection {
-	return Enclosed(name, nil)
+func Root() *Collection {
+	return Make("", nil)
 }
 
-func Enclosed(name string, parent *Collection) *Collection {
+func Make(name string, parent Environment) *Collection {
 	info := Common{
 		Name: name,
 	}
 	return &Collection{
 		Common: info,
-		Env:    Environ(),
 	}
-}
-
-func (c *Collection) Resolve(ident string) ([]string, error) {
-	vs, err := c.Env.Resolve(ident)
-	if err == nil {
-		return vs, nil
-	}
-	if c.parent != nil {
-		return c.parent.Resolve(ident)
-	}
-	return nil, err
-}
-
-func (c *Collection) Define(ident string, values []string) {
-	c.Env.Define(ident, values)
 }
 
 type Request struct {
 	Common
+	Method  string
 	Depends []string
 	Expect  int
 	Before  string
