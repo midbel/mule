@@ -3,7 +3,7 @@ package mule
 import (
 	"fmt"
 	"io"
-	"net/url"
+	"strings"
 )
 
 type Parser struct {
@@ -11,9 +11,8 @@ type Parser struct {
 	curr Token
 	peek Token
 
-	depth    int
-	macros   map[string]func() error
-	dispatch map[string]func(*Collection) error
+	depth  int
+	macros map[string]func() error
 }
 
 func Parse(r io.Reader) (*Parser, error) {
@@ -23,27 +22,7 @@ func Parse(r io.Reader) (*Parser, error) {
 	p.macros = map[string]func() error{
 		"readfile": p.parseReadFileMacro,
 		"include":  p.parseIncludeMacro,
-	}
-	p.dispatch = map[string]func(*Collection) error{
-		"collection": p.parseCollection,
-		"variables":  p.parseVariables,
-		"query":      nil,
-		"headers":    nil,
-		"tls":        nil,
-		"username":   nil,
-		"password":   nil,
-		"url":        p.parseURL,
-		"before":     nil,
-		"beforeAll":  nil,
-		"beforeEach": nil,
-		"after":      nil,
-		"afterAll":   nil,
-		"afterEach":  nil,
-		"get":        p.parseRequest,
-		"post":       p.parseRequest,
-		"put":        p.parseRequest,
-		"patch":      p.parseRequest,
-		"delete":     p.parseRequest,
+		"env":      p.parseEnvMacro,
 	}
 	p.next()
 	p.next()
@@ -68,81 +47,238 @@ func (p *Parser) parse(root *Collection) error {
 	case p.is(Ident):
 		child := Make(p.getCurrLiteral(), root)
 		p.next()
-		if err := p.parseMain(child); err != nil {
+		if err := p.parseCollection(child); err != nil {
 			return err
 		}
 		root.Collections = append(root.Collections, child)
-	case p.is(Keyword):
-		fn, ok := p.dispatch[p.getCurrLiteral()]
-		if !ok {
-			return p.unexpected("collection")
-		}
-		return fn(root)
 	default:
-		return p.unexpected("collection")
+		return p.parseItem(root)
 	}
 	return nil
-}
-
-func (p *Parser) parseMain(root *Collection) error {
-	return p.parseBraces("collection", func() error {
-		for !p.done() && !p.is(Rbrace) {
-			if err := p.parse(root); err != nil {
-				return err
-			}
-		}
-		return nil
-	})
 }
 
 func (p *Parser) parseCollection(root *Collection) error {
-	p.next()
-	return p.parse(root)
-}
-
-func (p *Parser) parseURL(root *Collection) error {
-	p.next()
-	if !p.is(Ident) && !p.is(String) {
-		return p.unexpected("url")
-	}
-	u, err := url.Parse(p.getCurrLiteral())
-	if err != nil {
-		return err
-	}
-	root.URL = *u
-	p.next()
-	if !p.is(EOL) {
-		return p.unexpected("url")
-	}
-	p.next()
-	return nil
-}
-
-func (p *Parser) parseRequest(root *Collection) error {
-	req := Request{
-		Method: p.getCurrLiteral(),
-	}
-	p.next()
-	if !p.is(Ident) {
-		return p.unexpected("request")
-	}
-	req.Name = p.getCurrLiteral()
-	p.next()
-	err := p.parseBraces("request", func() error {
-		for !p.done() && !p.is(Rbrace) {
-			p.next()
-		}
-		return nil
+	return p.parseBraces("collection", func() error {
+		return p.parseItem(root)
 	})
-	if err == nil {
-		root.Requests = append(root.Requests, &req)
+}
+
+func (p *Parser) parseItem(root *Collection) error {
+	if !p.is(Keyword) {
+		return p.unexpected("collection")
 	}
+	var (
+		err error
+		eol bool
+	)
+	switch p.getCurrLiteral() {
+	case "collection":
+		p.next()
+		err = p.parse(root)
+	case "before", "beforeAll":
+		p.next()
+		eol = true
+		root.BeforeAll, err = p.parseValue()
+	case "beforeEach":
+		p.next()
+		eol = true
+		root.BeforeEach, err = p.parseValue()
+	case "after", "afterAll":
+		p.next()
+		eol = true
+		root.AfterAll, err = p.parseValue()
+	case "afterEach":
+		p.next()
+		eol = true
+		root.AfterEach, err = p.parseValue()
+	case "url":
+		p.next()
+		eol = true
+		root.URL, err = p.parseValue()
+	case "username":
+		p.next()
+		eol = true
+		root.User, err = p.parseValue()
+	case "password":
+		p.next()
+		eol = true
+		root.Pass, err = p.parseValue()
+	case "query":
+		p.next()
+		root.Query, err = p.parseSet("query")
+	case "headers":
+		p.next()
+		root.Headers, err = p.parseSet("headers")
+	case "variables":
+		p.next()
+		err = p.parseVariables(root)
+	case "get", "post", "put", "patch", "delete":
+		req, err1 := p.parseRequest()
+		if err1 != nil {
+			err = err1
+			break
+		}
+		root.Requests = append(root.Requests, req)
+	default:
+		err = p.unexpected("collection")
+	}
+	if err == nil && eol && !p.is(EOL) {
+		err = p.unexpected("collection")
+	}
+	p.skip(EOL)
 	return err
 }
 
-func (p *Parser) parseVariables(root *Collection) error {
+func (p *Parser) parseValue() (Value, error) {
+	switch {
+	case p.is(Ident) || p.is(String) || p.is(Number):
+		defer p.next()
+		return createLiteral(p.getCurrLiteral()), nil
+	case p.is(Variable):
+		defer p.next()
+		return createVariable(p.getCurrLiteral()), nil
+	case p.is(Quote):
+		p.next()
+		var cs compound
+		for !p.done() && !p.is(Quote) {
+			v, err := p.parseValue()
+			if err != nil {
+				return nil, err
+			}
+			cs = append(cs, v)
+		}
+		if !p.is(Quote) {
+			return nil, p.unexpected("value")
+		}
+		p.next()
+		if len(cs) == 1 {
+			return cs[0], nil
+		}
+		return cs, nil
+	default:
+		return nil, p.unexpected("value")
+	}
+}
+
+func (p *Parser) parseRequest() (*Request, error) {
+	req := Request{
+		Method: strings.ToUpper(p.getCurrLiteral()),
+	}
 	p.next()
+	if !p.is(Lbrace) {
+		if !p.is(Ident) && !p.is(String) {
+			return nil, p.unexpected("request")
+		}
+		req.Name = p.getCurrLiteral()
+		p.next()
+	}
+	err := p.parseBraces("request", func() error {
+		if !p.is(Keyword) {
+			return p.unexpected("request")
+		}
+		var (
+			err error
+			eol bool
+		)
+		switch p.getCurrLiteral() {
+		case "depends":
+			p.next()
+			eol = true
+			for !p.is(EOL) && p.done() {
+				d, err := p.parseValue()
+				if err != nil {
+					return err
+				}
+				req.Depends = append(req.Depends, d)
+			}
+		case "before":
+			p.next()
+			eol = true
+			req.Before, err = p.parseValue()
+		case "after":
+			p.next()
+			eol = true
+			req.After, err = p.parseValue()
+		case "url":
+			p.next()
+			eol = true
+			req.URL, err = p.parseValue()
+		case "username":
+			p.next()
+			eol = true
+			req.User, err = p.parseValue()
+		case "password":
+			p.next()
+			eol = true
+			req.Pass, err = p.parseValue()
+		case "retry":
+			p.next()
+			eol = true
+			req.Retry, err = p.parseValue()
+		case "timeout":
+			p.next()
+			eol = true
+			req.Timeout, err = p.parseValue()
+		case "redirect":
+		case "query":
+			p.next()
+			req.Query, err = p.parseSet("query")
+		case "headers":
+			p.next()
+			req.Headers, err = p.parseSet("headers")
+		default:
+			err = p.unexpected("request")
+		}
+		if err == nil && eol && !p.is(EOL) {
+			err = p.unexpected("request")
+		}
+		p.skip(EOL)
+		return err
+	})
+	return &req, err
+}
+
+func (p *Parser) parseSet(ctx string) (Set, error) {
+	set := make(Set)
+	return set, p.parseBraces(ctx, func() error {
+		p.skip(EOL)
+		if !p.is(Ident) && !p.is(String) {
+			return p.unexpected("variables")
+		}
+		ident := p.getCurrLiteral()
+		p.next()
+		for !p.done() && !p.is(EOL) {
+			v, err := p.parseValue()
+			if err != nil {
+				return err
+			}
+			set[ident] = append(set[ident], v)
+		}
+		if !p.is(EOL) {
+			return p.unexpected("ctx")
+		}
+		p.next()
+		return nil
+	})
+}
+
+func (p *Parser) parseVariables(root *Collection) error {
 	return p.parseBraces("variables", func() error {
+		p.skip(EOL)
+		if !p.is(Ident) {
+			return p.unexpected("variables")
+		}
+		ident := p.getCurrLiteral()
+		p.next()
+		value, err := p.parseValue()
+		if err != nil {
+			return err
+		}
+		if !p.is(EOL) {
+			return p.unexpected("variables")
+		}
+		p.next()
+		root.Define(ident, value)
 		return nil
 	})
 }
@@ -152,8 +288,10 @@ func (p *Parser) parseBraces(ctx string, fn func() error) error {
 		return p.unexpected(ctx)
 	}
 	p.next()
-	if err := fn(); err != nil {
-		return err
+	for !p.done() && !p.is(Rbrace) {
+		if err := fn(); err != nil {
+			return err
+		}
 	}
 	if !p.is(Rbrace) {
 		return p.unexpected(ctx)
@@ -175,6 +313,10 @@ func (p *Parser) parseIncludeMacro() error {
 }
 
 func (p *Parser) parseReadFileMacro() error {
+	return nil
+}
+
+func (p *Parser) parseEnvMacro() error {
 	return nil
 }
 

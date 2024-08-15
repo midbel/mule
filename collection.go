@@ -6,16 +6,17 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"strings"
 )
 
 type Environment interface {
-	Define(string, []string)
-	Resolve(string) ([]string, error)
+	Define(string, Value)
+	Resolve(string) (Value, error)
 }
 
 type Env struct {
 	parent Environment
-	values map[string][]string
+	values map[string]Value
 }
 
 func Empty() Environment {
@@ -25,11 +26,11 @@ func Empty() Environment {
 func Enclosed(parent Environment) Environment {
 	return &Env{
 		parent: parent,
-		values: make(map[string][]string),
+		values: make(map[string]Value),
 	}
 }
 
-func (e *Env) Resolve(ident string) ([]string, error) {
+func (e *Env) Resolve(ident string) (Value, error) {
 	vs, ok := e.values[ident]
 	if ok {
 		return vs, nil
@@ -40,21 +41,22 @@ func (e *Env) Resolve(ident string) ([]string, error) {
 	return nil, fmt.Errorf("%s: undefined variable", ident)
 }
 
-func (e *Env) Define(ident string, values []string) {
-	e.values[ident] = values
+func (e *Env) Define(ident string, value Value) {
+	e.values[ident] = value
 }
 
 type Common struct {
 	Name string
 
-	URL     url.URL
-	User    string
-	Pass    string
-	Retry   int
-	Timeout int
+	URL      Value
+	User     Value
+	Pass     Value
+	Retry    Value
+	Timeout  Value
+	Redirect Value
 
-	Headers http.Header
-	Query   url.Values
+	Headers Set
+	Query   Set
 	Tls     *tls.Config
 	Body    io.Reader
 }
@@ -63,10 +65,10 @@ type Collection struct {
 	Common
 	Environment
 	// scripts to be run
-	BeforeAll  string
-	BeforeEach string
-	AfterAll   string
-	AfterEach  string
+	BeforeAll  Value
+	BeforeEach Value
+	AfterAll   Value
+	AfterEach  Value
 
 	// collection of requests
 	Requests    []*Request
@@ -86,15 +88,67 @@ func Make(name string, parent Environment) *Collection {
 		Name: name,
 	}
 	return &Collection{
-		Common: info,
+		Common:      info,
+		Environment: Enclosed(nil),
 	}
 }
 
 type Request struct {
 	Common
 	Method  string
-	Depends []string
-	Expect  int
-	Before  string
-	After   string
+	Depends []Value
+	Before  Value
+	After   Value
+}
+
+type Value interface {
+	Expand(Environment) (string, error)
+}
+
+type literal string
+
+func createLiteral(str string) Value {
+	return literal(str)
+}
+
+func (i literal) Expand(_ Environment) (string, error) {
+	return string(i), nil
+}
+
+type variable string
+
+func createVariable(str string) Value {
+	return variable(str)
+}
+
+func (v variable) Expand(e Environment) (string, error) {
+	val, err := e.Resolve(string(v))
+	if err != nil {
+		return "", err
+	}
+	return val.Expand(e)
+}
+
+type compound []Value
+
+func (c compound) Expand(e Environment) (string, error) {
+	var parts []string
+	for i := range c {
+		v, err := c[i].Expand(e)
+		if err != nil {
+			return "", err
+		}
+		parts = append(parts, v)
+	}
+	return strings.Join(parts, ""), nil
+}
+
+type Set map[string][]Value
+
+func (s Set) Headers() http.Header {
+	return nil
+}
+
+func (s Set) Query() url.Values {
+	return nil
 }

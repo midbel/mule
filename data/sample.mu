@@ -2,16 +2,23 @@
 # this is another comment
 
 url http://localhost:3000
+username foobar
+
+variables {
+	token abcdef
+}
+
+query {
+	limit 100
+	page  1
+}
 
 projects {
-	url /api/projects/	
-}
+	password demo-test
 
-collection draft {
-	url /draft/items/	
-	
-}
-
-get request {
-	
+	get all {
+		url /api/projects/	
+		username foobar
+		password foobar
+	}
 }
