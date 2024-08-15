@@ -6,6 +6,7 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"os"
 	"strings"
 )
 
@@ -95,10 +96,36 @@ func Make(name string, parent Environment) *Collection {
 
 type Request struct {
 	Common
+	Body    Value
 	Method  string
 	Depends []Value
 	Before  Value
 	After   Value
+}
+
+type Body interface {
+	Open() (io.ReadCloser, error)
+}
+
+func getBody(str string) Body {
+	s, err := os.Stat(str)
+	if err == nil && s.Mode().IsRegular() {
+		return fileBody(str)
+	}
+	return stringBody(str)
+}
+
+type stringBody string
+
+func (b stringBody) Open() (io.ReadCloser, error) {
+	str := strings.NewReader(string(b))
+	return io.NopCloser(str), nil
+}
+
+type fileBody string
+
+func (b fileBody) Open() (io.ReadCloser, error) {
+	return os.Open(string(b))
 }
 
 type Value interface {

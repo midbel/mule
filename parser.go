@@ -190,6 +190,10 @@ func (p *Parser) parseRequest() (*Request, error) {
 				}
 				req.Depends = append(req.Depends, d)
 			}
+		case "body":
+			p.next()
+			eol = true
+			req.Body, err = p.parseValue()
 		case "before":
 			p.next()
 			eol = true
