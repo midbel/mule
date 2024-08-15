@@ -41,23 +41,25 @@ func (p *Parser) Parse() (*Collection, error) {
 
 func (p *Parser) parse(root *Collection) error {
 	p.skip(Comment)
+
+	var err error
 	switch {
 	case p.is(Macro):
-		return p.parseMacro()
+		err = p.parseMacro()
 	case p.is(Ident):
 		child := Make(p.getCurrLiteral(), root)
 		p.next()
-		err := p.parseBraces("collection", func() error {
+		err = p.parseBraces("collection", func() error {
 			return p.parseItem(root)
 		})
 		if err != nil {
-			return err
+			break
 		}
 		root.Collections = append(root.Collections, child)
 	default:
-		return p.parseItem(root)
+		err = p.parseItem(root)
 	}
-	return nil
+	return err
 }
 
 func (p *Parser) parseItem(root *Collection) error {
