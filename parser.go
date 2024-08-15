@@ -47,7 +47,10 @@ func (p *Parser) parse(root *Collection) error {
 	case p.is(Ident):
 		child := Make(p.getCurrLiteral(), root)
 		p.next()
-		if err := p.parseCollection(child); err != nil {
+		err := p.parseBraces("collection", func() error {
+			return p.parseItem(root)
+		})
+		if err != nil {
 			return err
 		}
 		root.Collections = append(root.Collections, child)
@@ -55,12 +58,6 @@ func (p *Parser) parse(root *Collection) error {
 		return p.parseItem(root)
 	}
 	return nil
-}
-
-func (p *Parser) parseCollection(root *Collection) error {
-	return p.parseBraces("collection", func() error {
-		return p.parseItem(root)
-	})
 }
 
 func (p *Parser) parseItem(root *Collection) error {
