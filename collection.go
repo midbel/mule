@@ -171,7 +171,7 @@ func (c *Collection) GetRequest(name string) (*Request, error) {
 
 type Request struct {
 	Common
-	Body    Value
+	Body    Body
 	Method  string
 	Depends []Value
 	Before  Value
@@ -187,30 +187,7 @@ func (r *Request) Execute(env Environment) error {
 	return nil
 }
 
-type Body interface {
-	Open() (io.ReadCloser, error)
-}
-
-func getBody(str string) Body {
-	s, err := os.Stat(str)
-	if err == nil && s.Mode().IsRegular() {
-		return fileBody(str)
-	}
-	return stringBody(str)
-}
-
-type stringBody string
-
-func (b stringBody) Open() (io.ReadCloser, error) {
-	str := strings.NewReader(string(b))
-	return io.NopCloser(str), nil
-}
-
-type fileBody string
-
-func (b fileBody) Open() (io.ReadCloser, error) {
-	return os.Open(string(b))
-}
+type Body interface{}
 
 type Value interface {
 	Expand(Environment) (string, error)
@@ -290,16 +267,57 @@ func (c compound) Expand(e Environment) (string, error) {
 	return strings.Join(parts, ""), nil
 }
 
-type Set map[string][]Value
-
-func (s Set) Headers() http.Header {
-	return nil
+type call struct {
+	ident string
+	args  []Value
 }
 
-func (s Set) Query() url.Values {
-	return nil
+func (c call) Expand(env Environment) (string, error) {
+	switch c.ident {
+	case "urlencoded":
+	default:
+		return "", fmt.Errorf("%s function unknown", c.ident)
+	}
+	return "", nil
+}
+
+type Set map[string][]Value
+
+func (s Set) Headers(env Environment) (http.Header, error) {
+	return nil, nil
+}
+
+func (s Set) Query(env Environment) (url.Values, error) {
+	vs := make(url.Values)
+	for k := range s {
+		for _, v := range s[k] {
+			str, err := v.Expand(env)
+			if err != nil {
+				return nil, err
+			}
+			vs.Add(k, str)
+		}
+	}
+	return vs, nil
 }
 
 func (s Set) Merge(other Set) Set {
 	return s
+}
+
+func (s Set) UrlEncoded(env Environment) (io.ReadCloser, error) {
+	q, err := s.Query(env)
+	if err != nil {
+		return nil, err
+	}
+	r := strings.NewReader(q.Encode())
+	return io.NopCloser(r), nil
+}
+
+func (s Set) Json(env Environment) (io.ReadCloser, error) {
+	return nil, nil
+}
+
+func (s Set) Xml(env Environment) (io.ReadCloser, error) {
+	return nil, nil
 }

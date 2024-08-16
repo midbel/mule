@@ -16,20 +16,30 @@ query {
 projects {
 	password demo-test
 
+	variables {
+		keycloak https://localhost:8080
+		realm realm-test
+	}
+
 	get all {
 		url /api/projects/	
 		username foobar
 		password foobar
 	}
 
-	get token {
-		url https://localhost:8080/realms/realm-test/openid/token
-		body {
+	post new-token {
+		url `${keycloak}/realms/${realm}/openid-connect/token`
+
+		body urlencoded({
 			grant_type password
 			client_id my-client
 			client_secret my-secret
 			username $username
 			password $password
+		})
+
+		headers {
+			content-type x-www-urlencoded
 		}
 	}
 }

@@ -50,8 +50,11 @@ const (
 	String
 	Number
 	Dot
+	Comma
 	Lbrace
 	Rbrace
+	Lparen
+	Rparen
 	Invalid
 )
 
@@ -76,6 +79,12 @@ func (t Token) String() string {
 		return "<lbrace>"
 	case Rbrace:
 		return "<rbrace>"
+	case Lparen:
+		return "<lparen>"
+	case Rparen:
+		return "<rparen>"
+	case Comma:
+		return "<comma>"
 	case Keyword:
 		prefix = "keyword"
 	case Macro:
@@ -347,14 +356,22 @@ func (s *Scanner) scanPunct(tok *Token) {
 		tok.Type = Lbrace
 	case rbrace:
 		tok.Type = Rbrace
+	case lparen:
+		tok.Type = Lparen
+	case rparen:
+		tok.Type = Rparen
+	case comma:
+		tok.Type = Comma
 	case dot:
 		tok.Type = Dot
 	default:
 		tok.Type = Invalid
 	}
 	s.read()
-	if tok.Type == Lbrace || tok.Type == Rbrace {
+	if tok.Type == Lbrace || tok.Type == Rbrace || tok.Type == Lparen || tok.Type == Rparen {
 		s.skip(isBlank)
+	} else if tok.Type == Comma {
+		s.skip(isSpace)
 	}
 }
 
@@ -419,6 +436,8 @@ func (s *Scanner) restore() {
 const (
 	lbrace     = '{'
 	rbrace     = '}'
+	lparen     = '('
+	rparen     = ')'
 	space      = ' '
 	tab        = '\t'
 	nl         = '\n'
@@ -433,6 +452,7 @@ const (
 	arobase    = '@'
 	star       = '*'
 	backquote  = '`'
+	comma      = ','
 )
 
 func isMacro(r rune) bool {
@@ -448,7 +468,9 @@ func isDelim(r rune) bool {
 }
 
 func isPunct(r rune) bool {
-	return r == dot || r == lbrace || r == rbrace
+	return r == dot || r == comma ||
+		r == lbrace || r == rbrace ||
+		r == lparen || r == rparen
 }
 
 func isComment(r rune) bool {
