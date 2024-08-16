@@ -29,6 +29,7 @@ var keywords = []string{
 	"url",
 	"usage",
 	"description",
+	"body",
 	// HTTP methods
 	"get",
 	"post",
@@ -323,7 +324,7 @@ func (s *Scanner) scanVariable(tok *Token) {
 		s.read()
 	}
 	s.scanIdent(tok)
-	if tok.Type != Ident {
+	if tok.Type != Ident && tok.Type != Keyword {
 		tok.Type = Invalid
 		return
 	}

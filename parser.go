@@ -50,7 +50,7 @@ func (p *Parser) parse(root *Collection) error {
 		child := Make(p.getCurrLiteral(), root)
 		p.next()
 		err = p.parseBraces("collection", func() error {
-			return p.parseItem(root)
+			return p.parseItem(child)
 		})
 		if err != nil {
 			break
@@ -130,7 +130,9 @@ func (p *Parser) parseItem(root *Collection) error {
 
 func (p *Parser) parseValue() (Value, error) {
 	switch {
-	case p.is(Ident) || p.is(String) || p.is(Number):
+	case p.is(Macro):
+		return nil, p.parseMacro()
+	case p.is(Ident) || p.is(String) || p.is(Number) || p.is(Keyword):
 		defer p.next()
 		return createLiteral(p.getCurrLiteral()), nil
 	case p.is(Variable):
@@ -157,6 +159,18 @@ func (p *Parser) parseValue() (Value, error) {
 	default:
 		return nil, p.unexpected("value")
 	}
+}
+
+func (p *Parser) parseBody() (Value, error) {
+	if !p.is(Lbrace) {
+		return p.parseValue()
+	}
+	set, err := p.parseSet("body")
+	if err != nil {
+		return nil, err
+	}
+	fmt.Println(set)
+	return createLiteral(""), err
 }
 
 func (p *Parser) parseRequest() (*Request, error) {
@@ -192,8 +206,10 @@ func (p *Parser) parseRequest() (*Request, error) {
 			}
 		case "body":
 			p.next()
-			eol = true
-			req.Body, err = p.parseValue()
+			if !p.is(Lbrace) {
+				eol = true
+			}
+			req.Body, err = p.parseBody()
 		case "before":
 			p.next()
 			eol = true
@@ -245,7 +261,7 @@ func (p *Parser) parseSet(ctx string) (Set, error) {
 	set := make(Set)
 	return set, p.parseBraces(ctx, func() error {
 		p.skip(EOL)
-		if !p.is(Ident) && !p.is(String) {
+		if !p.is(Ident) && !p.is(String) && !p.is(Keyword) {
 			return p.unexpected("variables")
 		}
 		ident := p.getCurrLiteral()

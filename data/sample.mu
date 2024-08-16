@@ -21,4 +21,15 @@ projects {
 		username foobar
 		password foobar
 	}
+
+	get token {
+		url https://localhost:8080/realms/realm-test/openid/token
+		body {
+			grant_type password
+			client_id my-client
+			client_secret my-secret
+			username $username
+			password $password
+		}
+	}
 }
