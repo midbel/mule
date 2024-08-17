@@ -56,11 +56,11 @@ type Common struct {
 	Retry    Value
 	Timeout  Value
 	Redirect Value
+	Body    Value
 
 	Headers Set
 	Query   Set
 	Tls     *tls.Config
-	Body    io.Reader
 }
 
 type Collection struct {
@@ -154,15 +154,13 @@ func (c *Collection) GetCollection(name string) (*Collection, error) {
 	}
 
 	sub := *c.Collections[ix]
+
 	sub.URL = getUrl(c.URL, sub.URL, sub)
 	sub.User = getValue(c.User, sub.User)
 	sub.Pass = getValue(c.Pass, sub.Pass)
+	sub.Body = getValue(sub.Body, c.Body)
 	sub.Headers = sub.Headers.Merge(c.Headers)
 	sub.Query = sub.Query.Merge(c.Query)
-
-	if sub.Body == nil {
-		sub.Body = c.Body
-	}
 
 	return &sub, nil
 }
@@ -177,22 +175,19 @@ func (c *Collection) GetRequest(name string) (*Request, error) {
 	}
 
 	req := *c.Requests[ix]
+
 	req.URL = getUrl(c.URL, req.URL, c)
 	req.User = getValue(req.User, c.User)
 	req.Pass = getValue(req.Pass, c.Pass)
+	req.Body = getValue(req.Body, c.Body)
 	req.Headers = req.Headers.Merge(c.Headers)
 	req.Query = req.Query.Merge(c.Query)
-
-	if req.Body == nil {
-		req.Body = c.Body
-	}
 
 	return &req, nil
 }
 
 type Request struct {
 	Common
-	Body    Value
 	Method  string
 	Depends []Value
 	Before  Value
@@ -205,8 +200,10 @@ func (r *Request) Execute(env Environment) error {
 		return err
 	}
 	fmt.Println(">", str)
-	b, err := r.Body.Expand(env)
-	fmt.Println(">>>", b, err)
+	if r.Body != nil {
+		b, err := r.Body.Expand(env)
+		fmt.Println(">>>", b, err)
+	}
 	return nil
 }
 
@@ -297,6 +294,9 @@ type call struct {
 
 func (c call) Expand(env Environment) (string, error) {
 	switch c.ident {
+	case "readfile":
+	case "jsonify":
+	case "xmlify":
 	case "urlencoded":
 		return c.getUrlEncoded(env)
 	default:
