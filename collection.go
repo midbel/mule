@@ -160,6 +160,10 @@ func (c *Collection) GetCollection(name string) (*Collection, error) {
 	sub.Headers = sub.Headers.Merge(c.Headers)
 	sub.Query = sub.Query.Merge(c.Query)
 
+	if sub.Body == nil {
+		sub.Body = c.Body
+	}
+
 	return &sub, nil
 }
 
@@ -178,6 +182,10 @@ func (c *Collection) GetRequest(name string) (*Request, error) {
 	req.Pass = getValue(req.Pass, c.Pass)
 	req.Headers = req.Headers.Merge(c.Headers)
 	req.Query = req.Query.Merge(c.Query)
+
+	if req.Body == nil {
+		req.Body = c.Body
+	}
 
 	return &req, nil
 }
