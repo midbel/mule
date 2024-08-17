@@ -103,6 +103,19 @@ func Make(name string, parent Environment) *Collection {
 	}
 }
 
+func (c Collection) Resolve(ident string) (Value, error) {
+	switch {
+	case c.User != nil && ident == "username":
+		return c.User, nil
+	case c.Pass != nil && ident == "password":
+		return c.Pass, nil
+	case c.URL != nil && ident == "url":
+		return c.URL, nil
+	default:
+	}
+	return c.Environment.Resolve(ident)
+}
+
 func (c *Collection) Execute() error {
 	return nil
 }
@@ -171,7 +184,7 @@ func (c *Collection) GetRequest(name string) (*Request, error) {
 
 type Request struct {
 	Common
-	Body    Body
+	Body    Value
 	Method  string
 	Depends []Value
 	Before  Value
@@ -183,7 +196,9 @@ func (r *Request) Execute(env Environment) error {
 	if err != nil {
 		return err
 	}
-	fmt.Println(">>>", str)
+	fmt.Println(">", str)
+	b, err := r.Body.Expand(env)
+	fmt.Println(">>>", b, err)
 	return nil
 }
 
@@ -269,16 +284,39 @@ func (c compound) Expand(e Environment) (string, error) {
 
 type call struct {
 	ident string
-	args  []Value
+	args  []interface{}
 }
 
 func (c call) Expand(env Environment) (string, error) {
 	switch c.ident {
 	case "urlencoded":
+		return c.getUrlEncoded(env)
 	default:
 		return "", fmt.Errorf("%s function unknown", c.ident)
 	}
 	return "", nil
+}
+
+func (c call) getUrlEncoded(env Environment) (string, error) {
+	if len(c.args) != 1 {
+		return "", fmt.Errorf("urlencoded: invalid number of argument")
+	}
+	if v, ok := c.args[0].(Value); ok {
+		res, err := v.Expand(env)
+		if err == nil {
+			res = url.QueryEscape(res)
+		}
+		return res, err
+	}
+	s, ok := c.args[0].(Set)
+	if !ok {
+		return "", fmt.Errorf("urlencoded: unsupported argument type")
+	}
+	q, err := s.Query(env)
+	if err != nil {
+		return "", err
+	}
+	return q.Encode(), nil
 }
 
 type Set map[string][]Value

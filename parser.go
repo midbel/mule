@@ -139,32 +139,30 @@ func (p *Parser) parseCall(ident string) (Value, error) {
 			err error
 		)
 		if p.is(Lbrace) {
-
+			arg, err = p.parseSet("arg")
 		} else {
 			arg, err = p.parseValue()
-			_ = arg
 		}
-		a, err := p.parseValue()
 		if err != nil {
 			return nil, err
 		}
-		c.args = append(c.args, a)
+		c.args = append(c.args, arg)
 		switch {
 		case p.is(Comma):
 			p.next()
 			if p.is(Rparen) {
-				return nil, p.unexpected("value")
+				return nil, p.unexpected("arg")
 			}
 		case p.is(Rparen):
 		default:
-			return nil, p.unexpected("value")
+			return nil, p.unexpected("arg")
 		}
 	}
 	if !p.is(Rparen) {
-		return nil, p.unexpected("value")
+		return nil, p.unexpected("call")
 	}
 	p.next()
-	return nil, nil
+	return c, nil
 }
 
 func (p *Parser) parseValue() (Value, error) {
@@ -207,11 +205,8 @@ func (p *Parser) parseValue() (Value, error) {
 	}
 }
 
-func (p *Parser) parseBody() (Body, error) {
-	if !p.is(Lbrace) {
-		return p.parseValue()
-	}
-	return p.parseSet("body")
+func (p *Parser) parseBody() (Value, error) {
+	return p.parseValue()
 }
 
 func (p *Parser) parseRequest() (*Request, error) {
@@ -247,9 +242,6 @@ func (p *Parser) parseRequest() (*Request, error) {
 			}
 		case "body":
 			p.next()
-			if !p.is(Lbrace) {
-				eol = true
-			}
 			req.Body, err = p.parseBody()
 		case "before":
 			p.next()
