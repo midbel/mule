@@ -30,13 +30,13 @@ projects {
 	post new-token {
 		url `${keycloak}/realms/${realm}/openid-connect/token`
 
-		body urlencoded({
+		body urlencoded {
 			grant_type password
 			client_id my-client
 			client_secret my-secret
 			username $username
 			password $password
-		})
+		}
 
 		auth bearer "abc.erdfcv.xyz"
 

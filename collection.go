@@ -224,6 +224,76 @@ type Body interface {
 	ContentType() string
 }
 
+type xmlBody struct {}
+
+func (b xmlBody) Expand(env Environment) (string, error) {
+	return "", nil
+}
+
+func (b xmlBody) Compressed() bool {
+	return false
+}
+
+func (b xmlBody) ContentType() string {
+	return "text/xml"
+}
+
+type jsonBody struct {}
+
+func (b jsonBody) Expand(env Environment) (string, error) {
+	return "", nil
+}
+
+func (b jsonBody) Compressed() bool {
+	return false
+}
+
+func (b jsonBody) ContentType() string {
+	return "application/json"
+}
+
+type octetstreamBody struct {}
+
+func (b octetstreamBody) Expand(env Environment) (string, error) {
+	return "", nil
+}
+
+func (b octetstreamBody) Compressed() bool {
+	return false
+}
+
+func (b octetstreamBody) ContentType() string {
+	return "application/octet-stream"
+}
+
+type textBody struct {}
+
+func (b textBody) Expand(env Environment) (string, error) {
+	return "", nil
+}
+
+func (b textBody) Compressed() bool {
+	return false
+}
+
+func (b textBody) ContentType() string {
+	return "text/plain"
+}
+
+type urlencodedBody struct {}
+
+func (b urlencodedBody) Expand(env Environment) (string, error) {
+	return "", nil
+}
+
+func (b urlencodedBody) Compressed() bool {
+	return false
+}
+
+func (b urlencodedBody) ContentType() string {
+	return "application/x-www-form-urlencoded"
+}
+
 type Value interface {
 	Expand(Environment) (string, error)
 }
