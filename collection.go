@@ -375,7 +375,17 @@ func (c call) getUrlEncoded(env Environment) (string, error) {
 type Set map[string][]Value
 
 func (s Set) Headers(env Environment) (http.Header, error) {
-	return nil, nil
+	hs := make(http.Header)
+	for k := range s {
+		for _, v := range s[k] {
+			str, err := v.Expand(env)
+			if err != nil {
+				return nil, err
+			}
+			hs.Add(k, str)
+		}
+	}
+	return hs, nil
 }
 
 func (s Set) Query(env Environment) (url.Values, error) {
@@ -393,7 +403,14 @@ func (s Set) Query(env Environment) (url.Values, error) {
 }
 
 func (s Set) Merge(other Set) Set {
-	return s
+	var ns = make(Set)
+	for k := range s {
+		ns[k] = slices.Clone(s[k])
+	}
+	for k := range other {
+		ns[k] = slices.Concat(ns[k], slices.Clone(other[k]))
+	}
+	return ns
 }
 
 func (s Set) UrlEncoded(env Environment) (io.ReadCloser, error) {
