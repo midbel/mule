@@ -214,58 +214,9 @@ func (p *Parser) parseAuth() (Authorization, error) {
 	)
 	switch p.getCurrLiteral() {
 	case "basic":
-		p.next()
-		var b basic
-		err = p.parseBraces("basic", func() error {
-			if !p.is(Keyword) {
-				return p.unexpected("basic")
-			}
-			var err error
-			switch p.getCurrLiteral() {
-			case "username":
-				p.next()
-				b.User, err = p.parseValue()
-			case "password":
-				p.next()
-				b.Pass, err = p.parseValue()
-			default:
-				return p.unexpected("basic")
-			}
-			if err == nil {
-				if !p.is(EOL) {
-					return p.unexpected("basic")
-				}
-				p.next()
-			}
-			return err
-		})
-		if err == nil {
-			auth = b
-		}
+		auth, err = p.parseBasicAuth()
 	case "bearer":
-		p.next()
-		var b bearer
-		if p.is(Lbrace) {
-			err = p.parseBraces("bearer", func() error {
-				if !p.is(Keyword) {
-					return p.unexpected("bearer")
-				}
-				if p.getCurrLiteral() != "token" {
-					return p.unexpected("bearer")
-				}
-				p.next()
-				token, err := p.parseValue()
-				if err == nil {
-					b.Token = token
-				}
-				return err
-			})
-		} else {
-			b.Token, err = p.parseValue()
-		}
-		if err == nil {
-			auth = b
-		}
+		auth, err = p.parseBearerAuth()
 	case "digest":
 		return nil, fmt.Errorf("digest: not yet implemented")
 	case "jwt":
@@ -273,6 +224,65 @@ func (p *Parser) parseAuth() (Authorization, error) {
 	default:
 		return nil, p.unexpected("auth")
 	}
+	return auth, err
+}
+
+func (p *Parser) parseBearerAuth() (Authorization, error) {
+	p.next()
+	var (
+		auth bearer
+		err  error
+	)
+	if !p.is(Lbrace) {
+		auth.Token, err = p.parseValue()
+		return auth, err
+	}
+	err = p.parseBraces("bearer", func() error {
+		if !p.is(Keyword) {
+			return p.unexpected("bearer")
+		}
+		if p.getCurrLiteral() != "token" {
+			return p.unexpected("bearer")
+		}
+		p.next()
+		token, err := p.parseValue()
+		if err == nil {
+			auth.Token = token
+		}
+		return err
+	})
+	return auth, err
+}
+
+func (p *Parser) parseBasicAuth() (Authorization, error) {
+	p.next()
+	var (
+		auth basic
+		err  error
+	)
+	err = p.parseBraces("basic", func() error {
+		if !p.is(Keyword) {
+			return p.unexpected("basic")
+		}
+		var err error
+		switch p.getCurrLiteral() {
+		case "username":
+			p.next()
+			auth.User, err = p.parseValue()
+		case "password":
+			p.next()
+			auth.Pass, err = p.parseValue()
+		default:
+			return p.unexpected("basic")
+		}
+		if err == nil {
+			if !p.is(EOL) {
+				return p.unexpected("basic")
+			}
+			p.next()
+		}
+		return err
+	})
 	return auth, err
 }
 
