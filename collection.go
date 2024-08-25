@@ -51,12 +51,11 @@ type Common struct {
 	Name string
 
 	URL      Value
-	User     Value
-	Pass     Value
+	Auth     Authorization
 	Retry    Value
 	Timeout  Value
 	Redirect Value
-	Body    Value
+	Body     Value
 
 	Headers Set
 	Query   Set
@@ -105,10 +104,6 @@ func Make(name string, parent Environment) *Collection {
 
 func (c Collection) Resolve(ident string) (Value, error) {
 	switch {
-	case c.User != nil && ident == "username":
-		return c.User, nil
-	case c.Pass != nil && ident == "password":
-		return c.Pass, nil
 	case c.URL != nil && ident == "url":
 		return c.URL, nil
 	default:
@@ -156,8 +151,6 @@ func (c *Collection) GetCollection(name string) (*Collection, error) {
 	sub := *c.Collections[ix]
 
 	sub.URL = getUrl(c.URL, sub.URL, sub)
-	sub.User = getValue(c.User, sub.User)
-	sub.Pass = getValue(c.Pass, sub.Pass)
 	sub.Body = getValue(sub.Body, c.Body)
 	sub.Headers = sub.Headers.Merge(c.Headers)
 	sub.Query = sub.Query.Merge(c.Query)
@@ -177,8 +170,6 @@ func (c *Collection) GetRequest(name string) (*Request, error) {
 	req := *c.Requests[ix]
 
 	req.URL = getUrl(c.URL, req.URL, c)
-	req.User = getValue(req.User, c.User)
-	req.Pass = getValue(req.Pass, c.Pass)
 	req.Body = getValue(req.Body, c.Body)
 	req.Headers = req.Headers.Merge(c.Headers)
 	req.Query = req.Query.Merge(c.Query)
@@ -195,22 +186,76 @@ type Request struct {
 }
 
 func (r *Request) Execute(env Environment) error {
-	str, err := r.URL.Expand(env)
+	url, err := r.URL.Expand(env)
 	if err != nil {
 		return err
 	}
-	fmt.Println(">", str)
+	var body io.Reader
 	if r.Body != nil {
 		b, err := r.Body.Expand(env)
-		fmt.Println(">>>", b, err)
+		if err != nil {
+			return err
+		}
+		body = strings.NewReader(b)
+	}
+	if r.Before != nil {
+
+	}
+	req, err := http.NewRequest(r.Method, url, body)
+	if err != nil {
+		return err
+	}
+	res, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return err
+	}
+	if res.StatusCode >= http.StatusBadRequest {
+		return fmt.Errorf(http.StatusText(res.StatusCode))
+	}
+	if r.After != nil {
+
 	}
 	return nil
 }
 
-type Body interface{}
+type Body interface {
+	Value
+	Compressed() bool
+	ContentType() string
+}
 
 type Value interface {
 	Expand(Environment) (string, error)
+}
+
+type Authorization interface {
+	Value
+	Method() string
+}
+
+type basic struct {
+	User Value
+	Pass Value
+}
+
+func (b basic) Method() string {
+	return "Basic"
+}
+
+func (b basic) Expand(env Environment) (string, error) {
+	return "", nil
+}
+
+type bearer struct {
+	Token Value
+}
+
+func (b bearer) Method() string {
+	return "Bearer"
+}
+
+func (b bearer) Expand(env Environment) (string, error) {
+	return b.Token.Expand(env)
 }
 
 func getUrl(left, right Value, env Environment) Value {

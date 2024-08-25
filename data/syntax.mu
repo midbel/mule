@@ -15,8 +15,15 @@ collection name {
 	}
 
 	url http://localhost
-	username foobar
-	password foobar
+
+	auth bearer "abc.defgh.xyz"
+	auth bearer {
+		token "abc.defgh.xyz"
+	}
+	auth basic {
+		username foobar
+		password tmp123
+	}
 
 	headers {
 		accept "application/json"
@@ -44,8 +51,6 @@ collection name {
 		depends r1 r2
 		expect  200
 		url http://localhost
-		username foobar1
-		password foobar2
 
 		retry 100
 		timeout 100

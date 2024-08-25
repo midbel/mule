@@ -13,6 +13,8 @@ var keywords = []string{
 	// configuration block
 	"username",
 	"password",
+	"token",
+	"auth",
 	"collection",
 	"variables",
 	"headers",

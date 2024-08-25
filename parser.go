@@ -90,18 +90,13 @@ func (p *Parser) parseItem(root *Collection) error {
 		p.next()
 		eol = true
 		root.AfterEach, err = p.parseValue()
+	case "auth":
+		p.next()
+		root.Auth, err = p.parseAuth()
 	case "url":
 		p.next()
 		eol = true
 		root.URL, err = p.parseValue()
-	case "username":
-		p.next()
-		eol = true
-		root.User, err = p.parseValue()
-	case "password":
-		p.next()
-		eol = true
-		root.Pass, err = p.parseValue()
 	case "query":
 		p.next()
 		root.Query, err = p.parseSet("query")
@@ -209,6 +204,78 @@ func (p *Parser) parseBody() (Value, error) {
 	return p.parseValue()
 }
 
+func (p *Parser) parseAuth() (Authorization, error) {
+	if !p.is(Ident) {
+		return nil, p.unexpected("auth")
+	}
+	var (
+		auth Authorization
+		err  error
+	)
+	switch p.getCurrLiteral() {
+	case "basic":
+		p.next()
+		var b basic
+		err = p.parseBraces("basic", func() error {
+			if !p.is(Keyword) {
+				return p.unexpected("basic")
+			}
+			var err error
+			switch p.getCurrLiteral() {
+			case "username":
+				p.next()
+				b.User, err = p.parseValue()
+			case "password":
+				p.next()
+				b.Pass, err = p.parseValue()
+			default:
+				return p.unexpected("basic")
+			}
+			if err == nil {
+				if !p.is(EOL) {
+					return p.unexpected("basic")
+				}
+				p.next()
+			}
+			return err
+		})
+		if err == nil {
+			auth = b
+		}
+	case "bearer":
+		p.next()
+		var b bearer
+		if p.is(Lbrace) {
+			err = p.parseBraces("bearer", func() error {
+				if !p.is(Keyword) {
+					return p.unexpected("bearer")
+				}
+				if p.getCurrLiteral() != "token" {
+					return p.unexpected("bearer")
+				}
+				p.next()
+				token, err := p.parseValue()
+				if err == nil {
+					b.Token = token
+				}
+				return err
+			})
+		} else {
+			b.Token, err = p.parseValue()
+		}
+		if err == nil {
+			auth = b
+		}
+	case "digest":
+		return nil, fmt.Errorf("digest: not yet implemented")
+	case "jwt":
+		return nil, fmt.Errorf("jwt: not yet implemented")
+	default:
+		return nil, p.unexpected("auth")
+	}
+	return auth, err
+}
+
 func (p *Parser) parseRequest() (*Request, error) {
 	req := Request{
 		Method: strings.ToUpper(p.getCurrLiteral()),
@@ -255,14 +322,6 @@ func (p *Parser) parseRequest() (*Request, error) {
 			p.next()
 			eol = true
 			req.URL, err = p.parseValue()
-		case "username":
-			p.next()
-			eol = true
-			req.User, err = p.parseValue()
-		case "password":
-			p.next()
-			eol = true
-			req.Pass, err = p.parseValue()
 		case "retry":
 			p.next()
 			eol = true
@@ -272,6 +331,9 @@ func (p *Parser) parseRequest() (*Request, error) {
 			eol = true
 			req.Timeout, err = p.parseValue()
 		case "redirect":
+		case "auth":
+			p.next()
+			req.Auth, err = p.parseAuth()
 		case "query":
 			p.next()
 			req.Query, err = p.parseSet("query")
@@ -295,7 +357,7 @@ func (p *Parser) parseSet(ctx string) (Set, error) {
 	return set, p.parseBraces(ctx, func() error {
 		p.skip(EOL)
 		if !p.is(Ident) && !p.is(String) && !p.is(Keyword) {
-			return p.unexpected("variables")
+			return p.unexpected("set")
 		}
 		ident := p.getCurrLiteral()
 		p.next()
@@ -307,7 +369,7 @@ func (p *Parser) parseSet(ctx string) (Set, error) {
 			set[ident] = append(set[ident], v)
 		}
 		if !p.is(EOL) {
-			return p.unexpected("ctx")
+			return p.unexpected("set")
 		}
 		p.next()
 		return nil
@@ -317,7 +379,7 @@ func (p *Parser) parseSet(ctx string) (Set, error) {
 func (p *Parser) parseVariables(root *Collection) error {
 	return p.parseBraces("variables", func() error {
 		p.skip(EOL)
-		if !p.is(Ident) {
+		if !p.is(Ident) && !p.is(Keyword) && !p.is(String) {
 			return p.unexpected("variables")
 		}
 		ident := p.getCurrLiteral()

@@ -2,7 +2,6 @@
 # this is another comment
 
 url http://localhost:3000
-username foobar
 
 variables {
 	token abcdef
@@ -14,7 +13,6 @@ query {
 }
 
 projects {
-	password demo-test
 
 	variables {
 		keycloak https://localhost:8080
@@ -23,8 +21,10 @@ projects {
 
 	get all {
 		url /api/projects/	
-		username foobar
-		password foobar
+		auth basic {
+			username foobar
+			password tmp123
+		}
 	}
 
 	post new-token {
@@ -37,6 +37,8 @@ projects {
 			username $username
 			password $password
 		})
+
+		auth bearer "abc.erdfcv.xyz"
 
 		headers {
 			content-type x-www-urlencoded
