@@ -1,0 +1,28 @@
+{
+	"continents": [
+		{
+			"id": 1,
+			"name": "europa"
+		},
+		{
+			"id": 2,
+			"name": "africa"
+		}
+	],
+	"countries": [		
+		{
+			"id": 1,
+			"name": "belgium",
+			"code": "be",
+			"continent": 1,
+			"population": 1100000
+		},
+		{
+			"id": 2,
+			"name": "france",
+			"code": "fr",
+			"continent": 1,
+			"population": 66000000
+		}
+	]
+}
