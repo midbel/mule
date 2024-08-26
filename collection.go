@@ -186,10 +186,11 @@ type Request struct {
 }
 
 func (r *Request) Execute(env Environment) error {
-	url, err := r.URL.Expand(env)
+	target, err := r.getUrl()
 	if err != nil {
 		return err
 	}
+
 	var body io.Reader
 	if r.Body != nil {
 		b, err := r.Body.Expand(env)
@@ -201,10 +202,14 @@ func (r *Request) Execute(env Environment) error {
 	if r.Before != nil {
 
 	}
-	req, err := http.NewRequest(r.Method, url, body)
+	req, err := http.NewRequest(r.Method, target, body)
 	if err != nil {
 		return err
 	}
+	if req.Header, err = c.Headers.Headers(env); err != nil {
+		return err
+	}
+
 	res, err := http.DefaultClient.Do(req)
 	if err != nil {
 		return err
@@ -216,6 +221,26 @@ func (r *Request) Execute(env Environment) error {
 
 	}
 	return nil
+}
+
+func (r *Request) target() (string, error) {
+	target, err := r.URL.Expand(env)
+	if err != nil {
+		return "", err
+	}
+	u, err := url.Parse(target)
+	if err != nil {
+		return "", err
+	}
+
+	vs, err := r.Query.Query(env)
+	if err != nil {
+		return err
+	}
+	if u.RawQuery == "" {
+		u.RawQuery = vs.Encode()
+	}
+	return u.ToString(), nil
 }
 
 type Body interface {
