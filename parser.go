@@ -123,55 +123,11 @@ func (p *Parser) parseItem(root *Collection) error {
 	return err
 }
 
-func (p *Parser) parseCall(ident string) (Value, error) {
-	p.next()
-	c := call{
-		ident: ident,
-	}
-	for !p.done() && !p.is(Rparen) {
-		var (
-			arg interface{}
-			err error
-		)
-		if p.is(Lbrace) {
-			arg, err = p.parseSet("arg")
-		} else {
-			arg, err = p.parseValue()
-		}
-		if err != nil {
-			return nil, err
-		}
-		c.args = append(c.args, arg)
-		switch {
-		case p.is(Comma):
-			p.next()
-			if p.is(Rparen) {
-				return nil, p.unexpected("arg")
-			}
-		case p.is(Rparen):
-		default:
-			return nil, p.unexpected("arg")
-		}
-	}
-	if !p.is(Rparen) {
-		return nil, p.unexpected("call")
-	}
-	p.next()
-	return c, nil
-}
-
 func (p *Parser) parseValue() (Value, error) {
 	switch {
 	case p.is(Macro):
 		return nil, p.parseMacro()
-	case p.is(Ident):
-		str := p.getCurrLiteral()
-		p.next()
-		if p.is(Lparen) {
-			return p.parseCall(str)
-		}
-		return createLiteral(str), nil
-	case p.is(String) || p.is(Number) || p.is(Keyword):
+	case p.is(Ident) || p.is(String) || p.is(Number) || p.is(Keyword):
 		defer p.next()
 		return createLiteral(p.getCurrLiteral()), nil
 	case p.is(Variable):

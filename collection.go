@@ -186,7 +186,7 @@ type Request struct {
 }
 
 func (r *Request) Execute(env Environment) error {
-	target, err := r.getUrl()
+	target, err := r.target(env)
 	if err != nil {
 		return err
 	}
@@ -206,7 +206,7 @@ func (r *Request) Execute(env Environment) error {
 	if err != nil {
 		return err
 	}
-	if req.Header, err = c.Headers.Headers(env); err != nil {
+	if req.Header, err = r.Headers.Headers(env); err != nil {
 		return err
 	}
 
@@ -223,7 +223,7 @@ func (r *Request) Execute(env Environment) error {
 	return nil
 }
 
-func (r *Request) target() (string, error) {
+func (r *Request) target(env Environment) (string, error) {
 	target, err := r.URL.Expand(env)
 	if err != nil {
 		return "", err
@@ -235,12 +235,12 @@ func (r *Request) target() (string, error) {
 
 	vs, err := r.Query.Query(env)
 	if err != nil {
-		return err
+		return "", err
 	}
 	if u.RawQuery == "" {
 		u.RawQuery = vs.Encode()
 	}
-	return u.ToString(), nil
+	return u.String(), nil
 }
 
 type Body interface {
