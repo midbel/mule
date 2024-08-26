@@ -1,7 +1,10 @@
 package mule
 
 import (
+	"bytes"
 	"crypto/tls"
+	"encoding/json"
+	"encoding/xml"
 	"fmt"
 	"io"
 	"net/http"
@@ -55,7 +58,7 @@ type Common struct {
 	Retry    Value
 	Timeout  Value
 	Redirect Value
-	Body     Value
+	Body     Body
 
 	Headers Set
 	Query   Set
@@ -151,7 +154,6 @@ func (c *Collection) GetCollection(name string) (*Collection, error) {
 	sub := *c.Collections[ix]
 
 	sub.URL = getUrl(c.URL, sub.URL, sub)
-	sub.Body = getValue(sub.Body, c.Body)
 	sub.Headers = sub.Headers.Merge(c.Headers)
 	sub.Query = sub.Query.Merge(c.Query)
 
@@ -170,7 +172,6 @@ func (c *Collection) GetRequest(name string) (*Request, error) {
 	req := *c.Requests[ix]
 
 	req.URL = getUrl(c.URL, req.URL, c)
-	req.Body = getValue(req.Body, c.Body)
 	req.Headers = req.Headers.Merge(c.Headers)
 	req.Query = req.Query.Merge(c.Query)
 
@@ -179,10 +180,11 @@ func (c *Collection) GetRequest(name string) (*Request, error) {
 
 type Request struct {
 	Common
-	Method  string
-	Depends []Value
-	Before  Value
-	After   Value
+	Compressed Value
+	Method     string
+	Depends    []Value
+	Before     Value
+	After      Value
 }
 
 func (r *Request) Execute(env Environment) error {
@@ -249,10 +251,26 @@ type Body interface {
 	ContentType() string
 }
 
-type xmlBody struct {}
+type xmlBody struct {
+	Set
+}
+
+func xmlify(set Set) Body {
+	return xmlBody{
+		Set: set,
+	}
+}
 
 func (b xmlBody) Expand(env Environment) (string, error) {
-	return "", nil
+	vs, err := b.Set.Map(env)
+	if err != nil {
+		return "", err
+	}
+	var buf bytes.Buffer
+	if err := xml.NewEncoder(&buf).Encode(vs); err != nil {
+		return "", err
+	}
+	return buf.String(), nil
 }
 
 func (b xmlBody) Compressed() bool {
@@ -263,10 +281,26 @@ func (b xmlBody) ContentType() string {
 	return "text/xml"
 }
 
-type jsonBody struct {}
+type jsonBody struct {
+	Set
+}
+
+func jsonify(set Set) Body {
+	return jsonBody{
+		Set: set,
+	}
+}
 
 func (b jsonBody) Expand(env Environment) (string, error) {
-	return "", nil
+	vs, err := b.Set.Map(env)
+	if err != nil {
+		return "", err
+	}
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(vs); err != nil {
+		return "", err
+	}
+	return buf.String(), nil
 }
 
 func (b jsonBody) Compressed() bool {
@@ -277,7 +311,15 @@ func (b jsonBody) ContentType() string {
 	return "application/json"
 }
 
-type octetstreamBody struct {}
+type octetstreamBody struct {
+	Set
+}
+
+func octetstream(set Set) Body {
+	return octetstreamBody{
+		Set: set,
+	}
+}
 
 func (b octetstreamBody) Expand(env Environment) (string, error) {
 	return "", nil
@@ -291,7 +333,15 @@ func (b octetstreamBody) ContentType() string {
 	return "application/octet-stream"
 }
 
-type textBody struct {}
+type textBody struct {
+	Set
+}
+
+func textify(set Set) Body {
+	return textBody{
+		Set: set,
+	}
+}
 
 func (b textBody) Expand(env Environment) (string, error) {
 	return "", nil
@@ -305,10 +355,22 @@ func (b textBody) ContentType() string {
 	return "text/plain"
 }
 
-type urlencodedBody struct {}
+type urlencodedBody struct {
+	Set
+}
+
+func urlEncoded(set Set) Body {
+	return urlencodedBody{
+		Set: set,
+	}
+}
 
 func (b urlencodedBody) Expand(env Environment) (string, error) {
-	return "", nil
+	qs, err := b.Set.Query(env)
+	if err != nil {
+		return "", err
+	}
+	return qs.Encode(), nil
 }
 
 func (b urlencodedBody) Compressed() bool {
@@ -427,46 +489,6 @@ func (c compound) Expand(e Environment) (string, error) {
 	return strings.Join(parts, ""), nil
 }
 
-type call struct {
-	ident string
-	args  []interface{}
-}
-
-func (c call) Expand(env Environment) (string, error) {
-	switch c.ident {
-	case "readfile":
-	case "jsonify":
-	case "xmlify":
-	case "urlencoded":
-		return c.getUrlEncoded(env)
-	default:
-		return "", fmt.Errorf("%s function unknown", c.ident)
-	}
-	return "", nil
-}
-
-func (c call) getUrlEncoded(env Environment) (string, error) {
-	if len(c.args) != 1 {
-		return "", fmt.Errorf("urlencoded: invalid number of argument")
-	}
-	if v, ok := c.args[0].(Value); ok {
-		res, err := v.Expand(env)
-		if err == nil {
-			res = url.QueryEscape(res)
-		}
-		return res, err
-	}
-	s, ok := c.args[0].(Set)
-	if !ok {
-		return "", fmt.Errorf("urlencoded: unsupported argument type")
-	}
-	q, err := s.Query(env)
-	if err != nil {
-		return "", err
-	}
-	return q.Encode(), nil
-}
-
 type Set map[string][]Value
 
 func (s Set) Headers(env Environment) (http.Header, error) {
@@ -481,6 +503,26 @@ func (s Set) Headers(env Environment) (http.Header, error) {
 		}
 	}
 	return hs, nil
+}
+
+func (s Set) Map(env Environment) (map[string]interface{}, error) {
+	vs := make(map[string]interface{})
+	for k := range s {
+		var arr []string
+		for _, v := range s[k] {
+			str, err := v.Expand(env)
+			if err != nil {
+				return nil, err
+			}
+			arr = append(arr, str)
+		}
+		var dat interface{} = arr
+		if len(arr) == 1 {
+			dat = arr[0]
+		}
+		vs[k] = dat
+	}
+	return vs, nil
 }
 
 func (s Set) Query(env Environment) (url.Values, error) {
@@ -506,21 +548,4 @@ func (s Set) Merge(other Set) Set {
 		ns[k] = slices.Concat(ns[k], slices.Clone(other[k]))
 	}
 	return ns
-}
-
-func (s Set) UrlEncoded(env Environment) (io.ReadCloser, error) {
-	q, err := s.Query(env)
-	if err != nil {
-		return nil, err
-	}
-	r := strings.NewReader(q.Encode())
-	return io.NopCloser(r), nil
-}
-
-func (s Set) Json(env Environment) (io.ReadCloser, error) {
-	return nil, nil
-}
-
-func (s Set) Xml(env Environment) (io.ReadCloser, error) {
-	return nil, nil
 }

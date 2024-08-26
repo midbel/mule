@@ -32,6 +32,7 @@ var keywords = []string{
 	"usage",
 	"description",
 	"body",
+	"compress",
 	// HTTP methods
 	"get",
 	"post",

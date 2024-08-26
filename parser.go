@@ -20,9 +20,8 @@ func Parse(r io.Reader) (*Parser, error) {
 		scan: Scan(r),
 	}
 	p.macros = map[string]func() error{
-		"readfile": p.parseReadFileMacro,
-		"include":  p.parseIncludeMacro,
-		"env":      p.parseEnvMacro,
+		"include": p.parseIncludeMacro,
+		"env":     p.parseEnvMacro,
 	}
 	p.next()
 	p.next()
@@ -156,8 +155,36 @@ func (p *Parser) parseValue() (Value, error) {
 	}
 }
 
-func (p *Parser) parseBody() (Value, error) {
-	return p.parseValue()
+func (p *Parser) parseBody() (Body, error) {
+	if p.is(Lbrace) {
+		set, err := p.parseSet("body")
+		if err != nil {
+			return nil, err
+		}
+		return jsonify(set), nil
+	}
+	if !p.is(Ident) {
+		return nil, p.unexpected("body")
+	}
+	var create func(Set) Body
+	switch p.getCurrLiteral() {
+	case "urlencoded":
+		create = urlEncoded
+	case "json":
+		create = jsonify
+	case "xml":
+		create = xmlify
+	case "text":
+		create = textify
+	default:
+		return nil, p.unexpected("body")
+	}
+	p.next()
+	set, err := p.parseSet("body")
+	if err != nil {
+		return nil, err
+	}
+	return create(set), nil
 }
 
 func (p *Parser) parseAuth() (Authorization, error) {
@@ -276,6 +303,9 @@ func (p *Parser) parseRequest() (*Request, error) {
 		case "body":
 			p.next()
 			req.Body, err = p.parseBody()
+		case "compress":
+			p.next()
+			req.Compressed, err = p.parseValue()
 		case "before":
 			p.next()
 			eol = true

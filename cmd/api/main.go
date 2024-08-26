@@ -16,7 +16,7 @@ var resources embed.FS
 func main() {
 	flag.Parse()
 
-	attach := []func() error {
+	attach := []func() error{
 		geo,
 		animals,
 	}
