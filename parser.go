@@ -20,8 +20,9 @@ func Parse(r io.Reader) (*Parser, error) {
 		scan: Scan(r),
 	}
 	p.macros = map[string]func() error{
-		"include": p.parseIncludeMacro,
-		"env":     p.parseEnvMacro,
+		"include":  p.parseIncludeMacro,
+		"readfile": p.parseReadFileMacro,
+		"env":      p.parseEnvMacro,
 	}
 	p.next()
 	p.next()

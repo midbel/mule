@@ -13,43 +13,9 @@ import (
 	"slices"
 	"strconv"
 	"strings"
+
+	"github.com/midbel/mule/environ"
 )
-
-type Environment interface {
-	Define(string, Value)
-	Resolve(string) (Value, error)
-}
-
-type Env struct {
-	parent Environment
-	values map[string]Value
-}
-
-func Empty() Environment {
-	return Enclosed(nil)
-}
-
-func Enclosed(parent Environment) Environment {
-	return &Env{
-		parent: parent,
-		values: make(map[string]Value),
-	}
-}
-
-func (e *Env) Resolve(ident string) (Value, error) {
-	vs, ok := e.values[ident]
-	if ok {
-		return vs, nil
-	}
-	if e.parent != nil {
-		return e.parent.Resolve(ident)
-	}
-	return nil, fmt.Errorf("%s: undefined variable", ident)
-}
-
-func (e *Env) Define(ident string, value Value) {
-	e.values[ident] = value
-}
 
 type Common struct {
 	Name string
@@ -68,7 +34,7 @@ type Common struct {
 
 type Collection struct {
 	Common
-	Environment
+	environ.Environment[Value]
 	// scripts to be run
 	BeforeAll  Value
 	BeforeEach Value
@@ -96,13 +62,13 @@ func Root() *Collection {
 	return Make("", nil)
 }
 
-func Make(name string, parent Environment) *Collection {
+func Make(name string, parent environ.Environment[Value]) *Collection {
 	info := Common{
 		Name: name,
 	}
 	return &Collection{
 		Common:      info,
-		Environment: Enclosed(nil),
+		Environment: environ.Enclosed[Value](nil),
 	}
 }
 
@@ -188,7 +154,7 @@ type Request struct {
 	After      Value
 }
 
-func (r *Request) Execute(env Environment) error {
+func (r *Request) Execute(env environ.Environment[Value]) error {
 	target, err := r.target(env)
 	if err != nil {
 		return err
@@ -218,8 +184,6 @@ func (r *Request) Execute(env Environment) error {
 	}
 	req.Header = headers
 
-	fmt.Println(req.Header)
-
 	res, err := http.DefaultClient.Do(req)
 	if err != nil {
 		return err
@@ -233,7 +197,7 @@ func (r *Request) Execute(env Environment) error {
 	return nil
 }
 
-func (r *Request) target(env Environment) (string, error) {
+func (r *Request) target(env environ.Environment[Value]) (string, error) {
 	target, err := r.URL.Expand(env)
 	if err != nil {
 		return "", err
@@ -269,7 +233,7 @@ func xmlify(set Set) Body {
 	}
 }
 
-func (b xmlBody) Expand(env Environment) (string, error) {
+func (b xmlBody) Expand(env environ.Environment[Value]) (string, error) {
 	vs, err := b.Set.Map(env)
 	if err != nil {
 		return "", err
@@ -299,7 +263,7 @@ func jsonify(set Set) Body {
 	}
 }
 
-func (b jsonBody) Expand(env Environment) (string, error) {
+func (b jsonBody) Expand(env environ.Environment[Value]) (string, error) {
 	vs, err := b.Set.Map(env)
 	if err != nil {
 		return "", err
@@ -329,7 +293,7 @@ func octetstream(set Set) Body {
 	}
 }
 
-func (b octetstreamBody) Expand(env Environment) (string, error) {
+func (b octetstreamBody) Expand(env environ.Environment[Value]) (string, error) {
 	return "", nil
 }
 
@@ -351,7 +315,7 @@ func textify(set Set) Body {
 	}
 }
 
-func (b textBody) Expand(env Environment) (string, error) {
+func (b textBody) Expand(env environ.Environment[Value]) (string, error) {
 	return "", nil
 }
 
@@ -373,7 +337,7 @@ func urlEncoded(set Set) Body {
 	}
 }
 
-func (b urlencodedBody) Expand(env Environment) (string, error) {
+func (b urlencodedBody) Expand(env environ.Environment[Value]) (string, error) {
 	qs, err := b.Set.Query(env)
 	if err != nil {
 		return "", err
@@ -390,7 +354,7 @@ func (b urlencodedBody) ContentType() string {
 }
 
 type Value interface {
-	Expand(Environment) (string, error)
+	Expand(environ.Environment[Value]) (string, error)
 }
 
 type Authorization interface {
@@ -407,7 +371,7 @@ func (b basic) Method() string {
 	return "Basic"
 }
 
-func (b basic) Expand(env Environment) (string, error) {
+func (b basic) Expand(env environ.Environment[Value]) (string, error) {
 	return "", nil
 }
 
@@ -419,11 +383,11 @@ func (b bearer) Method() string {
 	return "Bearer"
 }
 
-func (b bearer) Expand(env Environment) (string, error) {
+func (b bearer) Expand(env environ.Environment[Value]) (string, error) {
 	return b.Token.Expand(env)
 }
 
-func getUrl(left, right Value, env Environment) Value {
+func getUrl(left, right Value, env environ.Environment[Value]) Value {
 	if left == nil {
 		return right
 	}
@@ -465,7 +429,7 @@ func createLiteral(str string) Value {
 	return literal(str)
 }
 
-func (i literal) Expand(_ Environment) (string, error) {
+func (i literal) Expand(_ environ.Environment[Value]) (string, error) {
 	return string(i), nil
 }
 
@@ -475,7 +439,7 @@ func createVariable(str string) Value {
 	return variable(str)
 }
 
-func (v variable) Expand(e Environment) (string, error) {
+func (v variable) Expand(e environ.Environment[Value]) (string, error) {
 	val, err := e.Resolve(string(v))
 	if err != nil {
 		return "", err
@@ -485,7 +449,7 @@ func (v variable) Expand(e Environment) (string, error) {
 
 type compound []Value
 
-func (c compound) Expand(e Environment) (string, error) {
+func (c compound) Expand(e environ.Environment[Value]) (string, error) {
 	var parts []string
 	for i := range c {
 		v, err := c[i].Expand(e)
@@ -499,7 +463,7 @@ func (c compound) Expand(e Environment) (string, error) {
 
 type Set map[string][]Value
 
-func (s Set) Headers(env Environment) (http.Header, error) {
+func (s Set) Headers(env environ.Environment[Value]) (http.Header, error) {
 	hs := make(http.Header)
 	for k := range s {
 		for _, v := range s[k] {
@@ -513,7 +477,7 @@ func (s Set) Headers(env Environment) (http.Header, error) {
 	return hs, nil
 }
 
-func (s Set) Map(env Environment) (map[string]interface{}, error) {
+func (s Set) Map(env environ.Environment[Value]) (map[string]interface{}, error) {
 	vs := make(map[string]interface{})
 	for k := range s {
 		var arr []string
@@ -533,7 +497,7 @@ func (s Set) Map(env Environment) (map[string]interface{}, error) {
 	return vs, nil
 }
 
-func (s Set) Query(env Environment) (url.Values, error) {
+func (s Set) Query(env environ.Environment[Value]) (url.Values, error) {
 	vs := make(url.Values)
 	for k := range s {
 		for _, v := range s[k] {
