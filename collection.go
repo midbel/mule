@@ -11,6 +11,7 @@ import (
 	"net/url"
 	"os"
 	"slices"
+	"strconv"
 	"strings"
 )
 
@@ -193,6 +194,11 @@ func (r *Request) Execute(env Environment) error {
 		return err
 	}
 
+	headers, err := r.Headers.Headers(env)
+	if err != nil {
+		return err
+	}
+
 	var body io.Reader
 	if r.Body != nil {
 		b, err := r.Body.Expand(env)
@@ -200,6 +206,8 @@ func (r *Request) Execute(env Environment) error {
 			return err
 		}
 		body = strings.NewReader(b)
+		headers.Set("content-type", r.Body.ContentType())
+		headers.Set("content-length", strconv.Itoa(len(b)))
 	}
 	if r.Before != nil {
 
@@ -208,9 +216,9 @@ func (r *Request) Execute(env Environment) error {
 	if err != nil {
 		return err
 	}
-	if req.Header, err = r.Headers.Headers(env); err != nil {
-		return err
-	}
+	req.Header = headers
+
+	fmt.Println(req.Header)
 
 	res, err := http.DefaultClient.Do(req)
 	if err != nil {

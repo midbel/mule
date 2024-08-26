@@ -30,7 +30,7 @@ projects {
 	post new-token {
 		url `${keycloak}/realms/${realm}/openid-connect/token`
 
-		body json {
+		body urlencoded {
 			grant_type password
 			client_id my-client
 			client_secret my-secret
