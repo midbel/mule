@@ -13,7 +13,40 @@ func Eval(r io.Reader) error {
 	if err != nil {
 		return err
 	}
-	_ = n
+	return eval(n)
+}
+
+func eval(n Node) error {
+	switch n := n.(type) {
+	case Body:
+	case Null:
+	case Undefined:
+	case Array:
+	case Object:
+	case Literal[string]:
+	case Literal[float64]:
+	case Literal[bool]:
+	case Identifier:
+	case Index:
+	case Unary:
+	case Binary:
+	case Let:
+	case Const:
+	case Increment:
+	case Decrement:
+	case If:
+	case Switch:
+	case While:
+	case For:
+	case Break:
+	case Continue:
+	case Try:
+	case Return:
+	case Call:
+	case Func:
+	default:
+		_ = n
+	}
 	return nil
 }
 
@@ -26,6 +59,10 @@ type Body struct {
 type Null struct{}
 
 type Undefined struct{}
+
+type Array []Node
+
+type Object map[Node]Node
 
 type Literal[T string | float64 | bool] struct {
 	Value T
