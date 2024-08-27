@@ -205,6 +205,7 @@ func Parse(r io.Reader) *Parser {
 	p.registerPrefix(String, p.parseString)
 	p.registerPrefix(Number, p.parseNumber)
 	p.registerPrefix(Boolean, p.parseBoolean)
+	p.registerPrefix(Lparen, p.parseGroup)
 	p.registerPrefix(Lsquare, p.parseArray)
 	p.registerPrefix(Lcurly, p.parseObject)
 
@@ -407,6 +408,10 @@ func (p *Parser) parseArray() (Node, error) {
 }
 
 func (p *Parser) parseObject() (Node, error) {
+	return nil, nil
+}
+
+func (p *Parser) parseGroup() (Node, error) {
 	return nil, nil
 }
 
@@ -748,8 +753,16 @@ func (s *Scanner) scanOperator(tok *Token) {
 	switch s.char {
 	case plus:
 		tok.Type = Add
+		if s.peek() == plus {
+			s.read()
+			tok.Type = Incr
+		}
 	case minus:
 		tok.Type = Sub
+		if s.peek() == minus {
+			s.read()
+			tok.Type = Decr
+		}
 	case star:
 		tok.Type = Mul
 		if s.peek() == star {
