@@ -19,12 +19,13 @@ projects {
 		realm realm-test
 	}
 
+	auth basic {
+		username foobar
+		password tmp123!
+	}
+
 	get all {
 		url /api/projects/	
-		auth basic {
-			username foobar
-			password tmp123
-		}
 	}
 
 	post new-token {
@@ -34,16 +35,12 @@ projects {
 			grant_type password
 			client_id my-client
 			client_secret my-secret
-			username foobar
-			password tmp123!
+			username $username
+			password $password
 		}
 
 		compress true
 
 		auth bearer "abc.erdfcv.xyz"
-
-		headers {
-			content-type x-www-urlencoded
-		}
 	}
 }

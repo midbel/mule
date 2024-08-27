@@ -76,6 +76,23 @@ func (c Collection) Resolve(ident string) (Value, error) {
 	switch {
 	case c.URL != nil && ident == "url":
 		return c.URL, nil
+	case (ident == "username" || ident == "password") && c.Auth != nil:
+		b, ok := c.Auth.(basic)
+		if !ok {
+			break
+		}
+		if ident == "username" {
+			return b.User, nil
+		}
+		if ident == "password" {
+			return b.Pass, nil
+		}
+	case ident == "token" && c.Auth != nil:
+		b, ok := c.Auth.(bearer)
+		if !ok {
+			break
+		}
+		return b.Token, nil
 	default:
 	}
 	return c.Environment.Resolve(ident)
@@ -168,6 +185,7 @@ func (r *Request) Execute(env environ.Environment[Value]) error {
 	var body io.Reader
 	if r.Body != nil {
 		b, err := r.Body.Expand(env)
+		fmt.Println(b)
 		if err != nil {
 			return err
 		}
