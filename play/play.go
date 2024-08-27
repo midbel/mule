@@ -9,6 +9,11 @@ import (
 )
 
 func Eval(r io.Reader) error {
+	n, err := ParseReader(r)
+	if err != nil {
+		return err
+	}
+	_ = n
 	return nil
 }
 
@@ -178,8 +183,10 @@ var bindings = map[rune]int{
 	Lcurly:   powObject,
 }
 
-type prefixFunc func() (Node, error)
-type infixFunc func(Node) (Node, error)
+type (
+	prefixFunc func() (Node, error)
+	infixFunc  func(Node) (Node, error)
+)
 
 type Parser struct {
 	prefix map[rune]prefixFunc
@@ -188,6 +195,11 @@ type Parser struct {
 	scan *Scanner
 	curr Token
 	peek Token
+}
+
+func ParseReader(r io.Reader) (Node, error) {
+	p := Parse(r)
+	return p.Parse()
 }
 
 func Parse(r io.Reader) *Parser {
