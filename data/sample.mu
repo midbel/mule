@@ -31,6 +31,14 @@ projects {
 	post new-token {
 		url `${keycloak}/realms/${realm}/openid-connect/token`
 
+		before <<SCRIPT
+			console.log("begin new token")
+		SCRIPT
+
+		after <<SCRIPT
+			console.log("end new token")
+		SCRIPT
+
 		body urlencoded {
 			grant_type password
 			client_id my-client

@@ -77,19 +77,19 @@ func (p *Parser) parseItem(root *Collection) error {
 	case "before", "beforeAll":
 		p.next()
 		eol = true
-		root.BeforeAll, err = p.parseValue()
+		root.BeforeAll, err = p.parseScript()
 	case "beforeEach":
 		p.next()
 		eol = true
-		root.BeforeEach, err = p.parseValue()
+		root.BeforeEach, err = p.parseScript()
 	case "after", "afterAll":
 		p.next()
 		eol = true
-		root.AfterAll, err = p.parseValue()
+		root.AfterAll, err = p.parseScript()
 	case "afterEach":
 		p.next()
 		eol = true
-		root.AfterEach, err = p.parseValue()
+		root.AfterEach, err = p.parseScript()
 	case "auth":
 		p.next()
 		root.Auth, err = p.parseAuth()
@@ -121,6 +121,18 @@ func (p *Parser) parseItem(root *Collection) error {
 	}
 	p.skip(EOL)
 	return err
+}
+
+func (p *Parser) parseScript() (string, error) {
+	if p.is(Macro) {
+
+	}
+	if !p.is(String) {
+		return "", p.unexpected("script")
+	}
+	script := p.getCurrLiteral()
+	p.next()
+	return script, nil
 }
 
 func (p *Parser) parseValue() (Value, error) {
@@ -310,11 +322,11 @@ func (p *Parser) parseRequest() (*Request, error) {
 		case "before":
 			p.next()
 			eol = true
-			req.Before, err = p.parseValue()
+			req.Before, err = p.parseScript()
 		case "after":
 			p.next()
 			eol = true
-			req.After, err = p.parseValue()
+			req.After, err = p.parseScript()
 		case "url":
 			p.next()
 			eol = true

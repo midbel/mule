@@ -15,6 +15,7 @@ import (
 	"strings"
 
 	"github.com/midbel/mule/environ"
+	"github.com/midbel/mule/play"
 )
 
 type Common struct {
@@ -36,10 +37,10 @@ type Collection struct {
 	Common
 	environ.Environment[Value]
 	// scripts to be run
-	BeforeAll  Value
-	BeforeEach Value
-	AfterAll   Value
-	AfterEach  Value
+	BeforeAll  string
+	BeforeEach string
+	AfterAll   string
+	AfterEach  string
 
 	// collection of requests
 	Requests    []*Request
@@ -167,8 +168,8 @@ type Request struct {
 	Compressed Value
 	Method     string
 	Depends    []Value
-	Before     Value
-	After      Value
+	Before     string
+	After      string
 }
 
 func (r *Request) Execute(env environ.Environment[Value]) error {
@@ -185,7 +186,6 @@ func (r *Request) Execute(env environ.Environment[Value]) error {
 	var body io.Reader
 	if r.Body != nil {
 		b, err := r.Body.Expand(env)
-		fmt.Println(b)
 		if err != nil {
 			return err
 		}
@@ -193,8 +193,8 @@ func (r *Request) Execute(env environ.Environment[Value]) error {
 		headers.Set("content-type", r.Body.ContentType())
 		headers.Set("content-length", strconv.Itoa(len(b)))
 	}
-	if r.Before != nil {
-
+	if err := play.Eval(strings.NewReader(r.Before)); err != nil {
+		return err
 	}
 	req, err := http.NewRequest(r.Method, target, body)
 	if err != nil {
@@ -209,8 +209,8 @@ func (r *Request) Execute(env environ.Environment[Value]) error {
 	if res.StatusCode >= http.StatusBadRequest {
 		return fmt.Errorf(http.StatusText(res.StatusCode))
 	}
-	if r.After != nil {
-
+	if err := play.Eval(strings.NewReader(r.After)); err != nil {
+		return err
 	}
 	return nil
 }

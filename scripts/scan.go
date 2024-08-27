@@ -6,7 +6,7 @@ import (
 	"io"
 	"os"
 
-	"github.com/midbel/mule"
+	"github.com/midbel/mule/play"
 )
 
 func main() {
@@ -25,11 +25,11 @@ func main() {
 }
 
 func scanFile(r io.Reader) error {
-	scan := mule.Scan(r)
+	scan := play.Scan(r)
 	for {
 		tok := scan.Scan()
 		fmt.Println(tok)
-		if tok.Type == mule.EOF || tok.Type == mule.Invalid {
+		if tok.Type == play.EOF || tok.Type == play.Invalid {
 			break
 		}
 	}
