@@ -14,8 +14,25 @@ func Eval(r io.Reader) error {
 
 type Node interface{}
 
+type Body struct {
+	Nodes []Node
+}
+
+type Null struct{}
+
+type Undefined struct{}
+
 type Literal[T string | float64 | bool] struct {
 	Value T
+}
+
+type Identifier struct {
+	Value string
+}
+
+type Index struct {
+	Left  Node
+	Value Node
 }
 
 type Unary struct {
@@ -29,10 +46,29 @@ type Binary struct {
 	Right Node
 }
 
+type Let struct {
+	Node
+}
+
+type Const struct {
+	Node
+}
+
 type If struct {
 	Cdt Node
 	Csq Node
 	Alt Node
+}
+
+type Switch struct {
+	Cdt     Node
+	Cases   []Node
+	Default Node
+}
+
+type Case struct {
+	Value Node
+	Body  Node
 }
 
 type While struct {
@@ -47,9 +83,32 @@ type For struct {
 	Body  Node
 }
 
+type ForOf struct {
+	Var  Node
+	Iter Node
+	Body Node
+}
+
+type ForIn struct {
+	Var  Node
+	Iter Node
+	Body Node
+}
+
 type Break struct{}
 
 type Continue struct{}
+
+type Try struct {
+	Node
+	Catch   Node
+	Finally Node
+}
+
+type Catch struct {
+	Err  Node
+	Body Node
+}
 
 type Throw struct {
 	Node
@@ -59,20 +118,296 @@ type Return struct {
 	Node
 }
 
+type Call struct {
+	Ident string
+	Args  []Node
+}
+
 type Func struct {
 	Ident string
 	Args  []Node
 	Body  Node
 }
 
+const (
+	powLowest int = iota
+	powComma
+	powAssign
+	powOr
+	powAnd
+	powEq
+	powCmp
+	powAdd
+	powMul
+	powPow
+	powUnary
+	powObject
+	powGroup
+)
+
+var bindings = map[rune]int{
+	Comma:    powComma,
+	Question: powAssign,
+	Assign:   powAssign,
+	Colon:    powAssign,
+	Or:       powOr,
+	And:      powAnd,
+	Eq:       powEq,
+	Ne:       powEq,
+	Lt:       powCmp,
+	Le:       powCmp,
+	Gt:       powCmp,
+	Ge:       powCmp,
+	Add:      powAdd,
+	Sub:      powAdd,
+	Mul:      powMul,
+	Div:      powMul,
+	Mod:      powMul,
+	Pow:      powPow,
+	Dot:      powObject,
+	Lparen:   powObject,
+	Lsquare:  powObject,
+	Lcurly:   powObject,
+}
+
+type prefixFunc func() (Node, error)
+type infixFunc func(Node) (Node, error)
+
 type Parser struct {
+	prefix map[rune]prefixFunc
+	infix  map[rune]infixFunc
+
 	scan *Scanner
 	curr Token
 	peek Token
 }
 
+func Parse(r io.Reader) *Parser {
+	p := Parser{
+		scan:   Scan(r),
+		prefix: make(map[rune]prefixFunc),
+		infix:  make(map[rune]infixFunc),
+	}
+
+	p.registerPrefix(Not, p.parseNot)
+	p.registerPrefix(Sub, p.parseRev)
+	p.registerPrefix(Ident, p.parseIdent)
+	p.registerPrefix(String, p.parseString)
+	p.registerPrefix(Number, p.parseNumber)
+	p.registerPrefix(Boolean, p.parseBoolean)
+	p.registerPrefix(Lsquare, p.parseArray)
+	p.registerPrefix(Lcurly, p.parseObject)
+
+	p.registerInfix(Add, p.parseBinary)
+	p.registerInfix(Sub, p.parseBinary)
+	p.registerInfix(Mul, p.parseBinary)
+	p.registerInfix(Div, p.parseBinary)
+	p.registerInfix(Pow, p.parseBinary)
+	p.registerInfix(Assign, p.parseBinary)
+	p.registerInfix(And, p.parseBinary)
+	p.registerInfix(Or, p.parseBinary)
+	p.registerInfix(Eq, p.parseBinary)
+	p.registerInfix(Ne, p.parseBinary)
+	p.registerInfix(Lt, p.parseBinary)
+	p.registerInfix(Le, p.parseBinary)
+	p.registerInfix(Gt, p.parseBinary)
+	p.registerInfix(Ge, p.parseBinary)
+	p.registerInfix(Lparen, p.parseCall)
+	p.registerInfix(Lsquare, p.parseIndex)
+
+	p.next()
+	p.next()
+	return &p
+}
+
 func (p *Parser) Parse() (Node, error) {
+	return p.parse()
+}
+
+func (p *Parser) parse() (Node, error) {
+	var body Body
+	for !p.done() {
+		n, err := p.parseNode()
+		if err != nil {
+			return nil, err
+		}
+		body.Nodes = append(body.Nodes, n)
+	}
+	return body, nil
+}
+
+func (p *Parser) parseNode() (Node, error) {
+	if p.is(Keyword) {
+		return p.parseKeyword()
+	}
+	return p.parseExpression(powLowest)
+}
+
+func (p *Parser) parseKeyword() (Node, error) {
+	keyword := p.curr.Literal
+	p.next()
+	switch keyword {
+	case "let":
+		return p.parseLet()
+	case "const":
+		return p.parseConst()
+	case "if":
+		return p.parseIf()
+	case "switch":
+		return p.parseSwitch()
+	case "for":
+		return p.parseFor()
+	case "do":
+		return p.parseDo()
+	case "while":
+		return p.parseWhile()
+	case "break":
+		return p.parseBreak()
+	case "continue":
+		return p.parseContinue()
+	case "return":
+		return p.parseReturn()
+	case "function":
+		return p.parseFunction()
+	case "import":
+		return p.parseImport()
+	case "export":
+		return p.parseExport()
+	case "try":
+		return p.parseTry()
+	case "throw":
+		return p.parseThrow()
+	case "null":
+		return p.parseNull()
+	case "undefined":
+		return p.parseUndefined()
+	default:
+		return nil, fmt.Errorf("%s: keyword not supported/known")
+	}
+}
+
+func (p *Parser) parseLet() (Node, error) {
 	return nil, nil
+}
+
+func (p *Parser) parseConst() (Node, error) {
+	return nil, nil
+}
+
+func (p *Parser) parseIf() (Node, error) {
+	return nil, nil
+}
+
+func (p *Parser) parseSwitch() (Node, error) {
+	return nil, nil
+}
+
+func (p *Parser) parseDo() (Node, error) {
+	return nil, nil
+}
+
+func (p *Parser) parseWhile() (Node, error) {
+	return nil, nil
+}
+
+func (p *Parser) parseFor() (Node, error) {
+	return nil, nil
+}
+
+func (p *Parser) parseBreak() (Node, error) {
+	return nil, nil
+}
+
+func (p *Parser) parseContinue() (Node, error) {
+	return nil, nil
+}
+
+func (p *Parser) parseReturn() (Node, error) {
+	return nil, nil
+}
+
+func (p *Parser) parseFunction() (Node, error) {
+	return nil, nil
+}
+
+func (p *Parser) parseImport() (Node, error) {
+	return nil, nil
+}
+
+func (p *Parser) parseExport() (Node, error) {
+	return nil, nil
+}
+
+func (p *Parser) parseTry() (Node, error) {
+	return nil, nil
+}
+
+func (p *Parser) parseThrow() (Node, error) {
+	return nil, nil
+}
+
+func (p *Parser) parseNull() (Node, error) {
+	return nil, nil
+}
+
+func (p *Parser) parseUndefined() (Node, error) {
+	return nil, nil
+}
+
+func (p *Parser) parseExpression(pow int) (Node, error) {
+	return nil, nil
+}
+
+func (p *Parser) parseNot() (Node, error) {
+	return nil, nil
+}
+
+func (p *Parser) parseRev() (Node, error) {
+	return nil, nil
+}
+
+func (p *Parser) parseIdent() (Node, error) {
+	return nil, nil
+}
+
+func (p *Parser) parseString() (Node, error) {
+	return nil, nil
+}
+
+func (p *Parser) parseNumber() (Node, error) {
+	return nil, nil
+}
+
+func (p *Parser) parseBoolean() (Node, error) {
+	return nil, nil
+}
+
+func (p *Parser) parseArray() (Node, error) {
+	return nil, nil
+}
+
+func (p *Parser) parseObject() (Node, error) {
+	return nil, nil
+}
+
+func (p *Parser) parseBinary(left Node) (Node, error) {
+	return nil, nil
+}
+
+func (p *Parser) parseIndex(left Node) (Node, error) {
+	return nil, nil
+}
+
+func (p *Parser) parseCall(left Node) (Node, error) {
+	return nil, nil
+}
+
+func (p *Parser) registerPrefix(kind rune, fn prefixFunc) {
+	p.prefix[kind] = fn
+}
+
+func (p *Parser) registerInfix(kind rune, fn infixFunc) {
+	p.infix[kind] = fn
 }
 
 func (p *Parser) done() bool {
@@ -137,6 +472,9 @@ var keywords = []string{
 	"of",
 	"if",
 	"else",
+	"switch",
+	"case",
+	"default",
 	"while",
 	"function",
 	"return",
@@ -150,6 +488,10 @@ var keywords = []string{
 	"catch",
 	"finally",
 	"throw",
+	"null",
+	"undefined",
+	"instanceof",
+	"typeof",
 }
 
 type Position struct {
