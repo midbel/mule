@@ -214,6 +214,7 @@ func Parse(r io.Reader) *Parser {
 	p.registerInfix(Sub, p.parseBinary)
 	p.registerInfix(Mul, p.parseBinary)
 	p.registerInfix(Div, p.parseBinary)
+	p.registerInfix(Mod, p.parseBinary)
 	p.registerInfix(Pow, p.parseBinary)
 	p.registerInfix(Assign, p.parseBinary)
 	p.registerInfix(And, p.parseBinary)
@@ -234,10 +235,6 @@ func Parse(r io.Reader) *Parser {
 }
 
 func (p *Parser) Parse() (Node, error) {
-	return p.parse()
-}
-
-func (p *Parser) parse() (Node, error) {
 	var body Body
 	for !p.done() {
 		n, err := p.parseNode()
