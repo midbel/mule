@@ -54,6 +54,14 @@ type Const struct {
 	Node
 }
 
+type Increment struct {
+	Node
+}
+
+type Decrement struct {
+	Node
+}
+
 type If struct {
 	Cdt Node
 	Csq Node
@@ -191,6 +199,8 @@ func Parse(r io.Reader) *Parser {
 
 	p.registerPrefix(Not, p.parseNot)
 	p.registerPrefix(Sub, p.parseRev)
+	p.registerPrefix(Incr, p.parseIncr)
+	p.registerPrefix(Decr, p.parseDecr)
 	p.registerPrefix(Ident, p.parseIdent)
 	p.registerPrefix(String, p.parseString)
 	p.registerPrefix(Number, p.parseNumber)
@@ -198,6 +208,7 @@ func Parse(r io.Reader) *Parser {
 	p.registerPrefix(Lsquare, p.parseArray)
 	p.registerPrefix(Lcurly, p.parseObject)
 
+	p.registerInfix(Dot, p.parseDot)
 	p.registerInfix(Add, p.parseBinary)
 	p.registerInfix(Sub, p.parseBinary)
 	p.registerInfix(Mul, p.parseBinary)
@@ -214,6 +225,7 @@ func Parse(r io.Reader) *Parser {
 	p.registerInfix(Ge, p.parseBinary)
 	p.registerInfix(Lparen, p.parseCall)
 	p.registerInfix(Lsquare, p.parseIndex)
+	p.registerInfix(Question, p.parseTernary)
 
 	p.next()
 	p.next()
@@ -366,6 +378,14 @@ func (p *Parser) parseRev() (Node, error) {
 	return nil, nil
 }
 
+func (p *Parser) parseIncr() (Node, error) {
+	return nil, nil
+}
+
+func (p *Parser) parseDecr() (Node, error) {
+	return nil, nil
+}
+
 func (p *Parser) parseIdent() (Node, error) {
 	return nil, nil
 }
@@ -390,7 +410,15 @@ func (p *Parser) parseObject() (Node, error) {
 	return nil, nil
 }
 
+func (p *Parser) parseDot(left Node) (Node, error) {
+	return nil, nil
+}
+
 func (p *Parser) parseBinary(left Node) (Node, error) {
+	return nil, nil
+}
+
+func (p *Parser) parseTernary(left Node) (Node, error) {
 	return nil, nil
 }
 
