@@ -193,7 +193,7 @@ func (r *Request) Execute(env environ.Environment[Value]) error {
 		headers.Set("content-type", r.Body.ContentType())
 		headers.Set("content-length", strconv.Itoa(len(b)))
 	}
-	if err := play.Eval(strings.NewReader(r.Before)); err != nil {
+	if _, err := play.Eval(strings.NewReader(r.Before), nil); err != nil {
 		return err
 	}
 	req, err := http.NewRequest(r.Method, target, body)
@@ -209,7 +209,7 @@ func (r *Request) Execute(env environ.Environment[Value]) error {
 	if res.StatusCode >= http.StatusBadRequest {
 		return fmt.Errorf(http.StatusText(res.StatusCode))
 	}
-	if err := play.Eval(strings.NewReader(r.After)); err != nil {
+	if _, err := play.Eval(strings.NewReader(r.After), nil); err != nil {
 		return err
 	}
 	return nil

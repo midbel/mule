@@ -2,21 +2,35 @@ package play
 
 import (
 	"bytes"
+	"errors"
 	"fmt"
 	"io"
 	"slices"
+	"strconv"
 	"unicode/utf8"
+
+	"github.com/midbel/mule/environ"
 )
 
-func Eval(r io.Reader) error {
+var (
+	ErrBreak    = errors.New("break")
+	ErrContinue = errors.New("continue")
+	ErrReturn   = errors.New("return")
+	ErrThrow    = errors.New("throw")
+	ErrEval     = errors.New("node can not be evalualed in current context")
+)
+
+type Value interface{}
+
+func Eval(r io.Reader, env environ.Environment[Value]) (Value, error) {
 	n, err := ParseReader(r)
 	if err != nil {
-		return err
+		return nil, err
 	}
-	return eval(n)
+	return eval(n, env)
 }
 
-func eval(n Node) error {
+func eval(n Node, env environ.Environment[Value]) (Value, error) {
 	switch n := n.(type) {
 	case Body:
 	case Null:
@@ -47,7 +61,7 @@ func eval(n Node) error {
 	default:
 		_ = n
 	}
-	return nil
+	return nil, nil
 }
 
 type Node interface{}
@@ -56,9 +70,13 @@ type Body struct {
 	Nodes []Node
 }
 
-type Null struct{}
+type Null struct {
+	Position
+}
 
-type Undefined struct{}
+type Undefined struct {
+	Position
+}
 
 type Array []Node
 
@@ -66,64 +84,77 @@ type Object map[Node]Node
 
 type Literal[T string | float64 | bool] struct {
 	Value T
+	Position
 }
 
 type Identifier struct {
 	Value string
+	Position
 }
 
 type Index struct {
 	Left  Node
 	Value Node
+	Position
 }
 
 type Unary struct {
 	Op rune
 	Node
+	Position
 }
 
 type Binary struct {
 	Op    rune
 	Left  Node
 	Right Node
+	Position
 }
 
 type Let struct {
 	Node
+	Position
 }
 
 type Const struct {
 	Node
+	Position
 }
 
 type Increment struct {
 	Node
+	Position
 }
 
 type Decrement struct {
 	Node
+	Position
 }
 
 type If struct {
 	Cdt Node
 	Csq Node
 	Alt Node
+	Position
 }
 
 type Switch struct {
 	Cdt     Node
 	Cases   []Node
 	Default Node
+	Position
 }
 
 type Case struct {
 	Value Node
 	Body  Node
+	Position
 }
 
 type While struct {
 	Cdt  Node
 	Body Node
+	Position
 }
 
 type For struct {
@@ -131,52 +162,67 @@ type For struct {
 	Cdt   Node
 	After Node
 	Body  Node
+	Position
 }
 
 type ForOf struct {
 	Var  Node
 	Iter Node
 	Body Node
+	Position
 }
 
 type ForIn struct {
 	Var  Node
 	Iter Node
 	Body Node
+	Position
 }
 
-type Break struct{}
+type Break struct {
+	Label string
+	Position
+}
 
-type Continue struct{}
+type Continue struct {
+	Label string
+	Position
+}
 
 type Try struct {
 	Node
 	Catch   Node
 	Finally Node
+	Position
 }
 
 type Catch struct {
 	Err  Node
 	Body Node
+	Position
 }
 
 type Throw struct {
 	Node
+	Position
 }
 
 type Return struct {
 	Node
+	Position
 }
 
 type Call struct {
 	Ident string
 	Args  []Node
+	Position
 }
 
 type Func struct {
 	Ident string
 	Args  []Node
 	Body  Node
+	Position
 }
 
 const (
@@ -190,9 +236,9 @@ const (
 	powAdd
 	powMul
 	powPow
-	powUnary
 	powObject
 	powGroup
+	powUnary
 )
 
 var bindings = map[rune]int{
@@ -291,6 +337,9 @@ func (p *Parser) Parse() (Node, error) {
 			return nil, err
 		}
 		body.Nodes = append(body.Nodes, n)
+		for p.is(EOL) {
+			p.next()
+		}
 	}
 	return body, nil
 }
@@ -303,9 +352,7 @@ func (p *Parser) parseNode() (Node, error) {
 }
 
 func (p *Parser) parseKeyword() (Node, error) {
-	keyword := p.curr.Literal
-	p.next()
-	switch keyword {
+	switch p.curr.Literal {
 	case "let":
 		return p.parseLet()
 	case "const":
@@ -346,11 +393,29 @@ func (p *Parser) parseKeyword() (Node, error) {
 }
 
 func (p *Parser) parseLet() (Node, error) {
-	return nil, nil
+	expr := Let{
+		Position: p.curr.Position,
+	}
+	p.next()
+	n, err := p.parseExpression(powLowest)
+	if err != nil {
+		return nil, err
+	}
+	expr.Node = n
+	return expr, nil
 }
 
 func (p *Parser) parseConst() (Node, error) {
-	return nil, nil
+	expr := Const{
+		Position: p.curr.Position,
+	}
+	p.next()
+	n, err := p.parseExpression(powLowest)
+	if err != nil {
+		return nil, err
+	}
+	expr.Node = n
+	return expr, nil
 }
 
 func (p *Parser) parseIf() (Node, error) {
@@ -374,15 +439,40 @@ func (p *Parser) parseFor() (Node, error) {
 }
 
 func (p *Parser) parseBreak() (Node, error) {
-	return nil, nil
+	expr := Break{
+		Position: p.curr.Position,
+	}
+	p.next()
+	if p.is(Ident) {
+		expr.Label = p.curr.Literal
+		p.next()
+	}
+	return expr, nil
 }
 
 func (p *Parser) parseContinue() (Node, error) {
-	return nil, nil
+	expr := Continue{
+		Position: p.curr.Position,
+	}
+	p.next()
+	if p.is(Ident) {
+		expr.Label = p.curr.Literal
+		p.next()
+	}
+	return expr, nil
 }
 
 func (p *Parser) parseReturn() (Node, error) {
-	return nil, nil
+	expr := Return{
+		Position: p.curr.Position,
+	}
+	p.next()
+	n, err := p.parseExpression(powLowest)
+	if err != nil {
+		return nil, err
+	}
+	expr.Node = n
+	return expr, nil
 }
 
 func (p *Parser) parseFunction() (Node, error) {
@@ -406,23 +496,68 @@ func (p *Parser) parseThrow() (Node, error) {
 }
 
 func (p *Parser) parseNull() (Node, error) {
-	return nil, nil
+	defer p.next()
+	expr := Null{
+		Position: p.curr.Position,
+	}
+	return expr, nil
 }
 
 func (p *Parser) parseUndefined() (Node, error) {
-	return nil, nil
+	defer p.next()
+	expr := Undefined{
+		Position: p.curr.Position,
+	}
+	return expr, nil
 }
 
 func (p *Parser) parseExpression(pow int) (Node, error) {
-	return nil, nil
+	fn, ok := p.prefix[p.curr.Type]
+	if !ok {
+		return nil, fmt.Errorf("unknown prefix expression %s", p.curr)
+	}
+	left, err := fn()
+	if err != nil {
+		return nil, err
+	}
+	for !p.done() && !p.eol() && pow < p.power() {
+		fn, ok := p.infix[p.curr.Type]
+		if !ok {
+			return nil, fmt.Errorf("unknown infix expression %s", p.curr)
+		}
+		if left, err = fn(left); err != nil {
+			return nil, err
+		}
+	}
+	return left, nil
 }
 
 func (p *Parser) parseNot() (Node, error) {
-	return nil, nil
+	expr := Unary{
+		Op:       Not,
+		Position: p.curr.Position,
+	}
+	p.next()
+	n, err := p.parseExpression(powUnary)
+	if err != nil {
+		return nil, err
+	}
+	expr.Node = n
+	return expr, nil
 }
 
 func (p *Parser) parseRev() (Node, error) {
-	return nil, nil
+	expr := Unary{
+		Op:       Sub,
+		Position: p.curr.Position,
+	}
+	p.next()
+	n, err := p.parseExpression(powUnary)
+	if err != nil {
+		return nil, err
+	}
+	expr.Node = n
+	return expr, nil
 }
 
 func (p *Parser) parseIncr() (Node, error) {
@@ -434,19 +569,47 @@ func (p *Parser) parseDecr() (Node, error) {
 }
 
 func (p *Parser) parseIdent() (Node, error) {
-	return nil, nil
+	defer p.next()
+	expr := Identifier{
+		Value:    p.curr.Literal,
+		Position: p.curr.Position,
+	}
+	return expr, nil
 }
 
 func (p *Parser) parseString() (Node, error) {
-	return nil, nil
+	defer p.next()
+	expr := Literal[string]{
+		Value:    p.curr.Literal,
+		Position: p.curr.Position,
+	}
+	return expr, nil
 }
 
 func (p *Parser) parseNumber() (Node, error) {
-	return nil, nil
+	n, err := strconv.ParseFloat(p.curr.Literal, 64)
+	if err != nil {
+		return nil, err
+	}
+	defer p.next()
+	expr := Literal[float64]{
+		Value:    n,
+		Position: p.curr.Position,
+	}
+	return expr, nil
 }
 
 func (p *Parser) parseBoolean() (Node, error) {
-	return nil, nil
+	n, err := strconv.ParseBool(p.curr.Literal)
+	if err != nil {
+		return nil, err
+	}
+	defer p.next()
+	expr := Literal[bool]{
+		Value:    n,
+		Position: p.curr.Position,
+	}
+	return expr, nil
 }
 
 func (p *Parser) parseArray() (Node, error) {
@@ -466,7 +629,19 @@ func (p *Parser) parseDot(left Node) (Node, error) {
 }
 
 func (p *Parser) parseBinary(left Node) (Node, error) {
-	return nil, nil
+	expr := Binary{
+		Left:     left,
+		Op:       p.curr.Type,
+		Position: p.curr.Position,
+	}
+	p.next()
+
+	right, err := p.parseExpression(bindings[expr.Op])
+	if err != nil {
+		return nil, err
+	}
+	expr.Right = right
+	return expr, nil
 }
 
 func (p *Parser) parseTernary(left Node) (Node, error) {
@@ -487,6 +662,18 @@ func (p *Parser) registerPrefix(kind rune, fn prefixFunc) {
 
 func (p *Parser) registerInfix(kind rune, fn infixFunc) {
 	p.infix[kind] = fn
+}
+
+func (p *Parser) power() int {
+	pow, ok := bindings[p.curr.Type]
+	if !ok {
+		return powLowest
+	}
+	return pow
+}
+
+func (p *Parser) eol() bool {
+	return p.is(EOL)
 }
 
 func (p *Parser) done() bool {
