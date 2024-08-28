@@ -22,6 +22,20 @@ var (
 
 type Value interface{}
 
+type Json struct {}
+
+func (j *Json) Get(_ string) (Value, error) {
+	return nil, nil
+}
+
+func (j *Json) Set(_ string, _ Value) error {
+	return nil
+}
+
+func (j *Json) Exec(args []Value) (Value, error) {
+	return nil, nil
+}
+
 func Eval(r io.Reader, env environ.Environment[Value]) (Value, error) {
 	n, err := ParseReader(r)
 	if err != nil {
@@ -38,9 +52,13 @@ func eval(n Node, env environ.Environment[Value]) (Value, error) {
 	case Array:
 	case Object:
 	case Literal[string]:
+		return n.Value, nil
 	case Literal[float64]:
+		return n.Value, nil
 	case Literal[bool]:
+		return n.Value, nil
 	case Identifier:
+		return env.Resolve(n.Value)
 	case Index:
 	case Unary:
 	case Binary:
