@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"math"
 	"slices"
 	"strconv"
 	"unicode/utf8"
@@ -18,11 +19,164 @@ var (
 	ErrReturn   = errors.New("return")
 	ErrThrow    = errors.New("throw")
 	ErrEval     = errors.New("node can not be evalualed in current context")
+	ErrOp       = errors.New("unsupported operation")
 )
 
-type Value interface{}
+type Value interface {
+	True() Value
+}
 
-type Json struct {}
+type Float struct {
+	value float64
+}
+
+func getFloat(val float64) Float {
+	return Float{
+		value: val,
+	}
+}
+
+func (f Float) True() Value {
+	return getBool(f.value != 0)
+}
+
+func (f Float) Not() Value {
+	return getBool(f.value == 0)
+}
+
+func (f Float) Rev() Value {
+	return getFloat(-f.value)
+}
+
+func (f Float) Float() Value {
+	return f
+}
+
+func (f Float) Add(other Value) (Value, error) {
+	switch other := other.(type) {
+	case Float:
+		x := f.value + other.value
+		return getFloat(x), nil
+	case String:
+		str := fmt.Sprintf("%f%s", f.value, other.value)
+		return getString(str), nil
+	default:
+		return nil, ErrOp
+	}
+}
+
+func (f Float) Sub(other Value) (Value, error) {
+	right, ok := other.(Float)
+	if !ok {
+		return nil, ErrOp
+	}
+	x := f.value - right.value
+	return getFloat(x), nil
+}
+
+func (f Float) Mul(other Value) (Value, error) {
+	right, ok := other.(Float)
+	if !ok {
+		return nil, ErrOp
+	}
+	x := f.value * right.value
+	return getFloat(x), nil
+}
+
+func (f Float) Div(other Value) (Value, error) {
+	right, ok := other.(Float)
+	if !ok {
+		return nil, ErrOp
+	}
+	x := f.value / right.value
+	return getFloat(x), nil
+}
+
+func (f Float) Mod(other Value) (Value, error) {
+	right, ok := other.(Float)
+	if !ok {
+		return nil, ErrOp
+	}
+	x := math.Mod(f.value, right.value)
+	return getFloat(x), nil
+}
+
+func (f Float) Pow(other Value) (Value, error) {
+	right, ok := other.(Float)
+	if !ok {
+		return nil, ErrOp
+	}
+	x := math.Pow(f.value, right.value)
+	return getFloat(x), nil
+}
+
+type Bool struct {
+	value bool
+}
+
+func getBool(val bool) Value {
+	return Bool{
+		value: val,
+	}
+}
+
+func (b Bool) True() Value {
+	return getBool(b.value)
+}
+
+func (b Bool) Not() Value {
+	return getBool(!b.value)
+}
+
+type String struct {
+	value string
+}
+
+func getString(val string) Value {
+	return String{
+		value: val,
+	}
+}
+
+func (s String) True() Value {
+	return getBool(s.value != "")
+}
+
+func (s String) Not() Value {
+	return getBool(s.value == "")
+}
+
+func (s String) Float() Value {
+	v, err := strconv.ParseFloat(s.value, 64)
+	if err != nil {
+		return getFloat(math.NaN())
+	}
+	return getFloat(v)
+}
+
+func (s String) Add(other Value) (Value, error) {
+	switch other := other.(type) {
+	case String:
+		str := s.value + other.value
+		return getString(str), nil
+	case Float:
+		x := fmt.Sprintf("%s%f", s.value, other.value)
+		return getString(x), nil
+	default:
+		return nil, ErrOp
+	}
+}
+
+// type Object struct {
+// 	Fields map[string]Value
+// }
+
+// type Array struct {
+// 	Object
+// 	Values []Value
+// }
+
+type Json struct{}
 
 func (j *Json) Get(_ string) (Value, error) {
 	return nil, nil
@@ -32,36 +186,47 @@ func (j *Json) Set(_ string, _ Value) error {
 	return nil
 }
 
-func (j *Json) Exec(args []Value) (Value, error) {
+func (j *Json) Exec(call string, args []Value) (Value, error) {
 	return nil, nil
 }
 
-func Eval(r io.Reader, env environ.Environment[Value]) (Value, error) {
+func Eval(r io.Reader) (Value, error) {
+	env := environ.Empty[Value]()
+	return EvalWithEnv(r, env)
+}
+
+func EvalWithEnv(r io.Reader, env environ.Environment[Value]) (Value, error) {
 	n, err := ParseReader(r)
 	if err != nil {
 		return nil, err
 	}
-	return eval(n, env)
+	return eval(n, env)	
 }
 
 func eval(n Node, env environ.Environment[Value]) (Value, error) {
 	switch n := n.(type) {
 	case Body:
+		return evalBody(n, env)
 	case Null:
 	case Undefined:
 	case Array:
 	case Object:
 	case Literal[string]:
-		return n.Value, nil
+		return getString(n.Value), nil
 	case Literal[float64]:
-		return n.Value, nil
+		return getFloat(n.Value), nil
 	case Literal[bool]:
-		return n.Value, nil
+		return getBool(n.Value), nil
 	case Identifier:
 		return env.Resolve(n.Value)
 	case Index:
 	case Unary:
+		return evalUnary(n, env)
 	case Binary:
+		if n.Op == Assign {
+			return evalAssign(n, env)
+		}
+		return evalBinary(n, env)
 	case Let:
 	case Const:
 	case Increment:
@@ -71,15 +236,126 @@ func eval(n Node, env environ.Environment[Value]) (Value, error) {
 	case While:
 	case For:
 	case Break:
+		return nil, ErrBreak
 	case Continue:
+		return nil, ErrContinue
 	case Try:
+	case Throw:
+		v, err := eval(n.Node, env)
+		if err == nil {
+			err = ErrThrow
+		}
+		return v, err
 	case Return:
+		v, err := eval(n.Node, env)
+		if err == nil {
+			err = ErrReturn
+		}
+		return v, err
 	case Call:
 	case Func:
 	default:
-		_ = n
+		return nil, ErrEval
 	}
 	return nil, nil
+}
+
+func evalBody(b Body, env environ.Environment[Value]) (Value, error) {
+	var (
+		res Value
+		err error
+	)
+	for _, n := range b.Nodes {
+		res, err = eval(n, env)
+		if err != nil {
+			break
+		}
+	}
+	return res, err
+}
+
+func evalAssign(b Binary, env environ.Environment[Value]) (Value, error) {
+	return nil, nil
+}
+
+func evalUnary(u Unary, env environ.Environment[Value]) (Value, error) {
+	right, err := eval(u.Node, env)
+	if err != nil {
+		return nil, err
+	}
+	switch u.Op {
+	default:
+		return nil, ErrEval
+	case Sub:
+		res, ok := right.(interface{ Rev() Value })
+		if !ok {
+			return nil, ErrOp
+		}
+		return res.Rev(), nil
+	case Add:
+		res, ok := right.(interface{ Float() Value })
+		if !ok {
+			return nil, ErrOp
+		}
+		return res.Float(), nil
+	case Not:
+		res, ok := right.(interface{ Not() Value })
+		if !ok {
+			return nil, ErrOp
+		}
+		return res.Not(), nil
+	}
+}
+
+func evalBinary(b Binary, env environ.Environment[Value]) (Value, error) {
+	left, err := eval(b.Left, env)
+	if err != nil {
+		return nil, err
+	}
+	right, err := eval(b.Right, env)
+	if err != nil {
+		return nil, err
+	}
+	switch b.Op {
+	default:
+		return nil, ErrEval
+	case Add:
+		left, ok := left.(interface{ Add(Value) (Value, error) })
+		if !ok {
+			return nil, ErrOp
+		}
+		return left.Add(right)
+	case Sub:
+		left, ok := left.(interface{ Sub(Value) (Value, error) })
+		if !ok {
+			return nil, ErrOp
+		}
+		return left.Sub(right)
+	case Mul:
+		left, ok := left.(interface{ Mul(Value) (Value, error) })
+		if !ok {
+			return nil, ErrOp
+		}
+		return left.Mul(right)
+	case Div:
+		left, ok := left.(interface{ Div(Value) (Value, error) })
+		if !ok {
+			return nil, ErrOp
+		}
+		return left.Div(right)
+	case Mod:
+		left, ok := left.(interface{ Mod(Value) (Value, error) })
+		if !ok {
+			return nil, ErrOp
+		}
+		return left.Mod(right)
+	case Pow:
+		left, ok := left.(interface{ Pow(Value) (Value, error) })
+		if !ok {
+			return nil, ErrOp
+		}
+		return left.Pow(right)
+	}
 }
 
 type Node interface{}
@@ -312,10 +588,11 @@ func Parse(r io.Reader) *Parser {
 
 	p.registerPrefix(Not, p.parseNot)
 	p.registerPrefix(Sub, p.parseRev)
+	p.registerPrefix(Add, p.parseFloat)
 	p.registerPrefix(Incr, p.parseIncr)
 	p.registerPrefix(Decr, p.parseDecr)
 	p.registerPrefix(Ident, p.parseIdent)
-	p.registerPrefix(String, p.parseString)
+	p.registerPrefix(Text, p.parseString)
 	p.registerPrefix(Number, p.parseNumber)
 	p.registerPrefix(Boolean, p.parseBoolean)
 	p.registerPrefix(Lparen, p.parseGroup)
@@ -564,6 +841,20 @@ func (p *Parser) parseNot() (Node, error) {
 	return expr, nil
 }
 
+func (p *Parser) parseFloat() (Node, error) {
+	expr := Unary{
+		Op: Add,
+		Position: p.curr.Position,
+	}
+	p.next()
+	n, err := p.parseExpression(powUnary)
+	if err != nil {
+		return nil, err
+	}
+	expr.Node = n
+	return expr, nil
+}
+
 func (p *Parser) parseRev() (Node, error) {
 	expr := Unary{
 		Op:       Sub,
@@ -712,7 +1003,7 @@ const (
 	EOL
 	Keyword
 	Ident
-	String
+	Text
 	Number
 	Boolean
 	Invalid
@@ -858,7 +1149,7 @@ func (t Token) String() string {
 		prefix = "boolean"
 	case Ident:
 		prefix = "identifier"
-	case String:
+	case Text:
 		prefix = "string"
 	case Number:
 		prefix = "number"
@@ -953,7 +1244,7 @@ func (s *Scanner) scanString(tok *Token) {
 		s.read()
 	}
 	tok.Literal = s.literal()
-	tok.Type = String
+	tok.Type = Text
 	if !isQuote(s.char) && s.char != quote {
 		tok.Type = Invalid
 		return
