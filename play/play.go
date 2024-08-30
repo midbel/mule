@@ -342,6 +342,9 @@ func eval(n Node, env environ.Environment[Value]) (Value, error) {
 		return evalIf(n, env)
 	case Switch:
 	case While:
+		return evalWhile(n, env)
+	case Do:
+		return evalDo(n, env)
 	case For:
 	case Break:
 		return nil, ErrBreak
@@ -361,6 +364,7 @@ func eval(n Node, env environ.Environment[Value]) (Value, error) {
 		}
 		return v, err
 	case Call:
+		return evalCall(n, env)
 	case Func:
 	default:
 		return nil, ErrEval
@@ -420,6 +424,64 @@ func evalConst(e Const, env environ.Environment[Value]) (Value, error) {
 	return res, env.Define(ident.Name, constValue(res))
 }
 
+func evalDo(d Do, env environ.Environment[Value]) (Value, error) {
+	var (
+		res Value
+		err error
+	)
+	for {
+		err = nil
+		res, err = eval(d.Body, env)
+		if err != nil {
+			if errors.Is(err, ErrBreak) {
+				err = nil
+				break
+			}
+			if errors.Is(err, ErrContinue) {
+				continue
+			}
+			return nil, err
+		}
+		tmp, err1 := eval(d.Cdt, env)
+		if err1 != nil {
+			return nil, err
+		}
+		if !isTrue(tmp) {
+			break
+		}
+	}
+	return res, err
+}
+
+func evalWhile(w While, env environ.Environment[Value]) (Value, error) {
+	var (
+		res Value
+		err error
+	)
+	for {
+		tmp, err1 := eval(w.Cdt, env)
+		if err1 != nil {
+			return nil, err
+		}
+		if !isTrue(tmp) {
+			break
+		}
+		err = nil
+		res, err = eval(w.Body, env)
+		if err != nil {
+			if errors.Is(err, ErrBreak) {
+				err = nil
+				break
+			}
+			if errors.Is(err, ErrContinue) {
+				continue
+			}
+			return nil, err
+		}
+	}
+	return res, err
+}
+
 func evalIf(i If, env environ.Environment[Value]) (Value, error) {
 	res, err := eval(i.Cdt, env)
 	if err != nil {
@@ -432,6 +494,10 @@ func evalIf(i If, env environ.Environment[Value]) (Value, error) {
 		return nil, nil
 	}
 	return eval(i.Alt, env)
+}
+
+func evalCall(c Call, env environ.Environment[Value]) (Value, error) {
+	return nil, nil
 }
 
 func evalMap(a Map, env environ.Environment[Value]) (Value, error) {
@@ -613,6 +679,10 @@ func evalBinary(b Binary, env environ.Environment[Value]) (Value, error) {
 	switch b.Op {
 	default:
 		return nil, ErrEval
+	case And:
+		return getBool(isTrue(left) && isTrue(right)), nil
+	case Or:
+		return getBool(isTrue(left) || isTrue(right)), nil
 	case Add:
 		left, ok := left.(interface{ Add(Value) (Value, error) })
 		if !ok {
@@ -752,10 +822,28 @@ type Case struct {
 	Position
 }
 
+type Do struct {
+	Cdt  Node
+	Body Node
+	Position
+}
+
 type While struct {
 	Cdt  Node
 	Body Node
 	Position
+}
+
+type Of struct {
+	Ident Node
+	Iter  Node
+	Body  Node
+}
+
+type In struct {
+	Ident Node
+	Iter  Node
+	Body  Node
 }
 
 type For struct {
@@ -814,7 +902,7 @@ type Return struct {
 }
 
 type Call struct {
-	Ident string
+	Ident Node
 	Args  []Node
 	Position
 }
@@ -926,6 +1014,8 @@ func Parse(r io.Reader) *Parser {
 	p.registerInfix(Le, p.parseBinary)
 	p.registerInfix(Gt, p.parseBinary)
 	p.registerInfix(Ge, p.parseBinary)
+	p.registerInfix(And, p.parseBinary)
+	p.registerInfix(Or, p.parseBinary)
 	p.registerInfix(Incr, p.parseIncrPostfix)
 	p.registerInfix(Decr, p.parseDecrPostfix)
 	p.registerInfix(Lparen, p.parseCall)
@@ -967,6 +1057,8 @@ func (p *Parser) parseKeyword() (Node, error) {
 		return p.parseConst()
 	case "if":
 		return p.parseIf()
+	case "else":
+		return p.parseElse()
 	case "switch":
 		return p.parseSwitch()
 	case "for":
@@ -1027,7 +1119,30 @@ func (p *Parser) parseConst() (Node, error) {
 }
 
 func (p *Parser) parseIf() (Node, error) {
-	return nil, nil
+	expr := If{
+		Position: p.curr.Position,
+	}
+	p.next()
+	cdt, err := p.parseCondition()
+	if err != nil {
+		return nil, err
+	}
+	expr.Cdt = cdt
+	if expr.Csq, err = p.parseBody(); err != nil {
+		return nil, err
+	}
+	if p.is(Keyword) {
+		expr.Alt, err = p.parseKeyword()
+	}
+	return expr, err
+}
+
+func (p *Parser) parseElse() (Node, error) {
+	p.next()
+	if p.is(Keyword) {
+		return p.parseKeyword()
+	}
+	return p.parseBody()
 }
 
 func (p *Parser) parseSwitch() (Node, error) {
@@ -1035,11 +1150,73 @@ func (p *Parser) parseSwitch() (Node, error) {
 }
 
 func (p *Parser) parseDo() (Node, error) {
-	return nil, nil
+	do := Do{
+		Position: p.curr.Position,
+	}
+	p.next()
+	body, err := p.parseBody()
+	if err != nil {
+		return nil, err
+	}
+	do.Body = body
+	if do.Cdt, err = p.parseCondition(); err != nil {
+		return nil, err
+	}
+	return do, nil
 }
 
 func (p *Parser) parseWhile() (Node, error) {
-	return nil, nil
+	expr := While{
+		Position: p.curr.Position,
+	}
+	p.next()
+	cdt, err := p.parseCondition()
+	if err != nil {
+		return nil, err
+	}
+	expr.Cdt = cdt
+	if expr.Body, err = p.parseBody(); err != nil {
+		return nil, err
+	}
+	return expr, nil
+}
+
+func (p *Parser) parseCondition() (Node, error) {
+	if !p.is(Lparen) {
+		return nil, p.unexpected()
+	}
+	p.next()
+	expr, err := p.parseExpression(powLowest)
+	if err != nil {
+		return nil, err
+	}
+	if !p.is(Rparen) {
+		return nil, p.unexpected()
+	}
+	p.next()
+	return expr, nil
+}
+
+func (p *Parser) parseBody() (Node, error) {
+	if !p.is(Lcurly) {
+		return p.parseExpression(powLowest)
+	}
+	p.next()
+	var b Body
+	for !p.done() && !p.is(Rcurly) {
+		p.skip(p.eol)
+		n, err := p.parseExpression(powLowest)
+		if err != nil {
+			return nil, err
+		}
+		b.Nodes = append(b.Nodes, n)
+		p.skip(p.eol)
+	}
+	if !p.is(Rcurly) {
+		return nil, p.unexpected()
+	}
+	p.next()
+	return b, nil
 }
 
 func (p *Parser) parseFor() (Node, error) {
@@ -1100,7 +1277,16 @@ func (p *Parser) parseTry() (Node, error) {
 }
 
 func (p *Parser) parseThrow() (Node, error) {
-	return nil, nil
+	t := Throw{
+		Position: p.curr.Position,
+	}
+	p.next()
+	expr, err := p.parseExpression(powLowest)
+	if err != nil {
+		return nil, err
+	}
+	t.Node = expr
+	return t, nil
 }
 
 func (p *Parser) parseNull() (Node, error) {
@@ -1417,7 +1603,32 @@ func (p *Parser) parseIndex(left Node) (Node, error) {
 }
 
 func (p *Parser) parseCall(left Node) (Node, error) {
-	return nil, nil
+	call := Call{
+		Ident: left,
+		Position: p.curr.Position,
+	}
+	p.next()
+	for !p.done() && !p.is(Rparen) {
+		p.skip(p.eol)
+		a, err := p.parseExpression(powLowest)
+		if err != nil {
+			return nil, err
+		}
+		call.Args = append(call.Args, a)
+		switch {
+		case p.is(Comma):
+			p.next()
+			p.skip(p.eol)
+		case p.is(Rparen):
+		default:
+			return nil, p.unexpected()
+		}
+	}
+	if !p.is(Rparen) {
+		return nil, p.unexpected()
+	}
+	p.next()
+	return call, nil
 }
 
 func (p *Parser) registerPrefix(kind rune, fn prefixFunc) {

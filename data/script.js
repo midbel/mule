@@ -12,3 +12,11 @@ let obj = {
 obj["name"]
 
 "string" ? 1 : 2
+
+if (false) {
+	0
+} else {
+	1
+}
+
+parseInt("1234")
