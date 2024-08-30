@@ -26,3 +26,7 @@ parseInt("1234")
 obj.name
 
 1 * null
+
+for (let x of [1, 2, 3]) {
+	console.log(x)
+}

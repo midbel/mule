@@ -1038,23 +1038,25 @@ type While struct {
 	Position
 }
 
-type Of struct {
+type OfCtrl struct {
 	Ident Node
 	Iter  Node
-	Body  Node
 }
 
-type In struct {
+type InCtrl struct {
 	Ident Node
 	Iter  Node
-	Body  Node
 }
 
-type For struct {
+type ForCtrl struct {
 	Init  Node
 	Cdt   Node
 	After Node
-	Body  Node
+}
+
+type For struct {
+	Ctrl Node
+	Body Node
 	Position
 }
 
@@ -1127,6 +1129,7 @@ var bindings = map[rune]int{
 	Question: powAssign,
 	Assign:   powAssign,
 	Colon:    powAssign,
+	Keyword:  powAssign,
 	Or:       powOr,
 	And:      powAnd,
 	Eq:       powEq,
@@ -1212,6 +1215,7 @@ func Parse(r io.Reader) *Parser {
 	p.registerInfix(Lparen, p.parseCall)
 	p.registerInfix(Lsquare, p.parseIndex)
 	p.registerInfix(Question, p.parseTernary)
+	p.registerInfix(Keyword, p.parseKeywordCtrl)
 
 	p.next()
 	p.next()
@@ -1279,7 +1283,7 @@ func (p *Parser) parseKeyword() (Node, error) {
 	case "throw":
 		return p.parseThrow()
 	default:
-		return nil, fmt.Errorf("%s: keyword not supported/known")
+		return nil, fmt.Errorf("%s: keyword not supported/known", p.curr.Literal)
 	}
 }
 
@@ -1290,7 +1294,36 @@ func (p *Parser) parseKeywordValue() (Node, error) {
 	case "undefined":
 		return p.parseUndefined()
 	default:
-		return nil, fmt.Errorf("%s: keyword not supported/known")
+		return nil, fmt.Errorf("%s: keyword not supported/known", p.curr.Literal)
+	}
+}
+
+func (p *Parser) parseKeywordCtrl(left Node) (Node, error) {
+	switch p.curr.Literal {
+	case "of":
+		expr := OfCtrl{
+			Ident: left,
+		}
+		p.next()
+		right, err := p.parseExpression(powLowest)
+		if err != nil {
+			return nil, err
+		}
+		expr.Iter = right
+		return expr, nil
+	case "in":
+		expr := InCtrl{
+			Ident: left,
+		}
+		p.next()
+		right, err := p.parseExpression(powLowest)
+		if err != nil {
+			return nil, err
+		}
+		expr.Iter = right
+		return expr, nil
+	default:
+		return nil, fmt.Errorf("%s: keyword not supported/known", p.curr.Literal)
 	}
 }
 
@@ -1422,7 +1455,41 @@ func (p *Parser) parseBody() (Node, error) {
 }
 
 func (p *Parser) parseFor() (Node, error) {
-	return nil, nil
+	loop := For{
+		Position: p.curr.Position,
+	}
+	p.next()
+	ctrl, err := p.parseForControl()
+	if err != nil {
+		return nil, err
+	}
+	loop.Ctrl = ctrl
+
+	if loop.Body, err = p.parseBody(); err != nil {
+		return nil, err
+	}
+	return loop, nil
+}
+
+func (p *Parser) parseForControl() (Node, error) {
+	if !p.is(Lparen) {
+		return nil, p.unexpected()
+	}
+	p.next()
+
+	expr, err := p.parseNode()
+	if err != nil {
+		return nil, err
+	}
+	switch expr.(type) {
+	case OfCtrl, InCtrl:
+	default:
+	}
+	if !p.is(Rparen) {
+		return nil, p.unexpected()
+	}
+	p.next()
+	return expr, nil	
 }
 
 func (p *Parser) parseBreak() (Node, error) {
@@ -1729,6 +1796,12 @@ func (p *Parser) parseMap() (Node, error) {
 		key, err := p.parseExpression(powPrefix)
 		if err != nil {
 			return nil, err
+		}
+		if p.is(Comma) {
+			p.next()
+			p.skip(p.eol)
+			obj.Nodes[key] = key
+			continue
 		}
 		if !p.is(Colon) {
 			return nil, p.unexpected()
