@@ -1,9 +1,17 @@
 package environ
 
-import "fmt"
+import (
+	"errors"
+	"fmt"
+)
+
+var (
+	ErrDefined = errors.New("undefined variable")
+	ErrExist   = errors.New("variable already exists")
+)
 
 type Environment[T any] interface {
-	Define(string, T)
+	Define(string, T) error
 	Resolve(string) (T, error)
 }
 
@@ -32,9 +40,10 @@ func (e *Env[T]) Resolve(ident string) (T, error) {
 		return e.parent.Resolve(ident)
 	}
 	var t T
-	return t, fmt.Errorf("%s: undefined variable", ident)
+	return t, fmt.Errorf("%s: %w", ident, ErrDefined)
 }
 
-func (e *Env[T]) Define(ident string, value T) {
+func (e *Env[T]) Define(ident string, value T) error {
 	e.values[ident] = value
+	return nil
 }

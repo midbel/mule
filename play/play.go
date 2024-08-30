@@ -20,10 +20,49 @@ var (
 	ErrThrow    = errors.New("throw")
 	ErrEval     = errors.New("node can not be evalualed in current context")
 	ErrOp       = errors.New("unsupported operation")
+	ErrConst    = errors.New("constant variable can not be reassigned")
 )
 
 type Value interface {
 	True() Value
+}
+
+type envValue struct {
+	Const bool
+	Value
+}
+
+func constValue(val Value) Value {
+	return createValueForEnv(val, true)
+}
+
+func letValue(val Value) Value {
+	return createValueForEnv(val, false)
+}
+
+func createValueForEnv(val Value, ro bool) Value {
+	if _, ok := val.(envValue); ok {
+		return val
+	}
+	return envValue{
+		Value: val,
+		Const: ro,
+	}
+}
+
+type Environment struct {
+	environ.Environment[Value]
+}
+
+func (e *Environment) Define(ident string, value Value) error {
+	v, err := e.Environment.Resolve(ident)
+	if err == nil {
+		x, ok := v.(envValue)
+		if ok && x.Const {
+			return fmt.Errorf("%s: %w", ident, ErrConst)
+		}
+	}
+	return e.Environment.Define(ident, value)
 }
 
 type Float struct {
@@ -167,14 +206,31 @@ func (s String) Add(other Value) (Value, error) {
 	}
 }
 
-// type Object struct {
-// 	Fields map[string]Value
-// }
+type Object struct {
+	Fields map[string]Value
+}
 
-// type Array struct {
-// 	Object
-// 	Values []Value
-// }
+type Array struct {
+	Object
+	Values []Value
+}
+
+func createArray() Array {
+	obj := Object{
+		Fields: make(map[string]Value),
+	}
+	return Array{
+		Object: obj,
+	}
+}
+
+func (a Array) True() Value {
+	return getBool(len(a.Values) != 0)
+}
+
+func (a Array) Not() Value {
+	return getBool(len(a.Values) == 0)
+}
 
 type Json struct{}
 
@@ -191,8 +247,10 @@ func (j *Json) Exec(call string, args []Value) (Value, error) {
 }
 
 func Eval(r io.Reader) (Value, error) {
-	env := environ.Empty[Value]()
-	return EvalWithEnv(r, env)
+	env := Environment{
+		Environment: environ.Empty[Value](),
+	}
+	return EvalWithEnv(r, &env)
 }
 
 func EvalWithEnv(r io.Reader, env environ.Environment[Value]) (Value, error) {
@@ -200,7 +258,7 @@ func EvalWithEnv(r io.Reader, env environ.Environment[Value]) (Value, error) {
 	if err != nil {
 		return nil, err
 	}
-	return eval(n, env)	
+	return eval(n, env)
 }
 
 func eval(n Node, env environ.Environment[Value]) (Value, error) {
@@ -209,7 +267,8 @@ func eval(n Node, env environ.Environment[Value]) (Value, error) {
 		return evalBody(n, env)
 	case Null:
 	case Undefined:
-	case Array:
+	case List:
+		return evalList(n, env)
 	case Object:
 	case Literal[string]:
 		return getString(n.Value), nil
@@ -218,17 +277,18 @@ func eval(n Node, env environ.Environment[Value]) (Value, error) {
 	case Literal[bool]:
 		return getBool(n.Value), nil
 	case Identifier:
-		return env.Resolve(n.Value)
+		return evalIdent(n, env)
 	case Index:
 	case Unary:
 		return evalUnary(n, env)
 	case Binary:
-		if n.Op == Assign {
-			return evalAssign(n, env)
-		}
 		return evalBinary(n, env)
+	case Assignment:
+		return evalAssign(n, env)
 	case Let:
+		return evalLet(n, env)
 	case Const:
+		return evalConst(n, env)
 	case Increment:
 	case Decrement:
 	case If:
@@ -274,8 +334,83 @@ func evalBody(b Body, env environ.Environment[Value]) (Value, error) {
 	return res, err
 }
 
-func evalAssign(b Binary, env environ.Environment[Value]) (Value, error) {
-	return nil, nil
+func evalLet(e Let, env environ.Environment[Value]) (Value, error) {
+	a, ok := e.Node.(Assignment)
+	if !ok {
+		return nil, ErrEval
+	}
+	ident, ok := a.Ident.(Identifier)
+	if !ok {
+		return nil, ErrEval
+	}
+	if _, err := env.Resolve(ident.Name); err == nil {
+		return nil, environ.ErrExist
+	}
+	res, err := eval(a.Node, env)
+	if err != nil {
+		return nil, err
+	}
+	return res, env.Define(ident.Name, letValue(res))
+}
+
+func evalConst(e Const, env environ.Environment[Value]) (Value, error) {
+	a, ok := e.Node.(Assignment)
+	if !ok {
+		return nil, ErrEval
+	}
+	ident, ok := a.Ident.(Identifier)
+	if !ok {
+		return nil, ErrEval
+	}
+	if _, err := env.Resolve(ident.Name); err == nil {
+		return nil, environ.ErrExist
+	}
+	res, err := eval(a.Node, env)
+	if err != nil {
+		return nil, err
+	}
+	return res, env.Define(ident.Name, constValue(res))
+}
+
+func evalList(a List, env environ.Environment[Value]) (Value, error) {
+	arr := createArray()
+	for _, n := range a.Nodes {
+		v, err := eval(n, env)
+		if err != nil {
+			return nil, err
+		}
+		arr.Values = append(arr.Values, v)
+	}
+	return arr, nil
+}
+
+func evalIdent(i Identifier, env environ.Environment[Value]) (Value, error) {
+	v, err := env.Resolve(i.Name)
+	if err != nil {
+		return nil, err
+	}
+	if x, ok := v.(envValue); ok {
+		v = x.Value
+	}
+	return v, nil
+}
+
+func evalAssign(a Assignment, env environ.Environment[Value]) (Value, error) {
+	ident, ok := a.Ident.(Identifier)
+	if !ok {
+		return nil, ErrEval
+	}
+	if v, err := env.Resolve(ident.Name); err == nil {
+		e, ok := v.(envValue)
+		if ok && e.Const {
+			return nil, ErrConst
+		}
+	}
+	res, err := eval(a.Node, env)
+	if err != nil {
+		return nil, err
+	}
+	return res, env.Define(ident.Name, letValue(res))
 }
 
 func evalUnary(u Unary, env environ.Environment[Value]) (Value, error) {
@@ -372,9 +507,12 @@ type Undefined struct {
 	Position
 }
 
-type Array []Node
+type List struct {
+	Position
+	Nodes []Node
+}
 
-type Object map[Node]Node
+type Map map[Node]Node
 
 type Literal[T string | float64 | bool] struct {
 	Value T
@@ -382,7 +520,7 @@ type Literal[T string | float64 | bool] struct {
 }
 
 type Identifier struct {
-	Value string
+	Name string
 	Position
 }
 
@@ -403,6 +541,11 @@ type Binary struct {
 	Left  Node
 	Right Node
 	Position
+}
+
+type Assignment struct {
+	Ident Node
+	Node
 }
 
 type Let struct {
@@ -596,17 +739,17 @@ func Parse(r io.Reader) *Parser {
 	p.registerPrefix(Number, p.parseNumber)
 	p.registerPrefix(Boolean, p.parseBoolean)
 	p.registerPrefix(Lparen, p.parseGroup)
-	p.registerPrefix(Lsquare, p.parseArray)
+	p.registerPrefix(Lsquare, p.parseList)
 	p.registerPrefix(Lcurly, p.parseObject)
 
 	p.registerInfix(Dot, p.parseDot)
+	p.registerInfix(Assign, p.parseAssign)
 	p.registerInfix(Add, p.parseBinary)
 	p.registerInfix(Sub, p.parseBinary)
 	p.registerInfix(Mul, p.parseBinary)
 	p.registerInfix(Div, p.parseBinary)
 	p.registerInfix(Mod, p.parseBinary)
 	p.registerInfix(Pow, p.parseBinary)
-	p.registerInfix(Assign, p.parseBinary)
 	p.registerInfix(And, p.parseBinary)
 	p.registerInfix(Or, p.parseBinary)
 	p.registerInfix(Eq, p.parseBinary)
@@ -843,7 +986,7 @@ func (p *Parser) parseNot() (Node, error) {
 
 func (p *Parser) parseFloat() (Node, error) {
 	expr := Unary{
-		Op: Add,
+		Op:       Add,
 		Position: p.curr.Position,
 	}
 	p.next()
@@ -880,7 +1023,7 @@ func (p *Parser) parseDecr() (Node, error) {
 func (p *Parser) parseIdent() (Node, error) {
 	defer p.next()
 	expr := Identifier{
-		Value:    p.curr.Literal,
+		Name:     p.curr.Literal,
 		Position: p.curr.Position,
 	}
 	return expr, nil
@@ -921,8 +1064,30 @@ func (p *Parser) parseBoolean() (Node, error) {
 	return expr, nil
 }
 
-func (p *Parser) parseArray() (Node, error) {
-	return nil, nil
+func (p *Parser) parseList() (Node, error) {
+	list := List{
+		Position: p.curr.Position,
+	}
+	p.next()
+	for !p.done() && !p.is(Rsquare) {
+		n, err := p.parseExpression(powComma)
+		if err != nil {
+			return nil, err
+		}
+		list.Nodes = append(list.Nodes, n)
+		switch {
+		case p.is(Comma):
+			p.next()
+		case p.is(Rsquare):
+		default:
+			return nil, p.unexpected()
+		}
+	}
+	if !p.is(Rsquare) {
+		return nil, fmt.Errorf("missing ] at end of array")
+	}
+	p.next()
+	return list, nil
 }
 
 func (p *Parser) parseObject() (Node, error) {
@@ -935,6 +1100,19 @@ func (p *Parser) parseGroup() (Node, error) {
 
 func (p *Parser) parseDot(left Node) (Node, error) {
 	return nil, nil
+}
+
+func (p *Parser) parseAssign(left Node) (Node, error) {
+	expr := Assignment{
+		Ident: left,
+	}
+	p.next()
+	right, err := p.parseExpression(powLowest)
+	if err != nil {
+		return nil, err
+	}
+	expr.Node = right
+	return expr, nil
 }
 
 func (p *Parser) parseBinary(left Node) (Node, error) {
@@ -996,6 +1174,11 @@ func (p *Parser) is(kind rune) bool {
 func (p *Parser) next() {
 	p.curr = p.peek
 	p.peek = p.scan.Scan()
+}
+
+func (p *Parser) unexpected() error {
+	pos := p.curr.Position
+	return fmt.Errorf("%s unexpected token at %d:%d", p.curr, pos.Line, pos.Column)
 }
 
 const (

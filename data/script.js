@@ -1,12 +1,7 @@
-ident
-"string"
-3.14
-42
-true
-null
-undefined
-!true
--345
-1/2
-ident = 1 + 2
-let ident = 1+2
+let value = 1
+value = value + 1
+
+const x = 1
+value = x + 1
+
+const value = 5
