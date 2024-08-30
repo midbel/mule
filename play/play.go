@@ -91,6 +91,14 @@ func (f Float) Float() Value {
 	return f
 }
 
+func (f Float) Incr() (Value, error) {
+	return f.Add(getFloat(1))
+}
+
+func (f Float) Decr() (Value, error) {
+	return f.Add(getFloat(-1))
+}
+
 func (f Float) Add(other Value) (Value, error) {
 	switch other := other.(type) {
 	case Float:
@@ -290,7 +298,9 @@ func eval(n Node, env environ.Environment[Value]) (Value, error) {
 	case Const:
 		return evalConst(n, env)
 	case Increment:
+		return evalIncrement(n, env)
 	case Decrement:
+		return evalDecrement(n, env)
 	case If:
 	case Switch:
 	case While:
@@ -411,6 +421,58 @@ func evalAssign(a Assignment, env environ.Environment[Value]) (Value, error) {
 		return nil, err
 	}
 	return res, env.Define(ident.Name, letValue(res))
+}
+
+func evalIncrement(i Increment, env environ.Environment[Value]) (Value, error) {
+	ident, ok := i.Node.(Identifier)
+	if !ok {
+		return nil, ErrEval
+	}
+	val, err := eval(i.Node, env)
+	if err != nil {
+		return nil, err
+	}
+	incr, ok := val.(interface{Incr() (Value, error)})
+	if !ok {
+		return nil, ErrOp
+	}
+	res, err := incr.Incr()
+	if err != nil {
+		return nil, err
+	}
+	if err := env.Define(ident.Name, res); err != nil {
+		return nil, err
+	}
+	if !i.Post {
+		val = res
+	}
+	return val, nil
+}
+
+func evalDecrement(i Decrement, env environ.Environment[Value]) (Value, error) {
+	ident, ok := i.Node.(Identifier)
+	if !ok {
+		return nil, ErrEval
+	}
+	val, err := eval(i.Node, env)
+	if err != nil {
+		return nil, err
+	}
+	decr, ok := val.(interface{Decr() (Value, error)})
+	if !ok {
+		return nil, ErrOp
+	}
+	res, err := decr.Decr()
+	if err != nil {
+		return nil, err
+	}
+	if err := env.Define(ident.Name, res); err != nil {
+		return nil, err
+	}
+	if !i.Post {
+		val = res
+	}
+	return val, nil
 }
 
 func evalUnary(u Unary, env environ.Environment[Value]) (Value, error) {
@@ -560,11 +622,13 @@ type Const struct {
 
 type Increment struct {
 	Node
+	Post bool
 	Position
 }
 
 type Decrement struct {
 	Node
+	Post bool
 	Position
 }
 
@@ -675,7 +739,8 @@ const (
 	powPow
 	powObject
 	powGroup
-	powUnary
+	powPostfix
+	powPrefix
 )
 
 var bindings = map[rune]int{
@@ -701,6 +766,8 @@ var bindings = map[rune]int{
 	Lparen:   powObject,
 	Lsquare:  powObject,
 	Lcurly:   powObject,
+	Incr: powPostfix,
+	Decr: powPrefix,
 }
 
 type (
@@ -732,8 +799,8 @@ func Parse(r io.Reader) *Parser {
 	p.registerPrefix(Not, p.parseNot)
 	p.registerPrefix(Sub, p.parseRev)
 	p.registerPrefix(Add, p.parseFloat)
-	p.registerPrefix(Incr, p.parseIncr)
-	p.registerPrefix(Decr, p.parseDecr)
+	p.registerPrefix(Incr, p.parseIncrPrefix)
+	p.registerPrefix(Decr, p.parseDecrPrefix)
 	p.registerPrefix(Ident, p.parseIdent)
 	p.registerPrefix(Text, p.parseString)
 	p.registerPrefix(Number, p.parseNumber)
@@ -758,6 +825,8 @@ func Parse(r io.Reader) *Parser {
 	p.registerInfix(Le, p.parseBinary)
 	p.registerInfix(Gt, p.parseBinary)
 	p.registerInfix(Ge, p.parseBinary)
+	p.registerInfix(Incr, p.parseIncrPostfix)
+	p.registerInfix(Decr, p.parseDecrPostfix)
 	p.registerInfix(Lparen, p.parseCall)
 	p.registerInfix(Lsquare, p.parseIndex)
 	p.registerInfix(Question, p.parseTernary)
@@ -976,7 +1045,7 @@ func (p *Parser) parseNot() (Node, error) {
 		Position: p.curr.Position,
 	}
 	p.next()
-	n, err := p.parseExpression(powUnary)
+	n, err := p.parseExpression(powPrefix)
 	if err != nil {
 		return nil, err
 	}
@@ -990,7 +1059,7 @@ func (p *Parser) parseFloat() (Node, error) {
 		Position: p.curr.Position,
 	}
 	p.next()
-	n, err := p.parseExpression(powUnary)
+	n, err := p.parseExpression(powPrefix)
 	if err != nil {
 		return nil, err
 	}
@@ -1004,7 +1073,7 @@ func (p *Parser) parseRev() (Node, error) {
 		Position: p.curr.Position,
 	}
 	p.next()
-	n, err := p.parseExpression(powUnary)
+	n, err := p.parseExpression(powPrefix)
 	if err != nil {
 		return nil, err
 	}
@@ -1012,12 +1081,50 @@ func (p *Parser) parseRev() (Node, error) {
 	return expr, nil
 }
 
-func (p *Parser) parseIncr() (Node, error) {
-	return nil, nil
+func (p *Parser) parseIncrPrefix() (Node, error) {
+	incr := Increment{
+		Position: p.curr.Position,
+	}
+	p.next()
+	right, err := p.parseExpression(powPrefix)
+	if err != nil {
+		return nil, err
+	}
+	incr.Node = right
+	return incr, nil
 }
 
-func (p *Parser) parseDecr() (Node, error) {
-	return nil, nil
+func (p *Parser) parseDecrPrefix() (Node, error) {
+	decr := Decrement{
+		Position: p.curr.Position,
+	}
+	p.next()
+	right, err := p.parseExpression(powPrefix)
+	if err != nil {
+		return nil, err
+	}
+	decr.Node = right
+	return decr, nil
+}
+
+func (p *Parser) parseIncrPostfix(left Node) (Node, error) {
+	incr := Increment{
+		Node: left,
+		Post: true,
+		Position: p.curr.Position,
+	}
+	p.next()
+	return incr, nil
+}
+
+func (p *Parser) parseDecrPostfix(left Node) (Node, error) {
+	decr := Decrement{
+		Node: left,
+		Post: true,
+		Position: p.curr.Position,
+	}
+	p.next()
+	return decr, nil
 }
 
 func (p *Parser) parseIdent() (Node, error) {
