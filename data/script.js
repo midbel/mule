@@ -8,3 +8,5 @@ let obj = {
 	name: "foobar",
 	age: 100,
 }
+
+obj["name"]

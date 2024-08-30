@@ -21,6 +21,7 @@ var (
 	ErrEval     = errors.New("node can not be evalualed in current context")
 	ErrOp       = errors.New("unsupported operation")
 	ErrConst    = errors.New("constant variable can not be reassigned")
+	ErrIndex    = errors.New("index out of bound")
 )
 
 type Value interface {
@@ -232,6 +233,10 @@ func (o Object) Not() Value {
 	return getBool(len(o.Fields) == 0)
 }
 
+func (o Object) At(ix Value) (Value, error) {
+	return o.Fields[ix], nil
+}
+
 type Array struct {
 	Object
 	Values []Value
@@ -249,6 +254,17 @@ func (a Array) True() Value {
 
 func (a Array) Not() Value {
 	return getBool(len(a.Values) == 0)
+}
+
+func (a Array) At(ix Value) (Value, error) {
+	x, ok := ix.(Float)
+	if !ok {
+		return nil, ErrOp
+	}
+	if x.value >= 0 && int(x.value) < len(a.Values) {
+		return a.Values[int(x.value)], nil
+	}
+	return nil, ErrIndex
 }
 
 type Json struct{}
@@ -299,6 +315,7 @@ func eval(n Node, env environ.Environment[Value]) (Value, error) {
 	case Identifier:
 		return evalIdent(n, env)
 	case Index:
+		return evalIndex(n, env)
 	case Unary:
 		return evalUnary(n, env)
 	case Binary:
@@ -433,6 +450,22 @@ func evalList(a List, env environ.Environment[Value]) (Value, error) {
 		arr.Values = append(arr.Values, v)
 	}
 	return arr, nil
+}
+
+func evalIndex(i Index, env environ.Environment[Value]) (Value, error) {
+	res, err := eval(i.Ident, env)
+	if err != nil {
+		return nil, err
+	}
+	expr, err := eval(i.Expr, env)
+	if err != nil {
+		return nil, err
+	}
+	at, ok := res.(interface{ At(Value) (Value, error) })
+	if !ok {
+		return nil, ErrOp
+	}
+	return at.At(expr)
 }
 
 func evalIdent(i Identifier, env environ.Environment[Value]) (Value, error) {
@@ -631,8 +664,8 @@ type Identifier struct {
 }
 
 type Index struct {
-	Left  Node
-	Value Node
+	Ident Node
+	Expr  Node
 	Position
 }
 
@@ -782,9 +815,10 @@ const (
 	powMul
 	powPow
 	powObject
-	powGroup
 	powPostfix
 	powPrefix
+	powAccess
+	powGroup
 )
 
 var bindings = map[rune]int{
@@ -806,9 +840,9 @@ var bindings = map[rune]int{
 	Div:      powMul,
 	Mod:      powMul,
 	Pow:      powPow,
-	Dot:      powObject,
-	Lparen:   powObject,
-	Lsquare:  powObject,
+	Lparen:   powGroup,
+	Dot:      powAccess,
+	Lsquare:  powAccess,
 	Lcurly:   powObject,
 	Incr:     powPostfix,
 	Decr:     powPrefix,
@@ -1221,6 +1255,7 @@ func (p *Parser) parseList() (Node, error) {
 	}
 	p.next()
 	for !p.done() && !p.is(Rsquare) {
+		p.skip(p.eol)
 		n, err := p.parseExpression(powComma)
 		if err != nil {
 			return nil, err
@@ -1321,7 +1356,21 @@ func (p *Parser) parseTernary(left Node) (Node, error) {
 }
 
 func (p *Parser) parseIndex(left Node) (Node, error) {
-	return nil, nil
+	ix := Index{
+		Position: p.curr.Position,
+		Ident:    left,
+	}
+	p.next()
+	x, err := p.parseExpression(powAccess)
+	if err != nil {
+		return nil, err
+	}
+	ix.Expr = x
+	if !p.is(Rsquare) {
+		return nil, p.unexpected()
+	}
+	p.next()
+	return ix, nil
 }
 
 func (p *Parser) parseCall(left Node) (Node, error) {
