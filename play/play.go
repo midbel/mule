@@ -28,6 +28,14 @@ type Value interface {
 	True() Value
 }
 
+func isTrue(val Value) bool {
+	b, ok := val.True().(Bool)
+	if !ok {
+		return false
+	}
+	return b.value
+}
+
 type envValue struct {
 	Const bool
 	Value
@@ -331,6 +339,7 @@ func eval(n Node, env environ.Environment[Value]) (Value, error) {
 	case Decrement:
 		return evalDecrement(n, env)
 	case If:
+		return evalIf(n, env)
 	case Switch:
 	case While:
 	case For:
@@ -409,6 +418,20 @@ func evalConst(e Const, env environ.Environment[Value]) (Value, error) {
 		return nil, err
 	}
 	return res, env.Define(ident.Name, constValue(res))
+}
+
+func evalIf(i If, env environ.Environment[Value]) (Value, error) {
+	res, err := eval(i.Cdt, env)
+	if err != nil {
+		return nil, err
+	}
+	if isTrue(res) {
+		return eval(i.Csq, env)
+	}
+	if i.Alt == nil {
+		return nil, nil
+	}
+	return eval(i.Alt, env)
 }
 
 func evalMap(a Map, env environ.Environment[Value]) (Value, error) {
@@ -1352,7 +1375,27 @@ func (p *Parser) parseBinary(left Node) (Node, error) {
 }
 
 func (p *Parser) parseTernary(left Node) (Node, error) {
-	return nil, nil
+	expr := If{
+		Cdt:      left,
+		Position: p.curr.Position,
+	}
+	p.next()
+	csq, err := p.parseExpression(powAssign)
+	if err != nil {
+		return nil, err
+	}
+	if !p.is(Colon) {
+		return nil, p.unexpected()
+	}
+	p.next()
+
+	alt, err := p.parseExpression(powAssign)
+	if err != nil {
+		return nil, err
+	}
+	expr.Csq = csq
+	expr.Alt = alt
+	return expr, nil
 }
 
 func (p *Parser) parseIndex(left Node) (Node, error) {

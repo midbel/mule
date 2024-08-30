@@ -10,3 +10,5 @@ let obj = {
 }
 
 obj["name"]
+
+"string" ? 1 : 2
