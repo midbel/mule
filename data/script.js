@@ -24,3 +24,5 @@ parseInt("1234")
 1 + (2 * 5)
 
 obj.name
+
+1 * null

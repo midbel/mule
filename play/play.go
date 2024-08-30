@@ -32,9 +32,14 @@ func execParseFloat(args []Value) (Value, error) {
 	return nil, nil
 }
 
+func execIsNaN(args []Value) (Value, error) {
+	return nil, nil
+}
+
 var builtins = map[string]func([]Value) (Value, error){
 	"parseInt":   execParseInt,
 	"parseFloat": execParseFloat,
+	"isNaN":      execIsNaN,
 }
 
 type Value interface {
@@ -95,6 +100,84 @@ func (f Function) True() Value {
 	return getBool(true)
 }
 
+type Void struct{}
+
+func isUndefined(v Value) bool {
+	_, ok := v.(Void)
+	return ok
+}
+
+func (v Void) True() Value {
+	return getBool(false)
+}
+
+func (v Void) Rev() Value {
+	return nan()
+}
+
+func (_ Void) Add(_ Value) (Value, error) {
+	return nan(), nil
+}
+
+func (_ Void) Sub(_ Value) (Value, error) {
+	return nan(), nil
+}
+
+func (_ Void) Mul(_ Value) (Value, error) {
+	return nan(), nil
+}
+
+func (_ Void) Div(_ Value) (Value, error) {
+	return nan(), nil
+}
+
+func (_ Void) Mod(_ Value) (Value, error) {
+	return nan(), nil
+}
+
+func (_ Void) Pow(_ Value) (Value, error) {
+	return nan(), nil
+}
+
+type Nil struct{}
+
+func isNull(v Value) bool {
+	_, ok := v.(Nil)
+	return ok
+}
+
+func (n Nil) True() Value {
+	return getBool(false)
+}
+
+func (_ Nil) Rev() Value {
+	return getFloat(0)
+}
+
+func (_ Nil) Add(_ Value) (Value, error) {
+	return getFloat(0), nil
+}
+
+func (_ Nil) Sub(_ Value) (Value, error) {
+	return getFloat(0), nil
+}
+
+func (_ Nil) Mul(_ Value) (Value, error) {
+	return getFloat(0), nil
+}
+
+func (_ Nil) Div(_ Value) (Value, error) {
+	return getFloat(0), nil
+}
+
+func (_ Nil) Mod(_ Value) (Value, error) {
+	return getFloat(0), nil
+}
+
+func (_ Nil) Pow(_ Value) (Value, error) {
+	return getFloat(0), nil
+}
+
 type Float struct {
 	value float64
 }
@@ -103,6 +186,10 @@ func getFloat(val float64) Float {
 	return Float{
 		value: val,
 	}
+}
+
+func nan() Float {
+	return getFloat(math.NaN())
 }
 
 func (f Float) True() Value {
@@ -130,6 +217,12 @@ func (f Float) Decr() (Value, error) {
 }
 
 func (f Float) Add(other Value) (Value, error) {
+	if isUndefined(other) {
+		return nan(), nil
+	}
+	if isNull(other) {
+		return getFloat(0), nil
+	}
 	switch other := other.(type) {
 	case Float:
 		x := f.value + other.value
@@ -143,6 +236,12 @@ func (f Float) Add(other Value) (Value, error) {
 }
 
 func (f Float) Sub(other Value) (Value, error) {
+	if isUndefined(other) {
+		return nan(), nil
+	}
+	if isNull(other) {
+		return getFloat(0), nil
+	}
 	right, ok := other.(Float)
 	if !ok {
 		return nil, ErrOp
@@ -152,6 +251,12 @@ func (f Float) Sub(other Value) (Value, error) {
 }
 
 func (f Float) Mul(other Value) (Value, error) {
+	if isUndefined(other) {
+		return nan(), nil
+	}
+	if isNull(other) {
+		return getFloat(0), nil
+	}
 	right, ok := other.(Float)
 	if !ok {
 		return nil, ErrOp
@@ -161,6 +266,12 @@ func (f Float) Mul(other Value) (Value, error) {
 }
 
 func (f Float) Div(other Value) (Value, error) {
+	if isUndefined(other) {
+		return nan(), nil
+	}
+	if isNull(other) {
+		return getFloat(0), nil
+	}
 	right, ok := other.(Float)
 	if !ok {
 		return nil, ErrOp
@@ -170,6 +281,12 @@ func (f Float) Div(other Value) (Value, error) {
 }
 
 func (f Float) Mod(other Value) (Value, error) {
+	if isUndefined(other) {
+		return nan(), nil
+	}
+	if isNull(other) {
+		return getFloat(0), nil
+	}
 	right, ok := other.(Float)
 	if !ok {
 		return nil, ErrOp
@@ -179,6 +296,12 @@ func (f Float) Mod(other Value) (Value, error) {
 }
 
 func (f Float) Pow(other Value) (Value, error) {
+	if isUndefined(other) {
+		return nan(), nil
+	}
+	if isNull(other) {
+		return getFloat(0), nil
+	}
 	right, ok := other.(Float)
 	if !ok {
 		return nil, ErrOp
@@ -267,7 +390,12 @@ func (o Object) At(ix Value) (Value, error) {
 }
 
 func (o Object) Get(prop Value) (Value, error) {
-	return o.At(prop)
+	v, ok := o.Fields[prop]
+	if !ok {
+		var x Void
+		return x, nil
+	}
+	return v, nil
 }
 
 type Array struct {
@@ -334,7 +462,11 @@ func eval(n Node, env environ.Environment[Value]) (Value, error) {
 	case Body:
 		return evalBody(n, env)
 	case Null:
+		var i Nil
+		return i, nil
 	case Undefined:
+		var v Void
+		return v, nil
 	case List:
 		return evalList(n, env)
 	case Map:
@@ -1055,6 +1187,7 @@ func Parse(r io.Reader) *Parser {
 	p.registerPrefix(Lparen, p.parseGroup)
 	p.registerPrefix(Lsquare, p.parseList)
 	p.registerPrefix(Lcurly, p.parseMap)
+	p.registerPrefix(Keyword, p.parseKeywordValue)
 
 	p.registerInfix(Dot, p.parseDot)
 	p.registerInfix(Assign, p.parseAssign)
@@ -1145,6 +1278,13 @@ func (p *Parser) parseKeyword() (Node, error) {
 		return p.parseFinally()
 	case "throw":
 		return p.parseThrow()
+	default:
+		return nil, fmt.Errorf("%s: keyword not supported/known")
+	}
+}
+
+func (p *Parser) parseKeywordValue() (Node, error) {
+	switch p.curr.Literal {
 	case "null":
 		return p.parseNull()
 	case "undefined":
