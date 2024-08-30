@@ -24,6 +24,19 @@ var (
 	ErrIndex    = errors.New("index out of bound")
 )
 
+func execParseInt(args []Value) (Value, error) {
+	return nil, nil
+}
+
+func execParseFloat(args []Value) (Value, error) {
+	return nil, nil
+}
+
+var builtins = map[string]func([]Value) (Value, error) {
+	"parseInt": execParseInt,
+	"parseFloat": execParseFloat,
+}
+
 type Value interface {
 	True() Value
 }
@@ -72,6 +85,14 @@ func (e *Environment) Define(ident string, value Value) error {
 		}
 	}
 	return e.Environment.Define(ident, value)
+}
+
+type Function struct {
+
+}
+
+func (f Function) True() Value {
+	return getBool(true)
 }
 
 type Float struct {
@@ -497,7 +518,31 @@ func evalIf(i If, env environ.Environment[Value]) (Value, error) {
 }
 
 func evalCall(c Call, env environ.Environment[Value]) (Value, error) {
-	return nil, nil
+	ident, ok := c.Ident.(Identifier)
+	if !ok {
+		return nil, ErrEval
+	}
+	if val, err := env.Resolve(ident.Name); err == nil {
+		fn, ok := val.(Function)
+		if !ok {
+			return nil, ErrOp 
+		}
+		_ = fn
+		return nil, nil
+	}
+	fn, ok := builtins[ident.Name]
+	if !ok {
+		return nil, ErrEval
+	}
+	var args []Value
+	for i := range c.Args {
+		a, err := eval(c.Args[i], env)
+		if err != nil {
+			return nil, err
+		}
+		args = append(args, a)
+	}
+	return fn(args)
 }
 
 func evalMap(a Map, env environ.Environment[Value]) (Value, error) {
@@ -1081,6 +1126,10 @@ func (p *Parser) parseKeyword() (Node, error) {
 		return p.parseExport()
 	case "try":
 		return p.parseTry()
+	case "catch":
+		return p.parseCatch()
+	case "finally":
+		return p.parseFinally()
 	case "throw":
 		return p.parseThrow()
 	case "null":
@@ -1273,7 +1322,37 @@ func (p *Parser) parseExport() (Node, error) {
 }
 
 func (p *Parser) parseTry() (Node, error) {
+	try := Try{
+		Position: p.curr.Position,
+	}
+	p.next()
+	body, err := p.parseBody()
+	if err != nil {
+		return nil, err
+	}
+	try.Node = body
+	if p.is(Keyword) && p.curr.Literal == "catch" {
+		try.Catch, err = p.parseKeyword()
+		if err != nil {
+			return nil, err
+		}
+	}
+	if p.is(Keyword) && p.curr.Literal == "finally" {
+		try.Finally, err = p.parseKeyword()
+		if err != nil {
+			return nil, err
+		}
+	}
+	return try, nil
+}
+
+func (p *Parser) parseCatch() (Node, error) {
 	return nil, nil
+}
+
+func (p *Parser) parseFinally() (Node, error) {
+	p.next()
+	return p.parseBody()
 }
 
 func (p *Parser) parseThrow() (Node, error) {
@@ -1604,7 +1683,7 @@ func (p *Parser) parseIndex(left Node) (Node, error) {
 
 func (p *Parser) parseCall(left Node) (Node, error) {
 	call := Call{
-		Ident: left,
+		Ident:    left,
 		Position: p.curr.Position,
 	}
 	p.next()
