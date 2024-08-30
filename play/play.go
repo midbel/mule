@@ -32,8 +32,8 @@ func execParseFloat(args []Value) (Value, error) {
 	return nil, nil
 }
 
-var builtins = map[string]func([]Value) (Value, error) {
-	"parseInt": execParseInt,
+var builtins = map[string]func([]Value) (Value, error){
+	"parseInt":   execParseInt,
 	"parseFloat": execParseFloat,
 }
 
@@ -88,7 +88,7 @@ func (e *Environment) Define(ident string, value Value) error {
 }
 
 type Function struct {
-
+	Body Node
 }
 
 func (f Function) True() Value {
@@ -266,6 +266,10 @@ func (o Object) At(ix Value) (Value, error) {
 	return o.Fields[ix], nil
 }
 
+func (o Object) Get(prop Value) (Value, error) {
+	return o.At(prop)
+}
+
 type Array struct {
 	Object
 	Values []Value
@@ -298,7 +302,7 @@ func (a Array) At(ix Value) (Value, error) {
 
 type Json struct{}
 
-func (j *Json) Get(_ string) (Value, error) {
+func (j *Json) Get(_ Value) (Value, error) {
 	return nil, nil
 }
 
@@ -345,6 +349,8 @@ func eval(n Node, env environ.Environment[Value]) (Value, error) {
 		return evalIdent(n, env)
 	case Index:
 		return evalIndex(n, env)
+	case Access:
+		return evalAccess(n, env)
 	case Unary:
 		return evalUnary(n, env)
 	case Binary:
@@ -525,10 +531,9 @@ func evalCall(c Call, env environ.Environment[Value]) (Value, error) {
 	if val, err := env.Resolve(ident.Name); err == nil {
 		fn, ok := val.(Function)
 		if !ok {
-			return nil, ErrOp 
+			return nil, ErrOp
 		}
-		_ = fn
-		return nil, nil
+		return eval(fn.Body, env)
 	}
 	fn, ok := builtins[ident.Name]
 	if !ok {
@@ -584,6 +589,22 @@ func evalList(a List, env environ.Environment[Value]) (Value, error) {
 		arr.Values = append(arr.Values, v)
 	}
 	return arr, nil
+}
+
+func evalAccess(a Access, env environ.Environment[Value]) (Value, error) {
+	res, err := eval(a.Node, env)
+	if err != nil {
+		return nil, err
+	}
+	ident, ok := a.Ident.(Identifier)
+	if !ok {
+		return nil, ErrEval
+	}
+	get, ok := res.(interface{ Get(Value) (Value, error) })
+	if !ok {
+		return nil, ErrOp
+	}
+	return get.Get(getString(ident.Name))
 }
 
 func evalIndex(i Index, env environ.Environment[Value]) (Value, error) {
@@ -807,6 +828,12 @@ type Index struct {
 	Position
 }
 
+type Access struct {
+	Ident Node
+	Node
+	Position
+}
+
 type Unary struct {
 	Op rune
 	Node
@@ -896,20 +923,6 @@ type For struct {
 	Cdt   Node
 	After Node
 	Body  Node
-	Position
-}
-
-type ForOf struct {
-	Var  Node
-	Iter Node
-	Body Node
-	Position
-}
-
-type ForIn struct {
-	Var  Node
-	Iter Node
-	Body Node
 	Position
 }
 
@@ -1599,15 +1612,35 @@ func (p *Parser) parseMap() (Node, error) {
 		return nil, p.unexpected()
 	}
 	p.next()
+	p.skip(p.eol)
 	return obj, nil
 }
 
 func (p *Parser) parseGroup() (Node, error) {
-	return nil, nil
+	p.next()
+	node, err := p.parseExpression(powLowest)
+	if err != nil {
+		return nil, err
+	}
+	if !p.is(Rparen) {
+		return nil, p.unexpected()
+	}
+	p.next()
+	return node, nil
 }
 
 func (p *Parser) parseDot(left Node) (Node, error) {
-	return nil, nil
+	access := Access{
+		Node:     left,
+		Position: p.curr.Position,
+	}
+	p.next()
+	expr, err := p.parseExpression(powAccess)
+	if err != nil {
+		return nil, err
+	}
+	access.Ident = expr
+	return access, nil
 }
 
 func (p *Parser) parseAssign(left Node) (Node, error) {

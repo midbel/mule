@@ -20,3 +20,7 @@ if (false) {
 }
 
 parseInt("1234")
+
+1 + (2 * 5)
+
+obj.name
