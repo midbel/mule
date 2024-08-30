@@ -1,7 +1,10 @@
 let value = 1
 value = value + 1
 
-const x = 1
-value = x + 1
+let x = 1
+value = x + 5
 
-const value = 5
+let obj = {
+	name: "foobar",
+	age: 100,
+}

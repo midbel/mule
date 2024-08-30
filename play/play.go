@@ -215,7 +215,21 @@ func (s String) Add(other Value) (Value, error) {
 }
 
 type Object struct {
-	Fields map[string]Value
+	Fields map[Value]Value
+}
+
+func createObject() Object {
+	return Object{
+		Fields: make(map[Value]Value),
+	}
+}
+
+func (o Object) True() Value {
+	return getBool(len(o.Fields) != 0)
+}
+
+func (o Object) Not() Value {
+	return getBool(len(o.Fields) == 0)
 }
 
 type Array struct {
@@ -224,11 +238,8 @@ type Array struct {
 }
 
 func createArray() Array {
-	obj := Object{
-		Fields: make(map[string]Value),
-	}
 	return Array{
-		Object: obj,
+		Object: createObject(),
 	}
 }
 
@@ -277,7 +288,8 @@ func eval(n Node, env environ.Environment[Value]) (Value, error) {
 	case Undefined:
 	case List:
 		return evalList(n, env)
-	case Object:
+	case Map:
+		return evalMap(n, env)
 	case Literal[string]:
 		return getString(n.Value), nil
 	case Literal[float64]:
@@ -382,6 +394,35 @@ func evalConst(e Const, env environ.Environment[Value]) (Value, error) {
 	return res, env.Define(ident.Name, constValue(res))
 }
 
+func evalMap(a Map, env environ.Environment[Value]) (Value, error) {
+	obj := createObject()
+	for k, v := range a.Nodes {
+		var (
+			key Value
+			err error
+		)
+		if i, ok := k.(Identifier); ok {
+			key = getString(i.Name)
+		} else {
+			key, err = eval(k, env)
+		}
+		if err != nil {
+			return nil, err
+		}
+		switch key.(type) {
+		case String, Float, Bool:
+		default:
+			return nil, ErrEval
+		}
+		val, err := eval(v, env)
+		if err != nil {
+			return nil, err
+		}
+		obj.Fields[key] = val
+	}
+	return obj, nil
+}
+
 func evalList(a List, env environ.Environment[Value]) (Value, error) {
 	arr := createArray()
 	for _, n := range a.Nodes {
@@ -432,7 +473,7 @@ func evalIncrement(i Increment, env environ.Environment[Value]) (Value, error) {
 	if err != nil {
 		return nil, err
 	}
-	incr, ok := val.(interface{Incr() (Value, error)})
+	incr, ok := val.(interface{ Incr() (Value, error) })
 	if !ok {
 		return nil, ErrOp
 	}
@@ -458,7 +499,7 @@ func evalDecrement(i Decrement, env environ.Environment[Value]) (Value, error) {
 	if err != nil {
 		return nil, err
 	}
-	decr, ok := val.(interface{Decr() (Value, error)})
+	decr, ok := val.(interface{ Decr() (Value, error) })
 	if !ok {
 		return nil, ErrOp
 	}
@@ -574,7 +615,10 @@ type List struct {
 	Nodes []Node
 }
 
-type Map map[Node]Node
+type Map struct {
+	Position
+	Nodes map[Node]Node
+}
 
 type Literal[T string | float64 | bool] struct {
 	Value T
@@ -766,8 +810,8 @@ var bindings = map[rune]int{
 	Lparen:   powObject,
 	Lsquare:  powObject,
 	Lcurly:   powObject,
-	Incr: powPostfix,
-	Decr: powPrefix,
+	Incr:     powPostfix,
+	Decr:     powPrefix,
 }
 
 type (
@@ -807,7 +851,7 @@ func Parse(r io.Reader) *Parser {
 	p.registerPrefix(Boolean, p.parseBoolean)
 	p.registerPrefix(Lparen, p.parseGroup)
 	p.registerPrefix(Lsquare, p.parseList)
-	p.registerPrefix(Lcurly, p.parseObject)
+	p.registerPrefix(Lcurly, p.parseMap)
 
 	p.registerInfix(Dot, p.parseDot)
 	p.registerInfix(Assign, p.parseAssign)
@@ -1109,8 +1153,8 @@ func (p *Parser) parseDecrPrefix() (Node, error) {
 
 func (p *Parser) parseIncrPostfix(left Node) (Node, error) {
 	incr := Increment{
-		Node: left,
-		Post: true,
+		Node:     left,
+		Post:     true,
 		Position: p.curr.Position,
 	}
 	p.next()
@@ -1119,8 +1163,8 @@ func (p *Parser) parseIncrPostfix(left Node) (Node, error) {
 
 func (p *Parser) parseDecrPostfix(left Node) (Node, error) {
 	decr := Decrement{
-		Node: left,
-		Post: true,
+		Node:     left,
+		Post:     true,
 		Position: p.curr.Position,
 	}
 	p.next()
@@ -1185,6 +1229,7 @@ func (p *Parser) parseList() (Node, error) {
 		switch {
 		case p.is(Comma):
 			p.next()
+			p.skip(p.eol)
 		case p.is(Rsquare):
 		default:
 			return nil, p.unexpected()
@@ -1197,8 +1242,41 @@ func (p *Parser) parseList() (Node, error) {
 	return list, nil
 }
 
-func (p *Parser) parseObject() (Node, error) {
-	return nil, nil
+func (p *Parser) parseMap() (Node, error) {
+	obj := Map{
+		Position: p.curr.Position,
+		Nodes:    make(map[Node]Node),
+	}
+	p.next()
+	for !p.done() && !p.is(Rcurly) {
+		p.skip(p.eol)
+		key, err := p.parseExpression(powPrefix)
+		if err != nil {
+			return nil, err
+		}
+		if !p.is(Colon) {
+			return nil, p.unexpected()
+		}
+		p.next()
+		val, err := p.parseExpression(powComma)
+		if err != nil {
+			return nil, err
+		}
+		obj.Nodes[key] = val
+		switch {
+		case p.is(Comma):
+			p.next()
+			p.skip(p.eol)
+		case p.is(Rcurly):
+		default:
+			return nil, p.unexpected()
+		}
+	}
+	if !p.is(Rcurly) {
+		return nil, p.unexpected()
+	}
+	p.next()
+	return obj, nil
 }
 
 func (p *Parser) parseGroup() (Node, error) {
@@ -1264,6 +1342,12 @@ func (p *Parser) power() int {
 		return powLowest
 	}
 	return pow
+}
+
+func (p *Parser) skip(ok func() bool) {
+	for ok() {
+		p.next()
+	}
 }
 
 func (p *Parser) eol() bool {
