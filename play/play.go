@@ -46,6 +46,11 @@ type Value interface {
 	True() Value
 }
 
+type Iterator interface {
+	List() []Value
+	Return()
+}
+
 func isTrue(val Value) bool {
 	b, ok := val.True().(Bool)
 	if !ok {
@@ -77,19 +82,43 @@ func createValueForEnv(val Value, ro bool) Value {
 	}
 }
 
-type Environment struct {
-	environ.Environment[Value]
+type Env struct {
+	parent environ.Environment[Value]
+	values map[string]Value
 }
 
-func (e *Environment) Define(ident string, value Value) error {
-	v, err := e.Environment.Resolve(ident)
+func Empty() environ.Environment[Value] {
+	return Enclosed(nil)
+}
+
+func Enclosed(parent environ.Environment[Value]) environ.Environment[Value] {
+	return &Env{
+		parent: parent,
+		values: make(map[string]Value),
+	}
+}
+
+func (e *Env) Resolve(ident string) (Value, error) {
+	v, ok := e.values[ident]
+	if ok {
+		return v, nil
+	}
+	if e.parent != nil {
+		return e.parent.Resolve(ident)
+	}
+	return nil, fmt.Errorf("%s: %w", ident, environ.ErrDefined)
+}
+
+func (e *Env) Define(ident string, value Value) error {
+	v, err := e.Resolve(ident)
 	if err == nil {
 		x, ok := v.(envValue)
 		if ok && x.Const {
 			return fmt.Errorf("%s: %w", ident, ErrConst)
 		}
 	}
-	return e.Environment.Define(ident, value)
+	e.values[ident] = value
+	return nil
 }
 
 type Function struct {
@@ -398,6 +427,14 @@ func (o Object) Get(prop Value) (Value, error) {
 	return v, nil
 }
 
+func (o Object) Values() []Value {
+	var vs []Value
+	for k := range o.Fields {
+		vs = append(vs, o.Fields[k])
+	}
+	return vs
+}
+
 type Array struct {
 	Object
 	Values []Value
@@ -428,6 +465,14 @@ func (a Array) At(ix Value) (Value, error) {
 	return nil, ErrIndex
 }
 
+func (a Array) List() []Value {
+	return a.Values
+}
+
+func (a Array) Return() {
+	return
+}
+
 type Json struct{}
 
 func (j *Json) Get(_ Value) (Value, error) {
@@ -443,10 +488,7 @@ func (j *Json) Exec(call string, args []Value) (Value, error) {
 }
 
 func Eval(r io.Reader) (Value, error) {
-	env := Environment{
-		Environment: environ.Empty[Value](),
-	}
-	return EvalWithEnv(r, &env)
+	return EvalWithEnv(r, Empty())
 }
 
 func EvalWithEnv(r io.Reader, env environ.Environment[Value]) (Value, error) {
@@ -505,6 +547,7 @@ func eval(n Node, env environ.Environment[Value]) (Value, error) {
 	case Do:
 		return evalDo(n, env)
 	case For:
+		return evalFor(n, env)
 	case Break:
 		return nil, ErrBreak
 	case Continue:
@@ -587,10 +630,11 @@ func evalDo(d Do, env environ.Environment[Value]) (Value, error) {
 	var (
 		res Value
 		err error
+		sub = Enclosed(env)
 	)
 	for {
 		err = nil
-		res, err = eval(d.Body, env)
+		res, err = eval(d.Body, Enclosed(sub))
 		if err != nil {
 			if errors.Is(err, ErrBreak) {
 				err = nil
@@ -601,7 +645,7 @@ func evalDo(d Do, env environ.Environment[Value]) (Value, error) {
 			}
 			return nil, err
 		}
-		tmp, err1 := eval(d.Cdt, env)
+		tmp, err1 := eval(d.Cdt, sub)
 		if err1 != nil {
 			return nil, err
 		}
@@ -616,9 +660,10 @@ func evalWhile(w While, env environ.Environment[Value]) (Value, error) {
 	var (
 		res Value
 		err error
+		sub = Enclosed(env)
 	)
 	for {
-		tmp, err1 := eval(w.Cdt, env)
+		tmp, err1 := eval(w.Cdt, sub)
 		if err1 != nil {
 			return nil, err
 		}
@@ -626,7 +671,7 @@ func evalWhile(w While, env environ.Environment[Value]) (Value, error) {
 			break
 		}
 		err = nil
-		res, err = eval(w.Body, env)
+		res, err = eval(w.Body, Enclosed(sub))
 		if err != nil {
 			if errors.Is(err, ErrBreak) {
 				err = nil
@@ -641,18 +686,86 @@ func evalWhile(w While, env environ.Environment[Value]) (Value, error) {
 	return res, err
 }
 
+func evalFor(f For, env environ.Environment[Value]) (Value, error) {
+	sub := Enclosed(env)
+	switch c := f.Ctrl.(type) {
+	case OfCtrl:
+		return evalForOf(c, f.Body, sub)
+	case InCtrl:
+		return evalForIn(c, f.Body, sub)
+	case ForCtrl:
+		return evalForClassic(c, f.Body, sub)
+	default:
+		return nil, ErrEval
+	}
+}
+
+func evalForOf(ctrl OfCtrl, body Node, env environ.Environment[Value]) (Value, error) {
+	list, err := eval(ctrl.Iter, env)
+	if err != nil {
+		return nil, err
+	}
+	it, ok := list.(Iterator)
+	if !ok {
+		return nil, ErrOp
+	}
+	var res Value
+	for _, v := range it.List() {
+		_ = v
+		res, err = eval(body, Enclosed(env))
+		if err != nil {
+			if errors.Is(err, ErrBreak) || errors.Is(err, ErrThrow) {
+				it.Return()
+			}
+			break
+		}
+	}
+	if errors.Is(err, ErrBreak) {
+		err = nil
+	}
+	return res, err
+}
+
+func evalForIn(ctrl InCtrl, body Node, env environ.Environment[Value]) (Value, error) {
+	list, err := eval(ctrl.Iter, env)
+	if err != nil {
+		return nil, err
+	}
+	it, ok := list.(interface{ Values() []Value })
+	if !ok {
+		return nil, ErrOp
+	}
+	var res Value
+	for _, v := range it.Values() {
+		_ = v
+		res, err = eval(body, Enclosed(env))
+		if err != nil {
+			break
+		}
+	}
+	if errors.Is(err, ErrBreak) {
+		err = nil
+	}
+	return res, err
+}
+
+func evalForClassic(ctrl ForCtrl, body Node, env environ.Environment[Value]) (Value, error) {
+	return nil, nil
+}
+
 func evalIf(i If, env environ.Environment[Value]) (Value, error) {
-	res, err := eval(i.Cdt, env)
+	sub := Enclosed(env)
+	res, err := eval(i.Cdt, sub)
 	if err != nil {
 		return nil, err
 	}
 	if isTrue(res) {
-		return eval(i.Csq, env)
+		return eval(i.Csq, Enclosed(sub))
 	}
 	if i.Alt == nil {
 		return nil, nil
 	}
-	return eval(i.Alt, env)
+	return eval(i.Alt, Enclosed(sub))
 }
 
 func evalCall(c Call, env environ.Environment[Value]) (Value, error) {
@@ -1190,7 +1303,7 @@ func Parse(r io.Reader) *Parser {
 	p.registerPrefix(Lparen, p.parseGroup)
 	p.registerPrefix(Lsquare, p.parseList)
 	p.registerPrefix(Lcurly, p.parseMap)
-	p.registerPrefix(Keyword, p.parseKeywordValue)
+	p.registerPrefix(Keyword, p.parseKeyword)
 
 	p.registerInfix(Dot, p.parseDot)
 	p.registerInfix(Assign, p.parseAssign)
@@ -1282,13 +1395,6 @@ func (p *Parser) parseKeyword() (Node, error) {
 		return p.parseFinally()
 	case "throw":
 		return p.parseThrow()
-	default:
-		return nil, fmt.Errorf("%s: keyword not supported/known", p.curr.Literal)
-	}
-}
-
-func (p *Parser) parseKeywordValue() (Node, error) {
-	switch p.curr.Literal {
 	case "null":
 		return p.parseNull()
 	case "undefined":
@@ -1297,6 +1403,17 @@ func (p *Parser) parseKeywordValue() (Node, error) {
 		return nil, fmt.Errorf("%s: keyword not supported/known", p.curr.Literal)
 	}
 }
+
+// func (p *Parser) parseKeywordValue() (Node, error) {
+// 	switch p.curr.Literal {
+// 	case "null":
+// 		return p.parseNull()
+// 	case "undefined":
+// 		return p.parseUndefined()
+// 	default:
+// 		return nil, fmt.Errorf("%s: keyword not supported/known", p.curr.Literal)
+// 	}
+// }
 
 func (p *Parser) parseKeywordCtrl(left Node) (Node, error) {
 	switch p.curr.Literal {
@@ -1332,11 +1449,30 @@ func (p *Parser) parseLet() (Node, error) {
 		Position: p.curr.Position,
 	}
 	p.next()
-	n, err := p.parseExpression(powLowest)
+	ident, err := p.parseExpression(powAssign)
 	if err != nil {
 		return nil, err
 	}
-	expr.Node = n
+	expr.Node = ident
+	if p.is(Keyword) {
+		return p.parseKeywordCtrl(expr)
+	}
+	if !p.is(Assign) {
+		expr.Node = Assignment{
+			Ident: ident,
+			Node:  Undefined{},
+		}
+		return expr, nil
+	}
+	p.next()
+	value, err := p.parseExpression(powLowest)
+	if err != nil {
+		return nil, err
+	}
+	expr.Node = Assignment{
+		Ident: ident,
+		Node:  value,
+	}
 	return expr, nil
 }
 
@@ -1345,11 +1481,22 @@ func (p *Parser) parseConst() (Node, error) {
 		Position: p.curr.Position,
 	}
 	p.next()
-	n, err := p.parseExpression(powLowest)
+	ident, err := p.parseExpression(powAssign)
 	if err != nil {
 		return nil, err
 	}
-	expr.Node = n
+	if !p.is(Assign) {
+		return nil, p.unexpected()
+	}
+	p.next()
+	value, err := p.parseExpression(powLowest)
+	if err != nil {
+		return nil, err
+	}
+	expr.Node = Assignment{
+		Ident: ident,
+		Node:  value,
+	}
 	return expr, nil
 }
 
@@ -1477,19 +1624,51 @@ func (p *Parser) parseForControl() (Node, error) {
 	}
 	p.next()
 
-	expr, err := p.parseNode()
-	if err != nil {
-		return nil, err
+	var ctrl ForCtrl
+	if !p.is(EOL) {
+		expr, err := p.parseExpression(powLowest)
+		if err != nil {
+			return nil, err
+		}
+		switch expr.(type) {
+		case OfCtrl, InCtrl:
+			if !p.is(Rparen) {
+				return nil, p.unexpected()
+			}
+			p.next()
+			return expr, nil
+		default:
+			ctrl.Init = expr
+		}
 	}
-	switch expr.(type) {
-	case OfCtrl, InCtrl:
-	default:
+	if !p.is(EOL) {
+		return nil, p.unexpected()
 	}
+	p.next()
+	if !p.is(EOL) {
+		expr, err := p.parseExpression(powLowest)
+		if err != nil {
+			return nil, err
+		}
+		ctrl.Cdt = expr
+	}
+	if !p.is(EOL) {
+		return nil, p.unexpected()
+	}
+	p.next()
+	if !p.is(Rparen) {
+		expr, err := p.parseExpression(powLowest)
+		if err != nil {
+			return nil, err
+		}
+		ctrl.After = expr
+	}
+
 	if !p.is(Rparen) {
 		return nil, p.unexpected()
 	}
 	p.next()
-	return expr, nil	
+	return ctrl, nil
 }
 
 func (p *Parser) parseBreak() (Node, error) {
