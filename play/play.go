@@ -1123,6 +1123,7 @@ func eval(n Node, env environ.Environment[Value]) (Value, error) {
 	case If:
 		return evalIf(n, env)
 	case Switch:
+		return evalSwitch(n, env)
 	case While:
 		return evalWhile(n, env)
 	case Do:
@@ -1150,10 +1151,10 @@ func eval(n Node, env environ.Environment[Value]) (Value, error) {
 	case Call:
 		return evalCall(n, env)
 	case Func:
+		return evalFunc(n, env)
 	default:
 		return nil, ErrEval
 	}
-	return nil, nil
 }
 
 func evalBody(b Body, env environ.Environment[Value]) (Value, error) {
@@ -1168,6 +1169,10 @@ func evalBody(b Body, env environ.Environment[Value]) (Value, error) {
 		}
 	}
 	return res, err
+}
+
+func evalFunc(f Func, env environ.Environment[Value]) (Value, error) {
+	return nil, nil
 }
 
 func evalTry(t Try, env environ.Environment[Value]) (Value, error) {
@@ -1373,6 +1378,10 @@ func evalIf(i If, env environ.Environment[Value]) (Value, error) {
 		return nil, nil
 	}
 	return eval(i.Alt, Enclosed(sub))
+}
+
+func evalSwitch(s Switch, env environ.Environment[Value]) (Value, error) {
+	return nil, nil
 }
 
 func evalCall(c Call, env environ.Environment[Value]) (Value, error) {
@@ -2631,6 +2640,9 @@ func (p *Parser) parseDecrPostfix(left Node) (Node, error) {
 
 func (p *Parser) parseIdent() (Node, error) {
 	defer p.next()
+	if !p.is(Ident) {
+		return nil, p.unexpected()
+	}
 	expr := Identifier{
 		Name:     p.curr.Literal,
 		Position: p.curr.Position,
@@ -2640,6 +2652,9 @@ func (p *Parser) parseIdent() (Node, error) {
 
 func (p *Parser) parseString() (Node, error) {
 	defer p.next()
+	if !p.is(Text) {
+		return nil, p.unexpected()
+	}
 	expr := Literal[string]{
 		Value:    p.curr.Literal,
 		Position: p.curr.Position,
@@ -2648,6 +2663,9 @@ func (p *Parser) parseString() (Node, error) {
 }
 
 func (p *Parser) parseNumber() (Node, error) {
+	if !p.is(Number) {
+		return nil, p.unexpected()
+	}
 	n, err := strconv.ParseFloat(p.curr.Literal, 64)
 	if err != nil {
 		return nil, err
@@ -2661,6 +2679,9 @@ func (p *Parser) parseNumber() (Node, error) {
 }
 
 func (p *Parser) parseBoolean() (Node, error) {
+	if !p.is(Boolean) {
+		return nil, p.unexpected()
+	}
 	n, err := strconv.ParseBool(p.curr.Literal)
 	if err != nil {
 		return nil, err
@@ -2674,6 +2695,9 @@ func (p *Parser) parseBoolean() (Node, error) {
 }
 
 func (p *Parser) parseList() (Node, error) {
+	if !p.is(Lsquare) {
+		return nil, p.unexpected()
+	}
 	list := List{
 		Position: p.curr.Position,
 	}
@@ -2702,6 +2726,9 @@ func (p *Parser) parseList() (Node, error) {
 }
 
 func (p *Parser) parseMap() (Node, error) {
+	if !p.is(Lcurly) {
+		return nil, p.unexpected()
+	}
 	obj := Map{
 		Position: p.curr.Position,
 		Nodes:    make(map[Node]Node),
