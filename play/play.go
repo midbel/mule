@@ -2808,6 +2808,67 @@ func (p *Parser) parseList() (Node, error) {
 	return list, nil
 }
 
+func (p *Parser) parseKey() (Node, error) {
+	if p.is(Text) {
+		return p.parseString()
+	}
+	if p.is(Number) {
+		return p.parseNumber()
+	}
+	if p.is(Boolean) {
+		return p.parseBoolean()
+	}
+
+	if !p.is(Ident) {
+		return nil, p.unexpected()
+	}
+
+	ident := Identifier{
+		Name:     p.curr.Literal,
+		Position: p.curr.Position,
+	}
+	p.next()
+	if p.is(Comma) || p.is(Colon) {
+		return ident, nil
+	}
+	if !p.is(Lparen) {
+		return nil, p.unexpected()
+	}
+	p.next()
+
+	fn := Func{
+		Ident: ident.Name,
+	}
+
+	for !p.done() && !p.is(Rparen) {
+		p.skip(p.eol)
+		arg, err := p.parseExpression(powComma)
+		if err != nil {
+			return nil, err
+		}
+		fn.Args = append(fn.Args, arg)
+		switch {
+		case p.is(Comma):
+			p.next()
+			p.skip(p.eol)
+		case p.is(Rparen):
+		default:
+			return nil, p.unexpected()
+		}
+	}
+	if !p.is(Rparen) {
+		return nil, p.unexpected()
+	}
+	p.next()
+
+	body, err := p.parseBody()
+	if err != nil {
+		return nil, err
+	}
+	fn.Body = body
+	return fn, nil
+}
+
 func (p *Parser) parseMap() (Node, error) {
 	if !p.is(Lcurly) {
 		return nil, p.unexpected()
@@ -2819,14 +2880,23 @@ func (p *Parser) parseMap() (Node, error) {
 	p.next()
 	for !p.done() && !p.is(Rcurly) {
 		p.skip(p.eol)
-		key, err := p.parseExpression(powPrefix)
+		key, err := p.parseKey()
 		if err != nil {
 			return nil, err
 		}
-		if p.is(Comma) {
-			p.next()
-			p.skip(p.eol)
-			obj.Nodes[key] = key
+		if p.is(Comma) || p.is(Rcurly) {
+			if fn, ok := key.(Func); ok {
+				ident := Identifier{
+					Name: fn.Ident,
+				}
+				obj.Nodes[ident] = fn
+			} else {
+				obj.Nodes[key] = key
+			}
+			if p.is(Comma) {
+				p.next()
+				p.skip(p.eol)
+			}
 			continue
 		}
 		if !p.is(Colon) {

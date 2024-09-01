@@ -18,7 +18,11 @@ obj = {
 	test: function() {
 		console.log(this)
 		return "testmeifyoucan"
+	},
+	test2() {
+		console.log("test2")
 	}
 }
 
 console.log(obj.test())
+console.log(obj.test2())
