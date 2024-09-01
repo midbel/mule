@@ -2838,6 +2838,7 @@ func (p *Parser) parseKey() (Node, error) {
 
 	fn := Func{
 		Ident: ident.Name,
+		Position: ident.Position,
 	}
 
 	for !p.done() && !p.is(Rparen) {
