@@ -1134,6 +1134,7 @@ func eval(n Node, env environ.Environment[Value]) (Value, error) {
 	case Continue:
 		return nil, ErrContinue
 	case Try:
+		return evalTry(n, env)
 	case Throw:
 		v, err := eval(n.Node, env)
 		if err == nil {
@@ -1164,6 +1165,31 @@ func evalBody(b Body, env environ.Environment[Value]) (Value, error) {
 		res, err = eval(n, env)
 		if err != nil {
 			break
+		}
+	}
+	return res, err
+}
+
+func evalTry(t Try, env environ.Environment[Value]) (Value, error) {
+	res, err := eval(t.Node, Enclosed(env))
+	if err != nil && t.Catch != nil {
+		catch, ok := t.Catch.(Catch)
+		if !ok {
+			return nil, ErrEval
+		}
+		sub := Enclosed(env)
+		ev, err := eval(catch.Err, sub)
+		if err != nil {
+			return nil, err
+		}
+		sub.Define("", letValue(ev))
+		if _, err := eval(catch.Body, sub); err != nil {
+			return nil, err
+		}
+	}
+	if t.Finally != nil {
+		if _, err := eval(t.Finally, Enclosed(env)); err != nil {
+			return nil, err
 		}
 	}
 	return res, err
@@ -1865,6 +1891,7 @@ type Func struct {
 	Ident string
 	Args  []Node
 	Body  Node
+	Arrow bool
 	Position
 }
 
@@ -1974,6 +2001,7 @@ func Parse(r io.Reader) *Parser {
 	p.registerInfix(Or, p.parseBinary)
 	p.registerInfix(Incr, p.parseIncrPostfix)
 	p.registerInfix(Decr, p.parseDecrPostfix)
+	p.registerInfix(Arrow, p.parseArrow)
 	p.registerInfix(Lparen, p.parseCall)
 	p.registerInfix(Lsquare, p.parseIndex)
 	p.registerInfix(Question, p.parseTernary)
@@ -2355,6 +2383,10 @@ func (p *Parser) parseReturn() (Node, error) {
 	}
 	expr.Node = n
 	return expr, nil
+}
+
+func (p *Parser) parseArrow(left Node) (Node, error) {
+	return nil, nil
 }
 
 func (p *Parser) parseFunction() (Node, error) {
@@ -2913,6 +2945,7 @@ const (
 	Ge
 	And
 	Or
+	Arrow
 	Dot
 	Comma
 	Question
@@ -2977,6 +3010,8 @@ func (t Token) String() string {
 		return "<eol>"
 	case Dot:
 		return "<dot>"
+	case Arrow:
+		return "<arrow>"
 	case Comma:
 		return "<comma>"
 	case Lparen:
@@ -3209,6 +3244,10 @@ func (s *Scanner) scanOperator(tok *Token) {
 		tok.Type = Mod
 	case equal:
 		tok.Type = Assign
+		if s.peek() == rangle {
+			s.read()
+			tok.Type = Arrow
+		}
 		if s.peek() == equal {
 			s.read()
 			tok.Type = Eq
