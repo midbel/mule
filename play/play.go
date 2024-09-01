@@ -2886,14 +2886,14 @@ func (p *Parser) parseMap() (Node, error) {
 			return nil, err
 		}
 		if p.is(Comma) || p.is(Rcurly) {
+			val := key
 			if fn, ok := key.(Func); ok {
-				ident := Identifier{
+				key = Identifier{
 					Name: fn.Ident,
 				}
-				obj.Nodes[ident] = fn
-			} else {
-				obj.Nodes[key] = key
+				val = fn
 			}
+			obj.Nodes[key] = val
 			if p.is(Comma) {
 				p.next()
 				p.skip(p.eol)
