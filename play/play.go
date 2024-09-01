@@ -154,6 +154,7 @@ type Parameter struct {
 
 type Function struct {
 	Ident string
+	Arrow bool
 	Args  []Parameter
 	Body  Node
 	Env   environ.Environment[Value]
@@ -1226,6 +1227,7 @@ func evalFunc(f Func, env environ.Environment[Value]) (Value, error) {
 		Ident: f.Ident,
 		Env:   Enclosed(Default()),
 		Body:  f.Body,
+		Arrow: f.Arrow,
 	}
 	for _, a := range f.Args {
 		switch a := a.(type) {

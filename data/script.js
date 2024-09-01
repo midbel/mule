@@ -26,3 +26,7 @@ obj = {
 
 console.log(obj.test())
 console.log(obj.test2())
+
+fib2(function() {
+	return 1
+})
