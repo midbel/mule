@@ -36,12 +36,6 @@ func execIsNaN(args []Value) (Value, error) {
 	return nil, nil
 }
 
-var builtins = map[string]func([]Value) (Value, error){
-	"parseInt":   execParseInt,
-	"parseFloat": execParseFloat,
-	"isNaN":      execIsNaN,
-}
-
 type Value interface {
 	True() Value
 }
@@ -121,6 +115,26 @@ func (e *Env) Define(ident string, value Value) error {
 	return nil
 }
 
+type BuiltinFunc struct {
+	Ident string
+	Func  func([]Value) (Value, error)
+}
+
+func createBuiltinFunc(ident string, fn func([]Value) (Value, error)) Value {
+	return BuiltinFunc{
+		Ident: ident,
+		Func:  fn,
+	}
+}
+
+func (b BuiltinFunc) True() Value {
+	return getBool(true)
+}
+
+func (b BuiltinFunc) Call(args []Value) (Value, error) {
+	return b.Func(args)
+}
+
 type Function struct {
 	Body Node
 }
@@ -168,6 +182,34 @@ func (_ Void) Pow(_ Value) (Value, error) {
 	return nan(), nil
 }
 
+func (_ Void) Equal(other Value) (Value, error) {
+	if !isUndefined(other) {
+		return getBool(false), nil
+	}
+	return getBool(true), nil
+}
+
+func (_ Void) StrictEqual(other Value) (Value, error) {
+	if !isUndefined(other) {
+		return getBool(false), nil
+	}
+	return getBool(true), nil
+}
+
+func (_ Void) NotEqual(other Value) (Value, error) {
+	if isUndefined(other) {
+		return getBool(false), nil
+	}
+	return getBool(true), nil
+}
+
+func (_ Void) StrictNotEqual(other Value) (Value, error) {
+	if isUndefined(other) {
+		return getBool(false), nil
+	}
+	return getBool(true), nil
+}
+
 type Nil struct{}
 
 func isNull(v Value) bool {
@@ -205,6 +247,34 @@ func (_ Nil) Mod(_ Value) (Value, error) {
 
 func (_ Nil) Pow(_ Value) (Value, error) {
 	return getFloat(0), nil
+}
+
+func (_ Nil) Equal(other Value) (Value, error) {
+	if !isNull(other) {
+		return getBool(false), nil
+	}
+	return getBool(true), nil
+}
+
+func (_ Nil) StrictEqual(other Value) (Value, error) {
+	if !isNull(other) {
+		return getBool(false), nil
+	}
+	return getBool(true), nil
+}
+
+func (_ Nil) NotEqual(other Value) (Value, error) {
+	if isNull(other) {
+		return getBool(false), nil
+	}
+	return getBool(true), nil
+}
+
+func (_ Nil) StrictNotEqual(other Value) (Value, error) {
+	if isNull(other) {
+		return getBool(false), nil
+	}
+	return getBool(true), nil
 }
 
 type Float struct {
@@ -339,6 +409,140 @@ func (f Float) Pow(other Value) (Value, error) {
 	return getFloat(x), nil
 }
 
+func (f Float) Equal(other Value) (Value, error) {
+	if isNull(other) || isUndefined(other) {
+		return getBool(false), nil
+	}
+	switch other := other.(type) {
+	case Float:
+		return getBool(f.value == other.value), nil
+	case String:
+		x, err := strconv.ParseFloat(other.value, 64)
+		if err != nil {
+			return getBool(false), nil
+		}
+		return getBool(f.value == x), nil
+	case Bool:
+		var x float64
+		if other.value {
+			x = 1
+		}
+		return getBool(f.value == x), nil
+	default:
+		return nil, ErrOp
+	}
+}
+
+func (f Float) StrictEqual(other Value) (Value, error) {
+	x, ok := other.(Float)
+	if !ok {
+		return getBool(ok), nil
+	}
+	return getBool(f.value == x.value), nil
+}
+
+func (f Float) NotEqual(other Value) (Value, error) {
+	if isNull(other) || isUndefined(other) {
+		return getBool(false), nil
+	}
+	switch other := other.(type) {
+	case Float:
+		return getBool(f.value != other.value), nil
+	case String:
+		x, err := strconv.ParseFloat(other.value, 64)
+		if err != nil {
+			return getBool(true), nil
+		}
+		return getBool(f.value != x), nil
+	case Bool:
+		var x float64
+		if other.value {
+			x = 1
+		}
+		return getBool(f.value != x), nil
+	default:
+		return nil, ErrOp
+	}
+}
+
+func (f Float) StrictNotEqual(other Value) (Value, error) {
+	x, ok := other.(Float)
+	if !ok {
+		return getBool(ok), nil
+	}
+	return getBool(f.value != x.value), nil
+}
+
+func (f Float) LesserThan(other Value) (Value, error) {
+	if isNull(other) || isUndefined(other) {
+		return getBool(false), nil
+	}
+	switch other := other.(type) {
+	case Float:
+		return getBool(f.value < other.value), nil
+	case String:
+		x, err := strconv.ParseFloat(other.value, 64)
+		if err != nil {
+			return getBool(false), nil
+		}
+		return getBool(f.value < x), nil
+	case Bool:
+		var x float64
+		if other.value {
+			x = 1
+		}
+		return getBool(f.value < x), nil
+	default:
+		return nil, ErrOp
+	}
+}
+
+func (f Float) LesserEqual(other Value) (Value, error) {
+	less, err := f.LesserThan(other)
+	if err != nil {
+		return nil, err
+	}
+	if isTrue(less) {
+		return less, nil
+	}
+	return f.Equal(other)
+}
+
+func (f Float) GreaterThan(other Value) (Value, error) {
+	if isNull(other) || isUndefined(other) {
+		return getBool(false), nil
+	}
+	switch other := other.(type) {
+	case Float:
+		return getBool(f.value > other.value), nil
+	case String:
+		x, err := strconv.ParseFloat(other.value, 64)
+		if err != nil {
+			return getBool(false), nil
+		}
+		return getBool(f.value > x), nil
+	case Bool:
+		var x float64
+		if other.value {
+			x = 1
+		}
+		return getBool(f.value > x), nil
+	default:
+		return nil, ErrOp
+	}
+}
+
+func (f Float) GreaterEqual(other Value) (Value, error) {
+	great, err := f.GreaterThan(other)
+	if err != nil {
+		return nil, err
+	}
+	if isTrue(great) {
+		return great, nil
+	}
+	return f.Equal(other)
+}
+
 type Bool struct {
 	value bool
 }
@@ -355,6 +559,37 @@ func (b Bool) True() Value {
 
 func (b Bool) Not() Value {
 	return getBool(!b.value)
+}
+
+func (b Bool) Float() Value {
+	if b.value {
+		return getFloat(1)
+	}
+	return getFloat(0)
+}
+
+func (b Bool) Equal(other Value) (Value, error) {
+	return getBool(b.value == isTrue(other)), nil
+}
+
+func (b Bool) StrictEqual(other Value) (Value, error) {
+	x, ok := other.(Bool)
+	if !ok {
+		return getBool(ok), nil
+	}
+	return getBool(b.value == x.value), nil
+}
+
+func (b Bool) NotEqual(other Value) (Value, error) {
+	return getBool(b.value != isTrue(other)), nil
+}
+
+func (b Bool) StrictNotEqual(other Value) (Value, error) {
+	x, ok := other.(Bool)
+	if !ok {
+		return getBool(ok), nil
+	}
+	return getBool(b.value != x.value), nil
 }
 
 type String struct {
@@ -394,6 +629,116 @@ func (s String) Add(other Value) (Value, error) {
 	default:
 		return nil, ErrOp
 	}
+}
+
+func (s String) Equal(other Value) (Value, error) {
+	if isNull(other) || isUndefined(other) {
+		return getBool(false), nil
+	}
+	switch other := other.(type) {
+	case String:
+		return getBool(s.value == other.value), nil
+	case Float:
+		str := strconv.FormatFloat(other.value, 'f', -1, 64)
+		return getBool(s.value == str), nil
+	case Bool:
+		str := strconv.FormatBool(other.value)
+		return getBool(s.value == str), nil
+	default:
+		return nil, ErrOp
+	}
+}
+
+func (s String) StrictEqual(other Value) (Value, error) {
+	x, ok := other.(String)
+	if !ok {
+		return getBool(ok), nil
+	}
+	return getBool(s.value == x.value), nil
+}
+
+func (s String) NotEqual(other Value) (Value, error) {
+	if isNull(other) || isUndefined(other) {
+		return getBool(false), nil
+	}
+	switch other := other.(type) {
+	case String:
+		return getBool(s.value != other.value), nil
+	case Float:
+		str := strconv.FormatFloat(other.value, 'f', -1, 64)
+		return getBool(s.value != str), nil
+	case Bool:
+		str := strconv.FormatBool(other.value)
+		return getBool(s.value != str), nil
+	default:
+		return nil, ErrOp
+	}
+}
+
+func (s String) StrictNotEqual(other Value) (Value, error) {
+	x, ok := other.(String)
+	if !ok {
+		return getBool(ok), nil
+	}
+	return getBool(s.value != x.value), nil
+}
+
+func (s String) LesserThan(other Value) (Value, error) {
+	if isNull(other) || isUndefined(other) {
+		return getBool(false), nil
+	}
+	switch other := other.(type) {
+	case String:
+		return getBool(s.value < other.value), nil
+	case Float:
+		str := strconv.FormatFloat(other.value, 'f', -1, 64)
+		return getBool(s.value < str), nil
+	case Bool:
+		str := strconv.FormatBool(other.value)
+		return getBool(s.value < str), nil
+	default:
+		return nil, ErrOp
+	}
+}
+
+func (s String) LesserEqual(other Value) (Value, error) {
+	less, err := s.LesserThan(other)
+	if err != nil {
+		return nil, err
+	}
+	if isTrue(less) {
+		return less, nil
+	}
+	return s.Equal(other)
+}
+
+func (s String) GreaterThan(other Value) (Value, error) {
+	if isNull(other) || isUndefined(other) {
+		return getBool(false), nil
+	}
+	switch other := other.(type) {
+	case String:
+		return getBool(s.value > other.value), nil
+	case Float:
+		str := strconv.FormatFloat(other.value, 'f', -1, 64)
+		return getBool(s.value > str), nil
+	case Bool:
+		str := strconv.FormatBool(other.value)
+		return getBool(s.value > str), nil
+	default:
+		return nil, ErrOp
+	}
+}
+
+func (s String) GreaterEqual(other Value) (Value, error) {
+	great, err := s.GreaterThan(other)
+	if err != nil {
+		return nil, err
+	}
+	if isTrue(great) {
+		return great, nil
+	}
+	return s.Equal(other)
 }
 
 type Object struct {
@@ -473,22 +818,27 @@ func (a Array) Return() {
 	return
 }
 
-type Json struct{}
+type Console struct{}
 
-func (j *Json) Get(_ Value) (Value, error) {
-	return nil, nil
+func (c Console) String() string {
+	return "console"
 }
 
-func (j *Json) Set(_ string, _ Value) error {
-	return nil
+func (c Console) True() Value {
+	return getBool(true)
 }
 
-func (j *Json) Exec(call string, args []Value) (Value, error) {
+func (c Console) Call(ident string, args []Value) (Value, error) {
 	return nil, nil
 }
 
 func Eval(r io.Reader) (Value, error) {
-	return EvalWithEnv(r, Empty())
+	top := Empty()
+	top.Define("console", Console{})
+	top.Define("parseInt", createBuiltinFunc("parseInt", execParseInt))
+	top.Define("parseFloat", createBuiltinFunc("parseFloat", execParseFloat))
+	top.Define("isNaN", createBuiltinFunc("isNaN", execIsNaN))
+	return EvalWithEnv(r, Enclosed(top))
 }
 
 func EvalWithEnv(r io.Reader, env environ.Environment[Value]) (Value, error) {
@@ -500,6 +850,7 @@ func EvalWithEnv(r io.Reader, env environ.Environment[Value]) (Value, error) {
 }
 
 func eval(n Node, env environ.Environment[Value]) (Value, error) {
+	fmt.Printf("eval: %T: %+[1]v\n", n)
 	switch n := n.(type) {
 	case Body:
 		return evalBody(n, env)
@@ -773,16 +1124,9 @@ func evalCall(c Call, env environ.Environment[Value]) (Value, error) {
 	if !ok {
 		return nil, ErrEval
 	}
-	if val, err := env.Resolve(ident.Name); err == nil {
-		fn, ok := val.(Function)
-		if !ok {
-			return nil, ErrOp
-		}
-		return eval(fn.Body, env)
-	}
-	fn, ok := builtins[ident.Name]
-	if !ok {
-		return nil, ErrEval
+	value, err := env.Resolve(ident.Name)
+	if err != nil {
+		return nil, err
 	}
 	var args []Value
 	for i := range c.Args {
@@ -792,7 +1136,14 @@ func evalCall(c Call, env environ.Environment[Value]) (Value, error) {
 		}
 		args = append(args, a)
 	}
-	return fn(args)
+	if call, ok := value.(interface{ Call([]Value) (Value, error) }); ok {
+		return call.Call(args)
+	}
+	fn, ok := value.(Function)
+	if !ok {
+		return nil, ErrOp
+	}
+	return eval(fn.Body, env)
 }
 
 func evalMap(a Map, env environ.Environment[Value]) (Value, error) {
@@ -841,15 +1192,25 @@ func evalAccess(a Access, env environ.Environment[Value]) (Value, error) {
 	if err != nil {
 		return nil, err
 	}
-	ident, ok := a.Ident.(Identifier)
-	if !ok {
-		return nil, ErrEval
+	if i, ok := a.Ident.(Identifier); ok {
+		get, ok := res.(interface{ Get(Value) (Value, error) })
+		if !ok {
+			return nil, ErrOp
+		}
+		return get.Get(getString(i.Name))
 	}
-	get, ok := res.(interface{ Get(Value) (Value, error) })
-	if !ok {
-		return nil, ErrOp
+	if i, ok := a.Ident.(Call); ok {
+		call, ok := res.(interface {
+			Call(string, []Value) (Value, error)
+		})
+		if !ok {
+			return nil, ErrOp
+		}
+		_ = i
+		_ = call
+		return nil, nil
 	}
-	return get.Get(getString(ident.Name))
+	return nil, ErrOp
 }
 
 func evalIndex(i Index, env environ.Environment[Value]) (Value, error) {
@@ -994,6 +1355,54 @@ func evalBinary(b Binary, env environ.Environment[Value]) (Value, error) {
 		return getBool(isTrue(left) && isTrue(right)), nil
 	case Or:
 		return getBool(isTrue(left) || isTrue(right)), nil
+	case Eq:
+		left, ok := left.(interface{ Equal(Value) (Value, error) })
+		if !ok {
+			return nil, ErrOp
+		}
+		return left.Equal(right)
+	case Seq:
+		left, ok := left.(interface{ StrictEqual(Value) (Value, error) })
+		if !ok {
+			return nil, ErrOp
+		}
+		return left.StrictEqual(right)
+	case Ne:
+		left, ok := left.(interface{ NotEqual(Value) (Value, error) })
+		if !ok {
+			return nil, ErrOp
+		}
+		return left.NotEqual(right)
+	case Sne:
+		left, ok := left.(interface{ StrictNotEqual(Value) (Value, error) })
+		if !ok {
+			return nil, ErrOp
+		}
+		return left.StrictNotEqual(right)
+	case Lt:
+		left, ok := left.(interface{ LesserThan(Value) (Value, error) })
+		if !ok {
+			return nil, ErrOp
+		}
+		return left.LesserThan(right)
+	case Le:
+		left, ok := left.(interface{ LesserEqual(Value) (Value, error) })
+		if !ok {
+			return nil, ErrOp
+		}
+		return left.LesserEqual(right)
+	case Gt:
+		left, ok := left.(interface{ GreaterThan(Value) (Value, error) })
+		if !ok {
+			return nil, ErrOp
+		}
+		return left.GreaterThan(right)
+	case Ge:
+		left, ok := left.(interface{ GreaterEqual(Value) (Value, error) })
+		if !ok {
+			return nil, ErrOp
+		}
+		return left.GreaterEqual(right)
 	case Add:
 		left, ok := left.(interface{ Add(Value) (Value, error) })
 		if !ok {
@@ -2199,7 +2608,9 @@ const (
 	Assign
 	Not
 	Eq
+	Seq
 	Ne
+	Sne
 	Lt
 	Le
 	Gt
@@ -2306,8 +2717,12 @@ func (t Token) String() string {
 		return "<not>"
 	case Eq:
 		return "<eq>"
+	case Seq:
+		return "<seq>"
 	case Ne:
 		return "<ne>"
+	case Sne:
+		return "<sne>"
 	case Lt:
 		return "<lt>"
 	case Le:
@@ -2502,11 +2917,19 @@ func (s *Scanner) scanOperator(tok *Token) {
 			s.read()
 			tok.Type = Eq
 		}
+		if s.peek() == equal && tok.Type == Eq {
+			s.read()
+			tok.Type = Seq
+		}
 	case bang:
 		tok.Type = Not
 		if s.peek() == equal {
 			s.read()
 			tok.Type = Ne
+		}
+		if s.peek() == equal && tok.Type == Ne {
+			s.read()
+			tok.Type = Sne
 		}
 	case langle:
 		tok.Type = Lt
