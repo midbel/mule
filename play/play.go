@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"math"
+	"os"
 	"slices"
 	"strconv"
 	"unicode/utf8"
@@ -150,11 +151,15 @@ func isUndefined(v Value) bool {
 	return ok
 }
 
-func (v Void) True() Value {
+func (_ Void) String() string {
+	return "undefined"
+}
+
+func (_ Void) True() Value {
 	return getBool(false)
 }
 
-func (v Void) Rev() Value {
+func (_ Void) Rev() Value {
 	return nan()
 }
 
@@ -217,7 +222,11 @@ func isNull(v Value) bool {
 	return ok
 }
 
-func (n Nil) True() Value {
+func (_ Nil) String() string {
+	return "null"
+}
+
+func (_ Nil) True() Value {
 	return getBool(false)
 }
 
@@ -289,6 +298,10 @@ func getFloat(val float64) Float {
 
 func nan() Float {
 	return getFloat(math.NaN())
+}
+
+func (f Float) String() string {
+	return strconv.FormatFloat(f.value, 'f', -1, 64)
 }
 
 func (f Float) True() Value {
@@ -553,6 +566,10 @@ func getBool(val bool) Value {
 	}
 }
 
+func (b Bool) String() string {
+	return strconv.FormatBool(b.value)
+}
+
 func (b Bool) True() Value {
 	return getBool(b.value)
 }
@@ -600,6 +617,10 @@ func getString(val string) Value {
 	return String{
 		value: val,
 	}
+}
+
+func (s String) String() string {
+	return s.value
 }
 
 func (s String) True() Value {
@@ -751,6 +772,35 @@ func createObject() Object {
 	}
 }
 
+func (o Object) String() string {
+	var (
+		buf bytes.Buffer
+		ix int
+	)
+	buf.WriteRune(lcurly)
+	for k, v := range o.Fields {
+		if ix > 0 {
+			buf.WriteRune(comma)
+			buf.WriteRune(space)
+		}
+		fmt.Fprint(&buf, k)
+		buf.WriteRune(colon)
+		buf.WriteRune(space)
+
+		_, quoted := v.(String)
+		if quoted {
+			buf.WriteRune(dquote)
+		}
+		fmt.Fprint(&buf, v)
+		if quoted {
+			buf.WriteRune(dquote)
+		}
+		ix++
+	}
+	buf.WriteRune(rcurly)
+	return buf.String()
+}
+
 func (o Object) True() Value {
 	return getBool(len(o.Fields) != 0)
 }
@@ -791,6 +841,20 @@ func createArray() Array {
 	}
 }
 
+func (a Array) String() string {
+	var buf bytes.Buffer
+	buf.WriteRune(lsquare)
+	for i := range a.Values {
+		if i > 0 {
+			buf.WriteRune(comma)
+			buf.WriteRune(space)
+		}
+		fmt.Fprint(&buf, a.Values[i])
+	}
+	buf.WriteRune(rsquare)
+	return buf.String()
+}
+
 func (a Array) True() Value {
 	return getBool(len(a.Values) != 0)
 }
@@ -829,7 +893,21 @@ func (c Console) True() Value {
 }
 
 func (c Console) Call(ident string, args []Value) (Value, error) {
-	return nil, nil
+	var w io.Writer
+	switch ident {
+	case "log":
+		w = os.Stdout
+	case "error":
+		w = os.Stderr
+	default:
+		return nil, fmt.Errorf("%s: undefined function", ident)
+	}
+	for i := range args {
+		fmt.Fprint(w, args[i])
+		fmt.Fprint(w, " ")
+	}
+	fmt.Fprintln(w)
+	return Void{}, nil
 }
 
 func Eval(r io.Reader) (Value, error) {
@@ -850,7 +928,6 @@ func EvalWithEnv(r io.Reader, env environ.Environment[Value]) (Value, error) {
 }
 
 func eval(n Node, env environ.Environment[Value]) (Value, error) {
-	fmt.Printf("eval: %T: %+[1]v\n", n)
 	switch n := n.(type) {
 	case Body:
 		return evalBody(n, env)
@@ -1206,9 +1283,19 @@ func evalAccess(a Access, env environ.Environment[Value]) (Value, error) {
 		if !ok {
 			return nil, ErrOp
 		}
-		_ = i
-		_ = call
-		return nil, nil
+		ident, ok := i.Ident.(Identifier)
+		if !ok {
+			return nil, ErrEval
+		}
+		var args []Value
+		for j := range i.Args {
+			a, err := eval(i.Args[j], env)
+			if err != nil {
+				return nil, err
+			}
+			args = append(args, a)
+		}
+		return call.Call(ident.Name, args)
 	}
 	return nil, ErrOp
 }
@@ -2523,7 +2610,7 @@ func (p *Parser) parseCall(left Node) (Node, error) {
 	p.next()
 	for !p.done() && !p.is(Rparen) {
 		p.skip(p.eol)
-		a, err := p.parseExpression(powLowest)
+		a, err := p.parseExpression(powComma)
 		if err != nil {
 			return nil, err
 		}
