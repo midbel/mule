@@ -149,14 +149,14 @@ func (b BuiltinFunc) Call(args []Value) (Value, error) {
 
 type Parameter struct {
 	Name string
-	Value Node
+	Value
 }
 
 type Function struct {
 	Ident string
-	Args []Parameter
-	Body Node
-	Env environ.Environment[Value]
+	Args  []Parameter
+	Body  Node
+	Env   environ.Environment[Value]
 }
 
 func (f Function) True() Value {
@@ -1180,7 +1180,38 @@ func evalBody(b Body, env environ.Environment[Value]) (Value, error) {
 }
 
 func evalFunc(f Func, env environ.Environment[Value]) (Value, error) {
-	return nil, nil
+	fn := Function{
+		Ident: f.Ident,
+		Env:   Empty(),
+		Body:  f.Body,
+	}
+	for _, a := range f.Args {
+		switch a := a.(type) {
+		case Identifier:
+			p := Parameter{
+				Name:  a.Name,
+				Value: Void{},
+			}
+			fn.Args = append(fn.Args, p)
+		case Assignment:
+			ident, ok := a.Ident.(Identifier)
+			if !ok {
+				return nil, ErrEval
+			}
+			val, err := eval(a.Node, env)
+			if err != nil {
+				return nil, err
+			}
+			p := Parameter{
+				Name:  ident.Name,
+				Value: val,
+			}
+			fn.Args = append(fn.Args, p)
+		default:
+			return nil, ErrEval
+		}
+	}
+	return fn, env.Define(fn.Ident, fn)
 }
 
 func evalTry(t Try, env environ.Environment[Value]) (Value, error) {
@@ -2483,7 +2514,7 @@ func (p *Parser) parseTry() (Node, error) {
 
 func (p *Parser) parseCatch() (Node, error) {
 	catch := Catch{
-		Position: p.curr.Position,	
+		Position: p.curr.Position,
 	}
 	p.next()
 	if !p.is(Lparen) {
