@@ -869,7 +869,9 @@ func (o Object) Call(ident string, args []Value) (Value, error) {
 	if !ok {
 		return nil, fmt.Errorf("%s: property not callable", ident)
 	}
-	call.Env.Define("this", o)
+	if !call.Arrow {
+		call.Env.Define("this", o)
+	}
 	return call.Call(args)
 }
 
