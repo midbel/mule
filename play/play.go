@@ -147,8 +147,16 @@ func (b BuiltinFunc) Call(args []Value) (Value, error) {
 	return b.Func(args)
 }
 
+type Parameter struct {
+	Name string
+	Value Node
+}
+
 type Function struct {
+	Ident string
+	Args []Parameter
 	Body Node
+	Env environ.Environment[Value]
 }
 
 func (f Function) True() Value {
