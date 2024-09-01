@@ -2837,7 +2837,7 @@ func (p *Parser) parseKey() (Node, error) {
 	p.next()
 
 	fn := Func{
-		Ident: ident.Name,
+		Ident:    ident.Name,
 		Position: ident.Position,
 	}
 
