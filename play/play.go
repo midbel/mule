@@ -2,6 +2,7 @@ package play
 
 import (
 	"bytes"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -9,6 +10,7 @@ import (
 	"os"
 	"slices"
 	"strconv"
+	"strings"
 	"unicode/utf8"
 
 	"github.com/midbel/mule/environ"
@@ -21,8 +23,10 @@ var (
 	ErrThrow    = errors.New("throw")
 	ErrEval     = errors.New("node can not be evalualed in current context")
 	ErrOp       = errors.New("unsupported operation")
+	ErrZero     = errors.New("division by zero")
 	ErrConst    = errors.New("constant variable can not be reassigned")
 	ErrIndex    = errors.New("index out of bound")
+	ErrArgument = errors.New("invalid number of arguments")
 )
 
 func execParseInt(args []Value) (Value, error) {
@@ -34,7 +38,14 @@ func execParseFloat(args []Value) (Value, error) {
 }
 
 func execIsNaN(args []Value) (Value, error) {
-	return nil, nil
+	if len(args) != 1 {
+		return getBool(true), nil
+	}
+	v, ok := args[0].(Float)
+	if !ok {
+		return getBool(false), nil
+	}
+	return getBool(math.IsNaN(v.value)), nil
 }
 
 type Value interface {
@@ -388,6 +399,9 @@ func (f Float) Div(other Value) (Value, error) {
 	if !ok {
 		return nil, ErrOp
 	}
+	if right.value == 0 {
+		return nil, ErrZero
+	}
 	x := f.value / right.value
 	return getFloat(x), nil
 }
@@ -402,6 +416,9 @@ func (f Float) Mod(other Value) (Value, error) {
 	right, ok := other.(Float)
 	if !ok {
 		return nil, ErrOp
+	}
+	if right.value == 0 {
+		return nil, ErrZero
 	}
 	x := math.Mod(f.value, right.value)
 	return getFloat(x), nil
@@ -775,7 +792,7 @@ func createObject() Object {
 func (o Object) String() string {
 	var (
 		buf bytes.Buffer
-		ix int
+		ix  int
 	)
 	buf.WriteRune(lcurly)
 	for k, v := range o.Fields {
@@ -882,6 +899,140 @@ func (a Array) Return() {
 	return
 }
 
+type Math struct{}
+
+func (m Math) String() string {
+	return "Math"
+}
+
+func (m Math) True() Value {
+	return getBool(true)
+}
+
+func (m Math) Call(ident string, args []Value) (Value, error) {
+	return Void{}, nil
+}
+
+type Json struct{}
+
+func (j Json) String() string {
+	return "JSON"
+}
+
+func (j Json) True() Value {
+	return getBool(true)
+}
+
+func (j Json) Call(ident string, args []Value) (Value, error) {
+	switch ident {
+	case "parse":
+		return j.parse(args)
+	case "stringify":
+		return j.stringify(args)
+	default:
+		return nil, fmt.Errorf("%s: undefined function", ident)
+	}
+}
+
+func (j Json) parse(args []Value) (Value, error) {
+	if len(args) != 1 {
+		return Void{}, ErrArgument
+	}
+	str, ok := args[0].(String)
+	if !ok {
+		return args[0], nil
+	}
+	var (
+		obj interface{}
+		buf = strings.NewReader(str.value)
+	)
+	if err := json.NewDecoder(buf).Decode(&obj); err != nil {
+		return Void{}, err
+	}
+	return nativeToValues(obj)
+}
+
+func (j Json) stringify(args []Value) (Value, error) {
+	if len(args) != 1 {
+		return Void{}, ErrArgument
+	}
+	v, err := valuesToNative(args[0])
+	if err != nil {
+		return nil, err
+	}
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(v); err != nil {
+		return nil, err
+	}
+	return getString(buf.String()), nil
+}
+
+func valuesToNative(arg Value) (interface{}, error) {
+	switch a := arg.(type) {
+	case String:
+		return a.value, nil
+	case Float:
+		return a.value, nil
+	case Bool:
+		return a.value, nil
+	case Array:
+		var arr []interface{}
+		for i := range a.Values {
+			v, err := valuesToNative(a.Values[i])
+			if err != nil {
+				return nil, err
+			}
+			arr = append(arr, v)
+		}
+		return arr, nil
+	case Object:
+		arr := make(map[string]interface{})
+		for k, v := range a.Fields {
+			vv, err := valuesToNative(v)
+			if err != nil {
+				return nil, err
+			}
+			arr[fmt.Sprintf("%s", k)] = vv
+		}
+		return arr, nil
+	default:
+		return nil, fmt.Errorf("type can not be converted to json")
+	}
+}
+
+func nativeToValues(obj interface{}) (Value, error) {
+	switch v := obj.(type) {
+	case string:
+		return getString(v), nil
+	case float64:
+		return getFloat(v), nil
+	case bool:
+		return getBool(v), nil
+	case []interface{}:
+		arr := createArray()
+		for i := range v {
+			a, err := nativeToValues(v[i])
+			if err != nil {
+				return nil, err
+			}
+			arr.Values = append(arr.Values, a)
+		}
+		return arr, nil
+	case map[string]interface{}:
+		obj := createObject()
+		for kv, vv := range v {
+			a, err := nativeToValues(vv)
+			if err != nil {
+				return nil, err
+			}
+			obj.Fields[getString(kv)] = a
+		}
+		return obj, nil
+	default:
+		return nil, fmt.Errorf("%v: unsupported JSON type", obj)
+	}
+}
+
 type Console struct{}
 
 func (c Console) String() string {
@@ -913,6 +1064,8 @@ func (c Console) Call(ident string, args []Value) (Value, error) {
 func Eval(r io.Reader) (Value, error) {
 	top := Empty()
 	top.Define("console", Console{})
+	top.Define("JSON", Json{})
+	top.Define("Math", Math{})
 	top.Define("parseInt", createBuiltinFunc("parseInt", execParseInt))
 	top.Define("parseFloat", createBuiltinFunc("parseFloat", execParseFloat))
 	top.Define("isNaN", createBuiltinFunc("isNaN", execIsNaN))
@@ -2922,7 +3075,7 @@ func (s *Scanner) scanIdent(tok *Token) {
 func (s *Scanner) scanString(tok *Token) {
 	quote := s.char
 	s.read()
-	for !s.done() && !isQuote(s.char) {
+	for !s.done() && s.char != quote {
 		s.write()
 		s.read()
 	}
