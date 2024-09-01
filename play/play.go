@@ -1145,6 +1145,8 @@ func eval(n Node, env environ.Environment[Value]) (Value, error) {
 		return evalList(n, env)
 	case Map:
 		return evalMap(n, env)
+	case Group:
+		return evalGroup(n, env)
 	case Literal[string]:
 		return getString(n.Value), nil
 	case Literal[float64]:
@@ -1494,6 +1496,20 @@ func evalCall(c Call, env environ.Environment[Value]) (Value, error) {
 	return nil, ErrOp
 }
 
+func evalGroup(g Group, env environ.Environment[Value]) (Value, error) {
+	var (
+		res Value
+		err error
+	)
+	for _, n := range g.Nodes {
+		res, err = eval(n, env)
+		if err != nil {
+			return nil, err
+		}
+	}
+	return res, nil
+}
+
 func evalMap(a Map, env environ.Environment[Value]) (Value, error) {
 	obj := createObject()
 	for k, v := range a.Nodes {
@@ -1830,6 +1846,11 @@ type Map struct {
 
 type Literal[T string | float64 | bool] struct {
 	Value T
+	Position
+}
+
+type Group struct {
+	Nodes []Node
 	Position
 }
 
@@ -2931,16 +2952,31 @@ func (p *Parser) parseMap() (Node, error) {
 }
 
 func (p *Parser) parseGroup() (Node, error) {
+	grp := Group{
+		Position: p.curr.Position,
+	}
 	p.next()
-	node, err := p.parseExpression(powLowest)
-	if err != nil {
-		return nil, err
+	for !p.done() && !p.is(Rparen) {
+		p.skip(p.eol)
+		node, err := p.parseExpression(powComma)
+		if err != nil {
+			return nil, err
+		}
+		grp.Nodes = append(grp.Nodes, node)
+		switch {
+		case p.is(Comma):
+			p.next()
+			p.skip(p.eol)
+		case p.is(Rparen):
+		default:
+			return nil, p.unexpected()
+		}
 	}
 	if !p.is(Rparen) {
 		return nil, p.unexpected()
 	}
 	p.next()
-	return node, nil
+	return grp, nil
 }
 
 func (p *Parser) parseDot(left Node) (Node, error) {
