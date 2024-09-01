@@ -3,3 +3,7 @@ console.log({name: "foobar", age: 100})
 
 let obj = JSON.parse('{"name": "foobar", "age": 100}')
 JSON.stringify(obj)
+
+function fib(n) {
+	return n + 1
+}

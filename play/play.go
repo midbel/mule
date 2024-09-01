@@ -2358,7 +2358,45 @@ func (p *Parser) parseReturn() (Node, error) {
 }
 
 func (p *Parser) parseFunction() (Node, error) {
-	return nil, nil
+	fn := Func{
+		Position: p.curr.Position,
+	}
+	p.next()
+	if !p.is(Ident) {
+		return nil, p.unexpected()
+	}
+	fn.Ident = p.curr.Literal
+	p.next()
+	if !p.is(Lparen) {
+		return nil, p.unexpected()
+	}
+	p.next()
+	for !p.done() && !p.is(Rparen) {
+		p.skip(p.eol)
+		arg, err := p.parseExpression(powComma)
+		if err != nil {
+			return nil, err
+		}
+		fn.Args = append(fn.Args, arg)
+		switch {
+		case p.is(Comma):
+			p.next()
+			p.skip(p.eol)
+		case p.is(Rparen):
+		default:
+			return nil, p.unexpected()
+		}
+	}
+	if !p.is(Rparen) {
+		return nil, p.unexpected()
+	}
+	p.next()
+	body, err := p.parseBody()
+	if err != nil {
+		return nil, err
+	}
+	fn.Body = body
+	return fn, nil
 }
 
 func (p *Parser) parseImport() (Node, error) {
@@ -2395,7 +2433,25 @@ func (p *Parser) parseTry() (Node, error) {
 }
 
 func (p *Parser) parseCatch() (Node, error) {
-	return nil, nil
+	catch := Catch{
+		Position: p.curr.Position,	
+	}
+	p.next()
+	if !p.is(Lparen) {
+		return nil, p.unexpected()
+	}
+	p.next()
+	ident, err := p.parseIdent()
+	if err != nil {
+		return nil, err
+	}
+	catch.Err = ident
+	if !p.is(Rparen) {
+		return nil, p.unexpected()
+	}
+	p.next()
+	catch.Body, err = p.parseBody()
+	return catch, err
 }
 
 func (p *Parser) parseFinally() (Node, error) {
