@@ -163,6 +163,28 @@ func (f Function) True() Value {
 	return getBool(true)
 }
 
+func (f Function) Call(args []Value) (Value, error) {
+	for i := range f.Args {
+		var arg Value
+		if i < len(args) {
+			arg = args[i]
+			if arg == nil || isNull(arg) || isUndefined(arg) {
+				arg = f.Args[i].Value
+			}
+		} else {
+			arg = f.Args[i].Value
+		}
+		if err := f.Env.Define(f.Args[i].Name, arg); err != nil {
+			return nil, err
+		}
+	}
+	arr := createArray()
+	arr.Values = append(arr.Values, args...)
+	f.Env.Define("arguments", arr)
+
+	return eval(f.Body, f.Env)
+}
+
 type Void struct{}
 
 func isUndefined(v Value) bool {
@@ -838,6 +860,19 @@ func (o Object) At(ix Value) (Value, error) {
 	return o.Fields[ix], nil
 }
 
+func (o Object) Call(ident string, args []Value) (Value, error) {
+	fn, ok := o.Fields[getString(ident)]
+	if !ok {
+		return nil, fmt.Errorf("%s: undefined function", ident)
+	}
+	call, ok := fn.(Function)
+	if !ok {
+		return nil, fmt.Errorf("%s: property not callable", ident)
+	}
+	call.Env.Define("this", o)
+	return call.Call(args)
+}
+
 func (o Object) Get(prop Value) (Value, error) {
 	v, ok := o.Fields[prop]
 	if !ok {
@@ -1069,7 +1104,7 @@ func (c Console) Call(ident string, args []Value) (Value, error) {
 	return Void{}, nil
 }
 
-func Eval(r io.Reader) (Value, error) {
+func Default() environ.Environment[Value] {
 	top := Empty()
 	top.Define("console", Console{})
 	top.Define("JSON", Json{})
@@ -1077,7 +1112,12 @@ func Eval(r io.Reader) (Value, error) {
 	top.Define("parseInt", createBuiltinFunc("parseInt", execParseInt))
 	top.Define("parseFloat", createBuiltinFunc("parseFloat", execParseFloat))
 	top.Define("isNaN", createBuiltinFunc("isNaN", execIsNaN))
-	return EvalWithEnv(r, Enclosed(top))
+
+	return top
+}
+
+func Eval(r io.Reader) (Value, error) {
+	return EvalWithEnv(r, Enclosed(Default()))
 }
 
 func EvalWithEnv(r io.Reader, env environ.Environment[Value]) (Value, error) {
@@ -1182,7 +1222,7 @@ func evalBody(b Body, env environ.Environment[Value]) (Value, error) {
 func evalFunc(f Func, env environ.Environment[Value]) (Value, error) {
 	fn := Function{
 		Ident: f.Ident,
-		Env:   Empty(),
+		Env:   Enclosed(Default()),
 		Body:  f.Body,
 	}
 	for _, a := range f.Args {
@@ -1441,13 +1481,13 @@ func evalCall(c Call, env environ.Environment[Value]) (Value, error) {
 		args = append(args, a)
 	}
 	if call, ok := value.(interface{ Call([]Value) (Value, error) }); ok {
-		return call.Call(args)
+		res, err := call.Call(args)
+		if errors.Is(err, ErrReturn) {
+			err = nil
+		}
+		return res, err
 	}
-	fn, ok := value.(Function)
-	if !ok {
-		return nil, ErrOp
-	}
-	return eval(fn.Body, env)
+	return nil, ErrOp
 }
 
 func evalMap(a Map, env environ.Environment[Value]) (Value, error) {
@@ -1504,6 +1544,14 @@ func evalAccess(a Access, env environ.Environment[Value]) (Value, error) {
 		return get.Get(getString(i.Name))
 	}
 	if i, ok := a.Ident.(Call); ok {
+		var args []Value
+		for j := range i.Args {
+			a, err := eval(i.Args[j], env)
+			if err != nil {
+				return nil, err
+			}
+			args = append(args, a)
+		}
 		call, ok := res.(interface {
 			Call(string, []Value) (Value, error)
 		})
@@ -1514,15 +1562,11 @@ func evalAccess(a Access, env environ.Environment[Value]) (Value, error) {
 		if !ok {
 			return nil, ErrEval
 		}
-		var args []Value
-		for j := range i.Args {
-			a, err := eval(i.Args[j], env)
-			if err != nil {
-				return nil, err
-			}
-			args = append(args, a)
+		res, err := call.Call(ident.Name, args)
+		if errors.Is(err, ErrReturn) {
+			err = nil
 		}
-		return call.Call(ident.Name, args)
+		return res, err
 	}
 	return nil, ErrOp
 }
@@ -2323,6 +2367,7 @@ func (p *Parser) parseBody() (Node, error) {
 		return nil, p.unexpected()
 	}
 	p.next()
+	p.skip(p.eol)
 	return b, nil
 }
 
@@ -2442,11 +2487,10 @@ func (p *Parser) parseFunction() (Node, error) {
 		Position: p.curr.Position,
 	}
 	p.next()
-	if !p.is(Ident) {
-		return nil, p.unexpected()
+	if p.is(Ident) {
+		fn.Ident = p.curr.Literal
+		p.next()
 	}
-	fn.Ident = p.curr.Literal
-	p.next()
 	if !p.is(Lparen) {
 		return nil, p.unexpected()
 	}
