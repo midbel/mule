@@ -27,7 +27,7 @@ var (
 	ErrConst    = errors.New("constant variable can not be reassigned")
 	ErrIndex    = errors.New("index out of bound")
 	ErrArgument = errors.New("invalid number of arguments")
-	ErrImpl = errors.New("not yet implemented")
+	ErrImpl     = errors.New("not yet implemented")
 )
 
 func execParseInt(args []Value) (Value, error) {
@@ -333,6 +333,10 @@ type Float struct {
 	value float64
 }
 
+func NewFloat(val float64) Value {
+	return getFloat(val)
+}
+
 func getFloat(val float64) Float {
 	return Float{
 		value: val,
@@ -609,6 +613,10 @@ type Bool struct {
 	value bool
 }
 
+func NewBool(val bool) Value {
+	return getBool(val)
+}
+
 func getBool(val bool) Value {
 	return Bool{
 		value: val,
@@ -660,6 +668,10 @@ func (b Bool) StrictNotEqual(other Value) (Value, error) {
 
 type String struct {
 	value string
+}
+
+func NewString(str string) Value {
+	return getString(str)
 }
 
 func getString(val string) Value {
