@@ -27,6 +27,7 @@ var (
 	ErrConst    = errors.New("constant variable can not be reassigned")
 	ErrIndex    = errors.New("index out of bound")
 	ErrArgument = errors.New("invalid number of arguments")
+	ErrImpl = errors.New("not yet implemented")
 )
 
 func execParseInt(args []Value) (Value, error) {
@@ -935,6 +936,39 @@ func (a Array) At(ix Value) (Value, error) {
 		return a.Values[int(x.value)], nil
 	}
 	return nil, ErrIndex
+}
+
+func (a Array) Get(prop Value) (Value, error) {
+	return nil, nil
+}
+
+func (a Array) Call(ident string, args []Value) (Value, error) {
+	switch ident {
+	case "at":
+	case "concat":
+	case "entries":
+	case "every":
+	case "filter":
+	case "find":
+	case "findIndex":
+	case "flat":
+	case "forEach":
+	case "includes":
+	case "indexOf":
+	case "join":
+	case "map":
+	case "pop":
+	case "push":
+	case "reduce":
+	case "reverse":
+	case "shift":
+	case "slice":
+	case "splice":
+	case "all":
+	default:
+		return nil, fmt.Errorf("%s: undefined function", ident)
+	}
+	return nil, ErrImpl
 }
 
 func (a Array) List() []Value {
