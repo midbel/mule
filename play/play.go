@@ -2036,7 +2036,7 @@ var bindings = map[rune]int{
 	Assign:   powAssign,
 	Colon:    powAssign,
 	Keyword:  powAssign,
-	Arrow: powAssign,
+	Arrow:    powAssign,
 	Or:       powOr,
 	And:      powAnd,
 	Eq:       powEq,
@@ -2507,16 +2507,19 @@ func (p *Parser) parseReturn() (Node, error) {
 func (p *Parser) parseArrow(left Node) (Node, error) {
 	var (
 		args []Node
-		err error
+		err  error
 	)
-	if arr, ok := left.(List); ok {
-		args = arr.Nodes
-	} else {
+	switch a := left.(type) {
+	case List:
+		args = a.Nodes
+	case Group:
+		args = a.Nodes
+	default:
 		args = append(args, left)
 	}
 	fn := Func{
-		Args: args,
-		Arrow: true,
+		Args:     args,
+		Arrow:    true,
 		Position: p.curr.Position,
 	}
 	p.next()
@@ -2663,7 +2666,6 @@ func (p *Parser) parseExpression(pow int) (Node, error) {
 	if !ok {
 		return nil, fmt.Errorf("unknown prefix expression %s", p.curr)
 	}
-	fmt.Println(p.curr, p.peek)
 	left, err := fn()
 	if err != nil {
 		return nil, err
