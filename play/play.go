@@ -2976,6 +2976,7 @@ func (p *Parser) parseGroup() (Node, error) {
 		return nil, p.unexpected()
 	}
 	p.next()
+	p.skip(p.eol)
 	return grp, nil
 }
 
@@ -2998,7 +2999,7 @@ func (p *Parser) parseAssign(left Node) (Node, error) {
 		Ident: left,
 	}
 	p.next()
-	right, err := p.parseExpression(powLowest)
+	right, err := p.parseExpression(powAssign)
 	if err != nil {
 		return nil, err
 	}
