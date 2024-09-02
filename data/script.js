@@ -32,3 +32,8 @@ let r = (v = v+2 , 3+3) * 2
 console.log("v(4) = ", v)
 console.log("r(12) = ", r)
 
+const arrow1 = x => x
+const arrow2 = (x, y) => x + y
+const arrow3 = (x, y) => {
+	return [x + y]
+}
