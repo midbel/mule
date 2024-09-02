@@ -1,6 +1,7 @@
 package mule
 
 import (
+	"fmt"
 	"net/http"
 
 	"github.com/midbel/mule/play"
@@ -9,7 +10,7 @@ import (
 type muleObject struct {
 	req *muleRequest
 	res *muleResponse
-	ctx *Collection
+	ctx *muleCollection
 }
 
 func (_ *muleObject) True() play.Value {
@@ -17,7 +18,20 @@ func (_ *muleObject) True() play.Value {
 }
 
 func (m *muleObject) Get(ident play.Value) (play.Value, error) {
-	return nil, nil
+	str, ok := ident.(fmt.Stringer)
+	if !ok {
+		return nil, play.ErrEval
+	}
+	switch prop := str.String(); prop {
+	case "collection":
+		return m.ctx, nil
+	case "request":
+		return m.req, nil
+	case "response":
+		return m.res, nil
+	default:
+		return nil, fmt.Errorf("%s: property not known", prop)
+	}
 }
 
 type muleCollection struct {
@@ -30,9 +44,9 @@ func (_ *muleCollection) True() play.Value {
 
 func (m *muleCollection) Call(ident string, args []play.Value) (play.Value, error) {
 	switch ident {
-	case "getVariable":
-	case "setVariable":
-	case "hasVariable":
+	case "get":
+	case "set":
+	case "has":
 	default:
 		return nil, fmt.Errorf("%s: unknown function", ident)
 	}

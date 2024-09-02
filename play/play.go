@@ -950,8 +950,18 @@ func (a Array) At(ix Value) (Value, error) {
 	return nil, ErrIndex
 }
 
-func (a Array) Get(prop Value) (Value, error) {
-	return nil, nil
+func (a Array) Get(ident Value) (Value, error) {
+	str, ok := ident.(fmt.Stringer)
+	if !ok {
+		return nil, ErrEval
+	}
+	switch name := str.String(); name {
+	case "length":
+		n := len(a.Values)
+		return getFloat(float64(n)), nil
+	default:
+		return a.Object.Get(ident)
+	}
 }
 
 func (a Array) Call(ident string, args []Value) (Value, error) {
@@ -1001,8 +1011,39 @@ func (m Math) True() Value {
 	return getBool(true)
 }
 
+func (m Math) Get(ident Value) (Value, error) {
+	str, ok := ident.(fmt.Stringer)
+	if !ok {
+		return nil, ErrEval
+	}
+	switch prop := str.String(); prop {
+	case "PI":
+		return getFloat(math.Pi), nil
+	default:
+		return nil, fmt.Errorf("%s: property not known", prop)
+	}
+}
+
 func (m Math) Call(ident string, args []Value) (Value, error) {
-	return Void{}, nil
+	switch ident {
+	case "abs":
+	case "ceil":
+	case "cos":
+	case "exp":
+	case "floor":
+	case "log":
+	case "round":
+	case "max":
+	case "min":
+	case "pow":
+	case "random":
+	case "sin":
+	case "tan":
+	case "trunc":
+	default:
+		return nil, fmt.Errorf("%s: undefined function", ident)
+	}
+	return nil, ErrImpl
 }
 
 type Json struct{}
