@@ -1843,9 +1843,12 @@ func evalAssign(a Assignment, env environ.Environment[Value]) (Value, error) {
 		if !ok {
 			return nil, ErrOp
 		}
-		_ = set
-		_ = target
-		return Void{}, ErrImpl
+		id, ok := ident.Ident.(Identifier)
+		if !ok {
+			return nil, ErrEval
+		}
+		return res, set.Set(getString(id.Name), res)
+		// return Void{}, ErrImpl
 	case Identifier:
 		if v, err := env.Resolve(ident.Name); err == nil {
 			e, ok := v.(envValue)
