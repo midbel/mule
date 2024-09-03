@@ -1063,13 +1063,29 @@ func (a Array) Return() {
 	return
 }
 
+type Date struct {
+	value time.Time
+}
+
+func (d *Date) True() Value {
+	return getBool(true)
+}
+
+func (d *Date) String() string {
+	return "date"
+}
+
+func (d *Date) Call(ident string, args []Value) (Value, error) {
+	return Void{}, ErrImpl
+}
+
 type Url struct {
-	url *url.URL
+	value *url.URL
 }
 
 func NewURL(str *url.URL) Value {
 	return &Url{
-		url: str,
+		value: str,
 	}
 }
 
@@ -1078,7 +1094,7 @@ func (u *Url) True() Value {
 }
 
 func (u *Url) String() string {
-	return u.url.String()
+	return u.value.String()
 }
 
 func (u *Url) Get(ident Value) (Value, error) {
@@ -1088,19 +1104,18 @@ func (u *Url) Get(ident Value) (Value, error) {
 	}
 	switch name := str.String(); name {
 	case "host", "hostname":
-		return getString(u.url.Hostname()), nil
+		return getString(u.value.Hostname()), nil
 	case "port":
-		return getString(u.url.Port()), nil
+		return getString(u.value.Port()), nil
 	case "path":
-		return getString(u.url.Path), nil
+		return getString(u.value.Path), nil
 	case "query":
-		return getString(u.url.RawQuery), nil
+		return getString(u.value.RawQuery), nil
 	case "scheme":
-		return getString(u.url.Scheme), nil
+		return getString(u.value.Scheme), nil
 	default:
 		return nil, fmt.Errorf("%s: undefined property", name)
 	}
-	return Void{}, nil
 }
 
 type Math struct{}
