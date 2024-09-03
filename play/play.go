@@ -844,6 +844,47 @@ func (s String) GreaterEqual(other Value) (Value, error) {
 	return s.Equal(other)
 }
 
+func (s String) Call(ident string, args []Value) (Value, error) {
+	switch ident {
+	case "concat":
+	case "endsWith":
+	case "includes":
+	case "indexOf":
+	case "lastIndexOf":
+	case "padEnd":
+	case "padStart":
+	case "repeat":
+	case "replace":
+	case "replaceAll":
+	case "slice":
+	case "split":
+	case "startsWith":
+	case "substring":
+	case "toLowerCase":
+	case "toUpperCase":
+	case "trim":
+	case "trimEnd":
+	case "trimStart":
+	default:
+		return nil, fmt.Errorf("%s: undefined function", ident)
+	}
+	return nil, ErrImpl
+}
+
+func (s String) Get(ident Value) (Value, error) {
+	str, ok := ident.(fmt.Stringer)
+	if !ok {
+		return nil, ErrEval
+	}
+	switch name := str.String(); name {
+	case "length":
+		n := len(s.value)
+		return getFloat(float64(n)), nil
+	default:
+		return Void{}, fmt.Errorf("%s: undefined property", str)
+	}
+}
+
 type Object struct {
 	Fields map[Value]Value
 }
