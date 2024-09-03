@@ -172,20 +172,20 @@ type Request struct {
 	After      string
 }
 
-func (r *Request) Execute(env environ.Environment[Value]) error {
-	target, err := r.target(env)
+func (r *Request) Execute(ctx *Collection) error {
+	target, err := r.target(ctx)
 	if err != nil {
 		return err
 	}
 
-	headers, err := r.Headers.Headers(env)
+	headers, err := r.Headers.Headers(ctx)
 	if err != nil {
 		return err
 	}
 
 	var body io.Reader
 	if r.Body != nil {
-		b, err := r.Body.Expand(env)
+		b, err := r.Body.Expand(ctx)
 		if err != nil {
 			return err
 		}
@@ -193,24 +193,41 @@ func (r *Request) Execute(env environ.Environment[Value]) error {
 		headers.Set("content-type", r.Body.ContentType())
 		headers.Set("content-length", strconv.Itoa(len(b)))
 	}
-	if _, err := play.Eval(strings.NewReader(r.Before)); err != nil {
-		return err
-	}
 	req, err := http.NewRequest(r.Method, target, body)
 	if err != nil {
 		return err
 	}
 	req.Header = headers
 
+	var (
+		env = play.Enclosed(play.Default())
+		obj muleObject
+	)
+	obj.req = &muleRequest{
+		request: req,
+	}
+	obj.ctx = &muleCollection{
+		collection: ctx,
+	}
+	env.Define("mule", &obj)
+
+	if _, err := play.EvalWithEnv(strings.NewReader(r.Before), play.Freeze(env)); err != nil {
+		return err
+	}
+
 	res, err := http.DefaultClient.Do(req)
 	if err != nil {
 		return err
 	}
+	obj.res = &muleResponse{
+		response: res,
+	}
+	env.Define("mule", &obj)
+	if _, err := play.EvalWithEnv(strings.NewReader(r.After), play.Freeze(env)); err != nil {
+		return err
+	}
 	if res.StatusCode >= http.StatusBadRequest {
 		return fmt.Errorf(http.StatusText(res.StatusCode))
-	}
-	if _, err := play.Eval(strings.NewReader(r.After)); err != nil {
-		return err
 	}
 	return nil
 }

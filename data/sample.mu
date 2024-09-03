@@ -33,6 +33,13 @@ projects {
 
 		before <<SCRIPT
 			console.log("begin new token")
+			console.log(">> get mule variable:", mule)
+			console.log(">> get mule request:", mule.request)
+			console.log(">> get mule request url:", mule.request.url.host)
+			console.log(">> get mule request url:", mule.request.url.port)
+			console.log(">> get mule request url:", mule.request.url.path)
+			console.log(">> get mule request url:", mule.request.url.query)
+			console.log(">> get mule request method:", mule.request.method)
 		SCRIPT
 
 		after <<SCRIPT

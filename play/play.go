@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"math"
+	"net/url"
 	"os"
 	"slices"
 	"strconv"
@@ -87,6 +88,22 @@ func createValueForEnv(val Value, ro bool) Value {
 		Value: val,
 		Const: ro,
 	}
+}
+
+var ErrFrozen = errors.New("read only")
+
+type frozenEnv struct {
+	environ.Environment[Value]
+}
+
+func Freeze(env environ.Environment[Value]) environ.Environment[Value] {
+	return &frozenEnv{
+		Environment: env,
+	}
+}
+
+func (e *frozenEnv) Define(_ string, _ Value) error {
+	return ErrFrozen
 }
 
 type Env struct {
@@ -999,6 +1016,46 @@ func (a Array) List() []Value {
 
 func (a Array) Return() {
 	return
+}
+
+type Url struct {
+	url *url.URL
+}
+
+func NewURL(str *url.URL) Value {
+	return &Url{
+		url: str,
+	}
+}
+
+func (u *Url) True() Value {
+	return getBool(true)
+}
+
+func (u *Url) String() string {
+	return u.url.String()
+}
+
+func (u *Url) Get(ident Value) (Value, error) {
+	str, ok := ident.(fmt.Stringer)
+	if !ok {
+		return nil, ErrEval
+	}
+	switch name := str.String(); name {
+	case "host", "hostname":
+		return getString(u.url.Hostname()), nil
+	case "port":
+		return getString(u.url.Port()), nil
+	case "path":
+		return getString(u.url.Path), nil
+	case "query":
+		return getString(u.url.RawQuery), nil
+	case "scheme":
+		return getString(u.url.Scheme), nil
+	default:
+		return nil, fmt.Errorf("%s: undefined property", name)
+	}
+	return Void{}, nil
 }
 
 type Math struct{}
