@@ -24,6 +24,11 @@ obj = {
 	}
 }
 
+console.log('>> before: ', obj.name)
+obj.name = "foo"
+console.log('<< after: ', obj.name)
+
+
 console.log(obj.test())
 console.log(obj.test2())
 
