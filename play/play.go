@@ -952,6 +952,11 @@ func (o Object) Call(ident string, args []Value) (Value, error) {
 	return call.Call(args)
 }
 
+func (o Object) Set(prop, value Value) error {
+	o.Fields[prop] = value
+	return nil
+}
+
 func (o Object) Get(prop Value) (Value, error) {
 	v, ok := o.Fields[prop]
 	if !ok {
@@ -1830,6 +1835,16 @@ func evalAssign(a Assignment, env environ.Environment[Value]) (Value, error) {
 	}
 	switch ident := a.Ident.(type) {
 	case Access:
+		target, err := eval(ident.Node, env)
+		if err != nil {
+			return nil, err
+		}
+		set, ok := target.(interface{ Set(Value, Value) error })
+		if !ok {
+			return nil, ErrOp
+		}
+		_ = set
+		_ = target
 		return Void{}, ErrImpl
 	case Identifier:
 		if v, err := env.Resolve(ident.Name); err == nil {
