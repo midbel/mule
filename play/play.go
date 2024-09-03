@@ -1824,19 +1824,19 @@ func evalIdent(i Identifier, env environ.Environment[Value]) (Value, error) {
 }
 
 func evalAssign(a Assignment, env environ.Environment[Value]) (Value, error) {
+	res, err := eval(a.Node, env)
+	if err != nil {
+		return nil, err
+	}
 	switch ident := a.Ident.(type) {
 	case Access:
-		return Void{}, nil
+		return Void{}, ErrImpl
 	case Identifier:
 		if v, err := env.Resolve(ident.Name); err == nil {
 			e, ok := v.(envValue)
 			if ok && e.Const {
 				return nil, ErrConst
 			}
-		}
-		res, err := eval(a.Node, env)
-		if err != nil {
-			return nil, err
 		}
 		return res, env.Define(ident.Name, letValue(res))
 	default:
