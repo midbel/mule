@@ -135,6 +135,26 @@ func (m *muleResponse) Get(ident play.Value) (play.Value, error) {
 	}
 }
 
+func (m *muleResponse) Call(ident string, args []play.Value) (play.Value, error) {
+	switch ident {
+	case "success":
+		ok := m.response.StatusCode < http.StatusBadRequest
+		return play.NewBool(ok), nil
+	case "fail":
+		ok := m.response.StatusCode >= http.StatusBadRequest
+		return play.NewBool(ok), nil
+	case "badRequest":
+		ok := m.response.StatusCode >= http.StatusBadRequest && m.response.StatusCode < http.StatusInternalServerError
+		return play.NewBool(ok), nil
+	case "serverError":
+		ok := m.response.StatusCode >= http.StatusInternalServerError
+		return play.NewBool(ok), nil
+	default:
+		return nil, fmt.Errorf("%s: unknown function", ident)
+	}
+	return nil, play.ErrImpl
+}
+
 type muleHeader struct {
 	headers http.Header
 }
