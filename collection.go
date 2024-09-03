@@ -210,6 +210,8 @@ func (r *Request) Execute(ctx *Collection) error {
 		collection: ctx,
 	}
 	env.Define("mule", &obj)
+	env.Define("cancel", play.NewBuiltinFunc("cancel", cancelRequest))
+	env.Define("abort", play.NewBuiltinFunc("abort", abortRequest))
 
 	if _, err := play.EvalWithEnv(strings.NewReader(r.Before), play.Freeze(env)); err != nil {
 		return err

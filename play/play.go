@@ -150,6 +150,10 @@ type BuiltinFunc struct {
 	Func  func([]Value) (Value, error)
 }
 
+func NewBuiltinFunc(ident string, fn func([]Value) (Value, error)) Value {
+	return createBuiltinFunc(ident, fn)
+}
+
 func createBuiltinFunc(ident string, fn func([]Value) (Value, error)) Value {
 	return BuiltinFunc{
 		Ident: ident,

@@ -1,11 +1,25 @@
 package mule
 
 import (
+	"errors"
 	"fmt"
 	"net/http"
 
 	"github.com/midbel/mule/play"
 )
+
+var (
+	ErrAbort  = errors.New("abort")
+	ErrCancel = errors.New("cancel")
+)
+
+func cancelRequest(args []play.Value) (play.Value, error) {
+	return play.Void{}, ErrCancel
+}
+
+func abortRequest(args []play.Value) (play.Value, error) {
+	return play.Void{}, ErrAbort
+}
 
 type muleObject struct {
 	req *muleRequest
