@@ -54,7 +54,7 @@ const arrow3 = (x, y) => {
        return [x + y]
 }
 
-switch (expr) {
+switch ("first") {
 case "first":
 	1+1
 	console.log("test first")

@@ -113,6 +113,15 @@ func isTrue(val Value) bool {
 	return b.value
 }
 
+func isEqual(fst Value, snd Value) bool {
+	eq, ok := fst.(interface{ Equal(Value) (Value, error) })
+	if !ok {
+		return ok
+	}
+	res, _ := eq.Equal(snd)
+	return isTrue(res)
+}
+
 type envValue struct {
 	Const bool
 	Value
@@ -1737,7 +1746,39 @@ func evalIf(i If, env environ.Environment[Value]) (Value, error) {
 }
 
 func evalSwitch(s Switch, env environ.Environment[Value]) (Value, error) {
-	return nil, nil
+	value, err := eval(s.Cdt, env)
+	if err != nil {
+		return nil, err
+	}
+	var match bool
+	for _, n := range s.Cases {
+		c, ok := n.(Case)
+		if !ok {
+			return nil, ErrEval
+		}
+		sub := Enclosed(env)
+		v, err := eval(c.Value, sub)
+		if err != nil {
+			return nil, err
+		}
+		if !isEqual(value, v) {
+			continue
+		}
+		match = true
+		if _, err = eval(c.Body, sub); err != nil {
+			if errors.Is(err, ErrBreak) {
+				break
+			}
+			return nil, err
+		}
+	}
+	if !match && s.Default != nil {
+		_, err = eval(s.Default, Enclosed(env))
+		if err != nil {
+			return nil, err
+		}
+	}
+	return Void{}, nil
 }
 
 func evalCall(c Call, env environ.Environment[Value]) (Value, error) {
@@ -2715,7 +2756,7 @@ func (p *Parser) parseSwitchIdent() (Node, error) {
 		return nil, p.unexpected()
 	}
 	p.next()
-	ident, err := p.parseIdent()
+	ident, err := p.parseExpression(powLowest)
 	if err != nil {
 		return nil, err
 	}
