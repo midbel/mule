@@ -51,5 +51,19 @@ console.log("pi", Math.PI)
 const arrow1 = x => x
 const arrow2 = (x, y) => x + y
 const arrow3 = (x, y) => {
-	return [x + y]
+       return [x + y]
+}
+
+switch (expr) {
+case "first":
+	1+1
+	console.log("test first")
+	break;
+case "second":
+	2+1
+	console.log("test second")
+case "third":
+	break;
+default:
+	console.log("fallback")
 }

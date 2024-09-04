@@ -1532,7 +1532,7 @@ func evalFunc(f Func, env environ.Environment[Value]) (Value, error) {
 }
 
 func evalTry(t Try, env environ.Environment[Value]) (Value, error) {
-	res, err := eval(t.Node, Enclosed(env))
+	_, err := eval(t.Node, Enclosed(env))
 	if err != nil && t.Catch != nil {
 		catch, ok := t.Catch.(Catch)
 		if !ok {
@@ -2316,6 +2316,7 @@ const (
 	powLowest int = iota
 	powComma
 	powAssign
+	powKeyword
 	powOr
 	powAnd
 	powEq
@@ -2335,8 +2336,8 @@ var bindings = map[rune]int{
 	Question: powAssign,
 	Assign:   powAssign,
 	Colon:    powAssign,
-	Keyword:  powAssign,
 	Arrow:    powAssign,
+	Keyword:  powKeyword,
 	Or:       powOr,
 	And:      powAnd,
 	Eq:       powEq,
@@ -2464,6 +2465,8 @@ func (p *Parser) parseKeyword() (Node, error) {
 		return p.parseElse()
 	case "switch":
 		return p.parseSwitch()
+	case "case":
+		return p.parseCase()
 	case "for":
 		return p.parseFor()
 	case "do":
@@ -2612,7 +2615,115 @@ func (p *Parser) parseElse() (Node, error) {
 }
 
 func (p *Parser) parseSwitch() (Node, error) {
-	return nil, nil
+	expr := Switch{
+		Position: p.curr.Position,
+	}
+	p.next()
+	cdt, err := p.parseSwitchIdent()
+	if err != nil {
+		return nil, err
+	}
+	expr.Cdt = cdt
+	expr.Cases, expr.Default, err = p.parseSwitchCases()
+	if err != nil {
+		return nil, err
+	}
+	return expr, nil
+}
+
+func (p *Parser) parseCase() (Node, error) {
+	expr := Case{
+		Position: p.curr.Position,
+	}
+	p.next()
+	ident, err := p.parseExpression(powAssign)
+	if err != nil {
+		return nil, err
+	}
+	expr.Value = ident
+	if !p.is(Colon) {
+		return nil, p.unexpected()
+	}
+	p.next()
+	p.skip(p.eol)
+	var body Body
+	for !p.done() && !p.is(Rcurly) {
+		if p.is(Keyword) && (p.curr.Literal == "case" || p.curr.Literal == "default") {
+			break
+		}
+		expr, err := p.parseExpression(powLowest)
+		if err != nil {
+			return nil, err
+		}
+		p.skip(p.eol)
+		body.Nodes = append(body.Nodes, expr)
+	}
+	expr.Body = body
+	return expr, nil
+}
+
+func (p *Parser) parseSwitchCases() ([]Node, Node, error) {
+	if !p.is(Lcurly) {
+		return nil, nil, p.unexpected()
+	}
+	p.next()
+	p.skip(p.eol)
+
+	var nodes []Node
+	for !p.done() && !p.is(Rcurly) {
+		if !p.is(Keyword) {
+			return nil, nil, p.unexpected()
+		}
+		if p.curr.Literal == "default" {
+			break
+		}
+		expr, err := p.parseExpression(powKeyword)
+		if err != nil {
+			return nil, nil, err
+		}
+		nodes = append(nodes, expr)
+	}
+
+	var alt Node
+	if p.is(Keyword) && p.curr.Literal == "default" {
+		p.next()
+		if !p.is(Colon) {
+			return nil, nil, p.unexpected()
+		}
+		p.next()
+		p.skip(p.eol)
+		var body Body
+		for !p.done() && !p.is(Rcurly) {
+			node, err := p.parseExpression(powKeyword)
+			if err != nil {
+				return nil, nil, err
+			}
+			p.skip(p.eol)
+			body.Nodes = append(body.Nodes, node)
+		}
+		alt = body
+	}
+	if !p.is(Rcurly) {
+		return nil, nil, p.unexpected()
+	}
+	p.next()
+	return nodes, alt, nil
+}
+
+func (p *Parser) parseSwitchIdent() (Node, error) {
+	if !p.is(Lparen) {
+		return nil, p.unexpected()
+	}
+	p.next()
+	ident, err := p.parseIdent()
+	if err != nil {
+		return nil, err
+	}
+	if !p.is(Rparen) {
+		return nil, p.unexpected()
+	}
+	p.next()
+	return ident, nil
 }
 
 func (p *Parser) parseDo() (Node, error) {
@@ -2959,13 +3070,18 @@ func (p *Parser) parseExpression(pow int) (Node, error) {
 	if err != nil {
 		return nil, err
 	}
+	var stop bool
 	for !p.done() && !p.eol() && pow < p.power() {
 		fn, ok := p.infix[p.curr.Type]
 		if !ok {
 			return nil, fmt.Errorf("unknown infix expression %s", p.curr)
 		}
+		stop = p.is(Arrow)
 		if left, err = fn(left); err != nil {
 			return nil, err
+		}
+		if stop {
+			break
 		}
 	}
 	return left, nil
