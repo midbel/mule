@@ -25,6 +25,7 @@ var (
 	ErrThrow    = errors.New("throw")
 	ErrEval     = errors.New("node can not be evalualed in current context")
 	ErrOp       = errors.New("unsupported operation")
+	ErrType     = errors.New("incompatible type")
 	ErrZero     = errors.New("division by zero")
 	ErrConst    = errors.New("constant variable can not be reassigned")
 	ErrIndex    = errors.New("index out of bound")
@@ -58,6 +59,50 @@ type Value interface {
 type Iterator interface {
 	List() []Value
 	Return()
+}
+
+type Event struct {
+	Name   string
+	Detail Value
+}
+
+type EventHandler interface {
+	Emit(string) error
+	Register(string, Value) error
+}
+
+type defaultEventHandler struct {
+	events map[string][]Value
+}
+
+func NewEventHandler() EventHandler {
+	return &defaultEventHandler{
+		events: make(map[string][]Value),
+	}
+}
+
+func (h *defaultEventHandler) Register(name string, value Value) error {
+	_, ok := value.(Function)
+	if !ok {
+		return ErrEval
+	}
+	h.events[name] = append(h.events[name], value)
+	return nil
+}
+
+func (h *defaultEventHandler) Emit(name string) error {
+	all := h.events[name]
+	if len(all) == 0 {
+		return nil
+	}
+	for _, a := range all {
+		c, ok := a.(interface{ Call([]Value) (Value, error) })
+		if !ok {
+			continue
+		}
+		c.Call([]Value{})
+	}
+	return nil
 }
 
 func isTrue(val Value) bool {
@@ -412,7 +457,7 @@ func (f Float) Add(other Value) (Value, error) {
 		str := fmt.Sprintf("%f%s", f.value, other.value)
 		return getString(str), nil
 	default:
-		return nil, ErrOp
+		return nil, ErrType
 	}
 }
 
@@ -425,7 +470,7 @@ func (f Float) Sub(other Value) (Value, error) {
 	}
 	right, ok := other.(Float)
 	if !ok {
-		return nil, ErrOp
+		return nil, ErrType
 	}
 	x := f.value - right.value
 	return getFloat(x), nil
@@ -440,7 +485,7 @@ func (f Float) Mul(other Value) (Value, error) {
 	}
 	right, ok := other.(Float)
 	if !ok {
-		return nil, ErrOp
+		return nil, ErrType
 	}
 	x := f.value * right.value
 	return getFloat(x), nil
@@ -455,7 +500,7 @@ func (f Float) Div(other Value) (Value, error) {
 	}
 	right, ok := other.(Float)
 	if !ok {
-		return nil, ErrOp
+		return nil, ErrType
 	}
 	if right.value == 0 {
 		return nil, ErrZero
@@ -473,7 +518,7 @@ func (f Float) Mod(other Value) (Value, error) {
 	}
 	right, ok := other.(Float)
 	if !ok {
-		return nil, ErrOp
+		return nil, ErrType
 	}
 	if right.value == 0 {
 		return nil, ErrZero
@@ -491,7 +536,7 @@ func (f Float) Pow(other Value) (Value, error) {
 	}
 	right, ok := other.(Float)
 	if !ok {
-		return nil, ErrOp
+		return nil, ErrType
 	}
 	x := math.Pow(f.value, right.value)
 	return getFloat(x), nil
@@ -517,7 +562,7 @@ func (f Float) Equal(other Value) (Value, error) {
 		}
 		return getBool(f.value == x), nil
 	default:
-		return nil, ErrOp
+		return nil, ErrType
 	}
 }
 
@@ -549,7 +594,7 @@ func (f Float) NotEqual(other Value) (Value, error) {
 		}
 		return getBool(f.value != x), nil
 	default:
-		return nil, ErrOp
+		return nil, ErrType
 	}
 }
 
@@ -581,7 +626,7 @@ func (f Float) LesserThan(other Value) (Value, error) {
 		}
 		return getBool(f.value < x), nil
 	default:
-		return nil, ErrOp
+		return nil, ErrType
 	}
 }
 
@@ -616,7 +661,7 @@ func (f Float) GreaterThan(other Value) (Value, error) {
 		}
 		return getBool(f.value > x), nil
 	default:
-		return nil, ErrOp
+		return nil, ErrType
 	}
 }
 
@@ -731,7 +776,7 @@ func (s String) Add(other Value) (Value, error) {
 		x := fmt.Sprintf("%s%f", s.value, other.value)
 		return getString(x), nil
 	default:
-		return nil, ErrOp
+		return nil, ErrType
 	}
 }
 
@@ -749,7 +794,7 @@ func (s String) Equal(other Value) (Value, error) {
 		str := strconv.FormatBool(other.value)
 		return getBool(s.value == str), nil
 	default:
-		return nil, ErrOp
+		return nil, ErrType
 	}
 }
 
@@ -775,7 +820,7 @@ func (s String) NotEqual(other Value) (Value, error) {
 		str := strconv.FormatBool(other.value)
 		return getBool(s.value != str), nil
 	default:
-		return nil, ErrOp
+		return nil, ErrType
 	}
 }
 
@@ -801,7 +846,7 @@ func (s String) LesserThan(other Value) (Value, error) {
 		str := strconv.FormatBool(other.value)
 		return getBool(s.value < str), nil
 	default:
-		return nil, ErrOp
+		return nil, ErrType
 	}
 }
 
@@ -830,7 +875,7 @@ func (s String) GreaterThan(other Value) (Value, error) {
 		str := strconv.FormatBool(other.value)
 		return getBool(s.value > str), nil
 	default:
-		return nil, ErrOp
+		return nil, ErrType
 	}
 }
 
@@ -952,6 +997,10 @@ func (o Object) Call(ident string, args []Value) (Value, error) {
 	return call.Call(args)
 }
 
+func (o Object) SetAt(prop, value Value) error {
+	return o.Set(prop, value)
+}
+
 func (o Object) Set(prop, value Value) error {
 	o.Fields[prop] = value
 	return nil
@@ -1010,12 +1059,24 @@ func (a Array) Not() Value {
 func (a Array) At(ix Value) (Value, error) {
 	x, ok := ix.(Float)
 	if !ok {
-		return nil, ErrOp
+		return nil, ErrEval
 	}
 	if x.value >= 0 && int(x.value) < len(a.Values) {
 		return a.Values[int(x.value)], nil
 	}
 	return nil, ErrIndex
+}
+
+func (a Array) SetAt(ix Value, value Value) error {
+	x, ok := ix.(Float)
+	if !ok {
+		return ErrEval
+	}
+	if x.value >= 0 && int(x.value) < len(a.Values) {
+		a.Values[int(x.value)] = value
+		return nil
+	}
+	return ErrIndex
 }
 
 func (a Array) Get(ident Value) (Value, error) {
@@ -1492,7 +1553,7 @@ func evalTry(t Try, env environ.Environment[Value]) (Value, error) {
 			return nil, err
 		}
 	}
-	return res, err
+	return Void{}, err
 }
 
 func evalLet(e Let, env environ.Environment[Value]) (Value, error) {
@@ -1511,7 +1572,7 @@ func evalLet(e Let, env environ.Environment[Value]) (Value, error) {
 	if err != nil {
 		return nil, err
 	}
-	return res, env.Define(ident.Name, letValue(res))
+	return Void{}, env.Define(ident.Name, letValue(res))
 }
 
 func evalConst(e Const, env environ.Environment[Value]) (Value, error) {
@@ -1530,7 +1591,7 @@ func evalConst(e Const, env environ.Environment[Value]) (Value, error) {
 	if err != nil {
 		return nil, err
 	}
-	return res, env.Define(ident.Name, constValue(res))
+	return Void{}, env.Define(ident.Name, constValue(res))
 }
 
 func evalDo(d Do, env environ.Environment[Value]) (Value, error) {
@@ -1670,7 +1731,7 @@ func evalIf(i If, env environ.Environment[Value]) (Value, error) {
 		return eval(i.Csq, Enclosed(sub))
 	}
 	if i.Alt == nil {
-		return nil, nil
+		return Void{}, nil
 	}
 	return eval(i.Alt, Enclosed(sub))
 }
@@ -1834,6 +1895,20 @@ func evalAssign(a Assignment, env environ.Environment[Value]) (Value, error) {
 		return nil, err
 	}
 	switch ident := a.Ident.(type) {
+	case Index:
+		target, err := eval(ident.Ident, env)
+		if err != nil {
+			return nil, err
+		}
+		set, ok := target.(interface{ SetAt(Value, Value) error })
+		if !ok {
+			return nil, ErrOp
+		}
+		id, err := eval(ident.Expr, env)
+		if err != nil {
+			return nil, err
+		}
+		return res, set.SetAt(id, res)
 	case Access:
 		target, err := eval(ident.Node, env)
 		if err != nil {
@@ -1845,10 +1920,9 @@ func evalAssign(a Assignment, env environ.Environment[Value]) (Value, error) {
 		}
 		id, ok := ident.Ident.(Identifier)
 		if !ok {
-			return nil, ErrEval
+			return nil, ErrOp
 		}
 		return res, set.Set(getString(id.Name), res)
-		// return Void{}, ErrImpl
 	case Identifier:
 		if v, err := env.Resolve(ident.Name); err == nil {
 			e, ok := v.(envValue)
@@ -2424,17 +2498,6 @@ func (p *Parser) parseKeyword() (Node, error) {
 		return nil, fmt.Errorf("%s: keyword not supported/known", p.curr.Literal)
 	}
 }
-
-// func (p *Parser) parseKeywordValue() (Node, error) {
-// 	switch p.curr.Literal {
-// 	case "null":
-// 		return p.parseNull()
-// 	case "undefined":
-// 		return p.parseUndefined()
-// 	default:
-// 		return nil, fmt.Errorf("%s: keyword not supported/known", p.curr.Literal)
-// 	}
-// }
 
 func (p *Parser) parseKeywordCtrl(left Node) (Node, error) {
 	switch p.curr.Literal {

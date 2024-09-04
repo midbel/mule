@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"time"
 
 	"github.com/midbel/mule/play"
 )
@@ -13,26 +14,37 @@ var (
 	ErrCancel = errors.New("cancel")
 )
 
-func cancelRequest(args []play.Value) (play.Value, error) {
-	return play.Void{}, ErrCancel
-}
-
-func abortRequest(args []play.Value) (play.Value, error) {
-	return play.Void{}, ErrAbort
-}
+const muleVarName = "mule"
 
 type muleObject struct {
-	req *muleRequest
-	res *muleResponse
-	ctx *muleCollection
+	when time.Time
+	req  *muleRequest
+	res  *muleResponse
+	ctx  *muleCollection
+
+	*play.EventHandler
 }
 
 func (_ *muleObject) String() string {
-	return "mule"
+	return muleVarName
 }
 
 func (_ *muleObject) True() play.Value {
 	return play.NewBool(true)
+}
+
+func (m *muleObject) Call(ident string, args []play.Value) (play.Value, error) {
+	switch ident {
+	case "cancel":
+		return Void{}, ErrCancel
+	case "abort":
+		return Void{}, ErrAbort
+	case "elapsed":
+		millis := time.Since(m.when).Milliseconds()
+		return play.NewFloat(millis), nil
+	default:
+		return nil, fmt.Errorf("%s: undefined fonction", ident)
+	}
 }
 
 func (m *muleObject) Get(ident play.Value) (play.Value, error) {
@@ -113,7 +125,7 @@ func (m *muleRequest) Get(ident play.Value) (play.Value, error) {
 			headers: m.request.Header,
 		}, nil
 	default:
-		return play.Void{}, fmt.Errorf("%s: unknown property", ident)
+		return play.Void{}, nil
 	}
 }
 
@@ -145,12 +157,14 @@ func (m *muleResponse) Get(ident play.Value) (play.Value, error) {
 			headers: m.response.Header,
 		}, nil
 	default:
-		return play.Void{}, fmt.Errorf("%s: unknown property", ident)
+		return play.Void{}, nil
 	}
 }
 
 func (m *muleResponse) Call(ident string, args []play.Value) (play.Value, error) {
 	switch ident {
+	case "json":
+		return Void{}, nil
 	case "success":
 		ok := m.response.StatusCode < http.StatusBadRequest
 		return play.NewBool(ok), nil
@@ -166,7 +180,6 @@ func (m *muleResponse) Call(ident string, args []play.Value) (play.Value, error)
 	default:
 		return nil, fmt.Errorf("%s: unknown function", ident)
 	}
-	return nil, play.ErrImpl
 }
 
 type muleHeader struct {
@@ -182,6 +195,7 @@ func (_ *muleHeader) Call(ident string, args []play.Value) (play.Value, error) {
 	case "get":
 	case "set":
 	case "has":
+	case "entries":
 	default:
 		return nil, fmt.Errorf("%s: unknown function", ident)
 	}

@@ -26,7 +26,14 @@ obj = {
 
 console.log('>> before: ', obj.name)
 obj.name = "foo"
-console.log('<< after: ', obj.name)
+obj.age = 5
+console.log('<< after1: ', obj.name, obj.age)
+obj["name"] = "bar"
+console.log('<< after2: ', obj.name, obj.age)
+
+const arr1 = [1, 2]
+arr1[0] = "foobar"
+console.log(arr1)
 
 
 console.log(obj.test())

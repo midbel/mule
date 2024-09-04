@@ -203,15 +203,15 @@ func (r *Request) Execute(ctx *Collection) error {
 		env = play.Enclosed(play.Default())
 		obj muleObject
 	)
+	obj.EventHandler = play.NewEventHandler()
+	obj.when = time.Now()
 	obj.req = &muleRequest{
 		request: req,
 	}
 	obj.ctx = &muleCollection{
 		collection: ctx,
 	}
-	env.Define("mule", &obj)
-	env.Define("cancel", play.NewBuiltinFunc("cancel", cancelRequest))
-	env.Define("abort", play.NewBuiltinFunc("abort", abortRequest))
+	env.Define(muleVarName, &obj)
 
 	if _, err := play.EvalWithEnv(strings.NewReader(r.Before), play.Freeze(env)); err != nil {
 		return err
@@ -221,10 +221,13 @@ func (r *Request) Execute(ctx *Collection) error {
 	if err != nil {
 		return err
 	}
+	defer res.Body.Close()
+
 	obj.res = &muleResponse{
 		response: res,
 	}
-	env.Define("mule", &obj)
+	env.Define(muleVarName, &obj)
+
 	if _, err := play.EvalWithEnv(strings.NewReader(r.After), play.Freeze(env)); err != nil {
 		return err
 	}
