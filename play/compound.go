@@ -201,18 +201,26 @@ func (a Array) Call(ident string, args []Value) (Value, error) {
 		fn = checkArity(1, a.forEach)
 	case "includes":
 	case "indexOf":
+		fn = checkArity(1, a.indexOf)
 	case "join":
 	case "map":
+		fn = checkArity(1, a.mapArray)
 	case "pop":
 		fn = checkArity(0, a.pop)
 	case "push":
+		fn = checkArity(-1, a.push)
 	case "reduce":
+		fn = checkArity(2, a.reduce)
+	case "reduceRight":
+		fn = checkArity(2, a.reduceRight)
 	case "reverse":
+		fn = checkArity(0, a.reverse)
 	case "shift":
 		fn = checkArity(0, a.shift)
 	case "slice":
 	case "splice":
 	case "some":
+		fn = checkArity(1, a.some)
 	default:
 		return nil, fmt.Errorf("%s: undefined function", ident)
 	}
@@ -443,6 +451,39 @@ func (a Array) forEach(args []Value) (Value, error) {
 	return Void{}, nil
 }
 
+func (a Array) indexOf(args []Value) (Value, error) {
+	if len(args) == 0 {
+		return Void{}, nil
+	}
+	for i := range a.Values {
+		if isEqual(a.Values[i], args[0]) {
+			return getFloat(float64(i)), nil
+		}
+	}
+	return getFloat(-1), nil
+}
+
+func (a Array) mapArray(args []Value) (Value, error) {
+	transform, ok := args[0].(Callable)
+	if !ok {
+		return nil, ErrType
+	}
+	arr := createArray()
+	for i := range a.Values {
+		args := []Value{
+			a.Values[i],
+			NewFloat(float64(i)),
+			a,
+		}
+		ret, err := transform.Call(args)
+		if err != nil {
+			return nil, err
+		}
+		arr.Values = append(arr.Values, ret)
+	}
+	return arr, nil
+}
+
 func (a Array) pop(args []Value) (Value, error) {
 	if len(a.Values) == 0 {
 		return Void{}, nil
@@ -450,6 +491,69 @@ func (a Array) pop(args []Value) (Value, error) {
 	ret := a.Values[len(a.Values)-1]
 	a.Values = a.Values[:len(a.Values)-1]
 	return ret, nil
+}
+
+func (a Array) push(args []Value) (Value, error) {
+	n := len(a.Values)
+	for i := range args {
+		a.Values = append(a.Values, args[i])
+		n++
+	}
+	return getFloat(float64(n)), nil
+}
+
+func (a Array) reduce(args []Value) (Value, error) {
+	apply, ok := args[0].(Callable)
+	if !ok {
+		return nil, ErrType
+	}
+	var (
+		ret = args[1]
+		err error
+	)
+	for i := range a.Values {
+		args := []Value{
+			ret,
+			a.Values[i],
+			getFloat(float64(i)),
+			a,
+		}
+		ret, err = apply.Call(args)
+		if err != nil {
+			return nil, err
+		}
+	}
+	return ret, nil
+}
+
+func (a Array) reduceRight(args []Value) (Value, error) {
+	apply, ok := args[0].(Callable)
+	if !ok {
+		return nil, ErrType
+	}
+	var (
+		err    error
+		ret    = args[1]
+		values = slices.Clone(a.Values)
+	)
+	for i := range slices.Reverse(values) {
+		args := []Value{
+			ret,
+			a.Values[i],
+			getFloat(float64(i)),
+			a,
+		}
+		ret, err = apply.Call(args)
+		if err != nil {
+			return nil, err
+		}
+	}
+	return ret, nil
+}
+
+func (a Array) reverse(args []Value) (Value, error) {
+	a.Values = slices.Reverse(a.Values)
+	return a
 }
 
 func (a Array) shift(args []Value) (Value, error) {
