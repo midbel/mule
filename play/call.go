@@ -1,5 +1,11 @@
 package play
 
+import (
+	"math"
+
+	"github.com/midbel/mule/environ"
+)
+
 type BuiltinFunc struct {
 	Ident string
 	Func  func([]Value) (Value, error)

@@ -2,9 +2,6 @@ package play
 
 import (
 	"errors"
-	"math"
-
-	"github.com/midbel/mule/environ"
 )
 
 var (
