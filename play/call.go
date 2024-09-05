@@ -6,6 +6,10 @@ import (
 	"github.com/midbel/mule/environ"
 )
 
+type Callable interface {
+	Call([]Value) (Value, error)
+}
+
 type BuiltinFunc struct {
 	Ident string
 	Func  func([]Value) (Value, error)

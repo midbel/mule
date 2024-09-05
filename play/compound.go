@@ -3,6 +3,7 @@ package play
 import (
 	"bytes"
 	"fmt"
+	"slices"
 )
 
 type Field struct {
@@ -176,16 +177,28 @@ func (a Array) Get(ident Value) (Value, error) {
 }
 
 func (a Array) Call(ident string, args []Value) (Value, error) {
+	var fn func([]Value) (Value, error)
 	switch ident {
 	case "at":
+		fn = checkArity(1, a.at)
 	case "concat":
+		fn = checkArity(-1, a.concat)
 	case "entries":
+		fn = checkArity(0, a.entries)
 	case "every":
+		fn = checkArity(1, a.every)
+	case "fill":
+		fn = checkArity(3, a.fill)
 	case "filter":
+		fn = checkArity(1, a.filter)
 	case "find":
+		fn = checkArity(1, a.find)
 	case "findIndex":
+		fn = checkArity(1, a.findIndex)
 	case "flat":
+		fn = checkArity(1, a.flat)
 	case "forEach":
+		fn = checkArity(1, a.forEach)
 	case "includes":
 	case "indexOf":
 	case "join":
@@ -201,7 +214,10 @@ func (a Array) Call(ident string, args []Value) (Value, error) {
 	default:
 		return nil, fmt.Errorf("%s: undefined function", ident)
 	}
-	return nil, ErrImpl
+	if fn == nil {
+		return nil, ErrImpl
+	}
+	return fn(args)
 }
 
 func (a Array) List() []Value {
@@ -210,4 +226,217 @@ func (a Array) List() []Value {
 
 func (a Array) Return() {
 	return
+}
+
+func (a Array) at(args []Value) (Value, error) {
+	ix, ok := args[0].(Float)
+	if !ok {
+		return nil, ErrType
+	}
+	at := int(ix.value)
+	if at < 0 {
+		at = len(a.Values) + at
+	}
+	if at >= 0 && at < len(a.Values) {
+		return a.Values[at], nil
+	}
+	return Void{}, nil
+}
+
+func (a Array) concat(args []Value) (Value, error) {
+	if len(args) == 0 {
+		return a, nil
+	}
+	for i := range args {
+		if other, ok := args[i].(Array); ok {
+			a.Values = slices.Concat(a.Values, other.Values)
+		} else {
+			a.Values = append(a.Values, args[i])
+		}
+	}
+	return a, nil
+}
+
+func (a Array) entries(args []Value) (Value, error) {
+	return nil, nil
+}
+
+func (a Array) every(args []Value) (Value, error) {
+	check, ok := args[0].(Callable)
+	if !ok {
+		return nil, ErrType
+	}
+	for i := range a.Values {
+		args := []Value{
+			a.Values[i],
+			NewFloat(float64(i)),
+			a,
+		}
+		ok, err := check.Call(args)
+		if err != nil {
+			return nil, err
+		}
+		if !isTrue(ok) {
+			return getBool(false), nil
+		}
+	}
+	return getBool(true), nil
+}
+
+func (a Array) fill(args []Value) (Value, error) {
+	if len(args) == 0 {
+		return nil, ErrOp
+	}
+	var (
+		fill Value
+		beg  int
+		end  = len(a.Values) - 1
+	)
+	if len(args) >= 1 {
+		fill = args[0]
+	}
+	if len(args) >= 2 {
+		x, ok := args[1].(Float)
+		if !ok {
+			return nil, ErrType
+		}
+		beg = int(x.value)
+		if beg < 0 {
+			beg = len(a.Values) + beg
+		}
+	}
+	if len(args) >= 3 {
+		x, ok := args[2].(Float)
+		if !ok {
+			return nil, ErrType
+		}
+		end = int(x.value)
+		if end < 0 {
+			end = len(a.Values) + end
+		}
+	}
+	if end <= beg {
+		return a, nil
+	}
+	for i := range a.Values[beg:end] {
+		a.Values[beg+i] = fill
+	}
+	return a, nil
+}
+
+func (a Array) filter(args []Value) (Value, error) {
+	keep, ok := args[0].(Callable)
+	if !ok {
+		return nil, ErrType
+	}
+	arr := createArray()
+	for i := range a.Values {
+		args := []Value{
+			a.Values[i],
+			NewFloat(float64(i)),
+			a,
+		}
+		ok, err := keep.Call(args)
+		if err != nil {
+			return nil, err
+		}
+		if !isTrue(ok) {
+			continue
+		}
+		arr.Values = append(arr.Values, a.Values[i])
+	}
+	return arr, nil
+}
+
+func (a Array) find(args []Value) (Value, error) {
+	find, ok := args[0].(Callable)
+	if !ok {
+		return nil, ErrType
+	}
+	for i := range a.Values {
+		args := []Value{
+			a.Values[i],
+			NewFloat(float64(i)),
+			a,
+		}
+		ok, err := find.Call(args)
+		if err != nil {
+			return nil, err
+		}
+		if isTrue(ok) {
+			return a.Values[i], nil
+		}
+	}
+	return Void{}, nil
+}
+
+func (a Array) findIndex(args []Value) (Value, error) {
+	find, ok := args[0].(Callable)
+	if !ok {
+		return nil, ErrType
+	}
+	for i := range a.Values {
+		args := []Value{
+			a.Values[i],
+			NewFloat(float64(i)),
+			a,
+		}
+		ok, err := find.Call(args)
+		if err != nil {
+			return nil, err
+		}
+		if isTrue(ok) {
+			return NewFloat(float64(i)), nil
+		}
+	}
+	return Void{}, nil
+}
+
+func (a Array) flat(args []Value) (Value, error) {
+	var (
+		depth   = 1
+		flatten func(Value, int) []Value
+	)
+	if len(args) > 0 {
+		d, ok := args[0].(Float)
+		if !ok {
+			return nil, ErrType
+		}
+		depth = int(d.value)
+	}
+
+	flatten = func(v Value, level int) []Value {
+		arr, ok := v.(Array)
+		if !ok || level < 0 {
+			return []Value{v}
+		}
+		var vs []Value
+		for i := range arr.Values {
+			xs := flatten(arr.Values[i], level-1)
+			vs = append(vs, xs...)
+		}
+		return vs
+	}
+	res := createArray()
+	res.Values = flatten(a, depth)
+	return res, nil
+}
+
+func (a Array) forEach(args []Value) (Value, error) {
+	each, ok := args[0].(Callable)
+	if !ok {
+		return nil, ErrType
+	}
+	for i := range a.Values {
+		args := []Value{
+			a.Values[i],
+			NewFloat(float64(i)),
+			a,
+		}
+		_, err := each.Call(args)
+		if err != nil {
+			return nil, err
+		}
+	}
+	return Void{}, nil
 }
