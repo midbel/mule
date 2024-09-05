@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"fmt"
 	"slices"
+	"strings"
 )
 
 type Field struct {
@@ -203,6 +204,7 @@ func (a Array) Call(ident string, args []Value) (Value, error) {
 	case "indexOf":
 		fn = checkArity(1, a.indexOf)
 	case "join":
+		fn = checkArity(1, a.join)
 	case "map":
 		fn = checkArity(1, a.mapArray)
 	case "pop":
@@ -221,6 +223,8 @@ func (a Array) Call(ident string, args []Value) (Value, error) {
 	case "splice":
 	case "some":
 		fn = checkArity(1, a.some)
+	case "unshift":
+		fn = checkArity(-1, a.unshift)
 	default:
 		return nil, fmt.Errorf("%s: undefined function", ident)
 	}
@@ -463,6 +467,28 @@ func (a Array) indexOf(args []Value) (Value, error) {
 	return getFloat(-1), nil
 }
 
+func (a Array) join(args []Value) (Value, error) {
+	var (
+		list []string
+		sep  = ","
+	)
+	if len(args) >= 1 {
+		str, ok := args[0].(fmt.Stringer)
+		if !ok {
+			return nil, ErrType
+		}
+		sep = str.String()
+	}
+	for i := range a.Values {
+		str, ok := a.Values[i].(fmt.Stringer)
+		if !ok {
+			return nil, ErrType
+		}
+		list = append(list, str.String())
+	}
+	return getString(strings.Join(list, sep)), nil
+}
+
 func (a Array) mapArray(args []Value) (Value, error) {
 	transform, ok := args[0].(Callable)
 	if !ok {
@@ -494,11 +520,8 @@ func (a Array) pop(args []Value) (Value, error) {
 }
 
 func (a Array) push(args []Value) (Value, error) {
+	a.Values = slices.Concat(a.Values, args)
 	n := len(a.Values)
-	for i := range args {
-		a.Values = append(a.Values, args[i])
-		n++
-	}
 	return getFloat(float64(n)), nil
 }
 
@@ -536,7 +559,8 @@ func (a Array) reduceRight(args []Value) (Value, error) {
 		ret    = args[1]
 		values = slices.Clone(a.Values)
 	)
-	for i := range slices.Reverse(values) {
+	slices.Reverse(values)
+	for i := range values {
 		args := []Value{
 			ret,
 			a.Values[i],
@@ -552,8 +576,8 @@ func (a Array) reduceRight(args []Value) (Value, error) {
 }
 
 func (a Array) reverse(args []Value) (Value, error) {
-	a.Values = slices.Reverse(a.Values)
-	return a
+	slices.Reverse(a.Values)
+	return a, nil
 }
 
 func (a Array) shift(args []Value) (Value, error) {
@@ -585,4 +609,10 @@ func (a Array) some(args []Value) (Value, error) {
 		}
 	}
 	return getBool(false), nil
+}
+
+func (a Array) unshift(args []Value) (Value, error) {
+	a.Values = slices.Concat(args, a.Values)
+	n := len(a.Values)
+	return getFloat(float64(n)), nil
 }
