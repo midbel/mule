@@ -22,7 +22,7 @@ type muleObject struct {
 	res  *muleResponse
 	ctx  *muleCollection
 
-	*play.EventHandler
+	play.EventHandler
 }
 
 func (_ *muleObject) String() string {
@@ -36,12 +36,12 @@ func (_ *muleObject) True() play.Value {
 func (m *muleObject) Call(ident string, args []play.Value) (play.Value, error) {
 	switch ident {
 	case "cancel":
-		return Void{}, ErrCancel
+		return play.Void{}, ErrCancel
 	case "abort":
-		return Void{}, ErrAbort
+		return play.Void{}, ErrAbort
 	case "elapsed":
 		millis := time.Since(m.when).Milliseconds()
-		return play.NewFloat(millis), nil
+		return play.NewFloat(float64(millis)), nil
 	default:
 		return nil, fmt.Errorf("%s: undefined fonction", ident)
 	}
@@ -164,7 +164,7 @@ func (m *muleResponse) Get(ident play.Value) (play.Value, error) {
 func (m *muleResponse) Call(ident string, args []play.Value) (play.Value, error) {
 	switch ident {
 	case "json":
-		return Void{}, nil
+		return play.Void{}, nil
 	case "success":
 		ok := m.response.StatusCode < http.StatusBadRequest
 		return play.NewBool(ok), nil
