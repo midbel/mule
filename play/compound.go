@@ -204,13 +204,15 @@ func (a Array) Call(ident string, args []Value) (Value, error) {
 	case "join":
 	case "map":
 	case "pop":
+		fn = checkArity(0, a.pop)
 	case "push":
 	case "reduce":
 	case "reverse":
 	case "shift":
+		fn = checkArity(0, a.shift)
 	case "slice":
 	case "splice":
-	case "all":
+	case "some":
 	default:
 		return nil, fmt.Errorf("%s: undefined function", ident)
 	}
@@ -439,4 +441,44 @@ func (a Array) forEach(args []Value) (Value, error) {
 		}
 	}
 	return Void{}, nil
+}
+
+func (a Array) pop(args []Value) (Value, error) {
+	if len(a.Values) == 0 {
+		return Void{}, nil
+	}
+	ret := a.Values[len(a.Values)-1]
+	a.Values = a.Values[:len(a.Values)-1]
+	return ret, nil
+}
+
+func (a Array) shift(args []Value) (Value, error) {
+	if len(a.Values) == 0 {
+		return Void{}, nil
+	}
+	ret := a.Values[0]
+	a.Values = a.Values[1:]
+	return ret, nil
+}
+
+func (a Array) some(args []Value) (Value, error) {
+	check, ok := args[0].(Callable)
+	if !ok {
+		return nil, ErrType
+	}
+	for i := range a.Values {
+		args := []Value{
+			a.Values[i],
+			NewFloat(float64(i)),
+			a,
+		}
+		ok, err := check.Call(args)
+		if err != nil {
+			return nil, err
+		}
+		if isTrue(ok) {
+			return getBool(true), nil
+		}
+	}
+	return getBool(false), nil
 }
