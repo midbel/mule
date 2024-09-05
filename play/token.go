@@ -58,6 +58,7 @@ var keywords = []string{
 	"case",
 	"default",
 	"while",
+	"do",
 	"function",
 	"return",
 	"import",

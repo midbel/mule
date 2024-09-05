@@ -31,7 +31,7 @@ var bindings = map[rune]int{
 	Assign:   powAssign,
 	Colon:    powAssign,
 	Arrow:    powAssign,
-	Keyword:  powKeyword,
+	Keyword:  powAssign,
 	Or:       powOr,
 	And:      powAnd,
 	Eq:       powEq,
@@ -127,15 +127,14 @@ func Parse(r io.Reader) *Parser {
 
 func (p *Parser) Parse() (Node, error) {
 	var body Body
+	p.skip(p.eol)
 	for !p.done() {
 		n, err := p.parseNode()
 		if err != nil {
 			return nil, err
 		}
 		body.Nodes = append(body.Nodes, n)
-		for p.is(EOL) {
-			p.next()
-		}
+		p.skip(p.eol)
 	}
 	return body, nil
 }
@@ -436,6 +435,10 @@ func (p *Parser) parseDo() (Node, error) {
 	}
 	do.Body = body
 	p.skip(p.eol)
+	if !p.is(Keyword) && p.curr.Literal != "while" {
+		return nil, p.unexpected()
+	}
+	p.next()
 	if do.Cdt, err = p.parseCondition(); err != nil {
 		return nil, err
 	}
@@ -494,7 +497,6 @@ func (p *Parser) parseBody() (Node, error) {
 		return nil, p.unexpected()
 	}
 	p.next()
-	// p.skip(p.eol)
 	return b, nil
 }
 
