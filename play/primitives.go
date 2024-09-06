@@ -682,3 +682,79 @@ func (s String) Get(ident Value) (Value, error) {
 		return Void{}, fmt.Errorf("%s: undefined property", str)
 	}
 }
+
+func (s String) concat(args []Value) (Value, error) {
+	return nil, nil
+}
+
+func (s String) endsWith(args []Value) (Value, error) {
+	return nil, nil
+}
+
+func (s String) includes(args []Value) (Value, error) {
+	return nil, nil
+}
+
+func (s String) indexOf(args []Value) (Value, error) {
+	return nil, nil
+}
+
+func (s String) lastIndexOf(args []Value) (Value, error) {
+	return nil, nil
+}
+
+func (s String) padEnd(args []Value) (Value, error) {
+	return nil, nil
+}
+
+func (s String) padStart(args []Value) (Value, error) {
+	return nil, nil
+}
+
+func (s String) repeat(args []Value) (Value, error) {
+	return nil, nil
+}
+
+func (s String) replace(args []Value) (Value, error) {
+	return nil, nil
+}
+
+func (s String) replaceAll(args []Value) (Value, error) {
+	return nil, nil
+}
+
+func (s String) slice(args []Value) (Value, error) {
+	return nil, nil
+}
+
+func (s String) split(args []Value) (Value, error) {
+	return nil, nil
+}
+
+func (s String) startsWith(args []Value) (Value, error) {
+	return nil, nil
+}
+
+func (s String) substring(args []Value) (Value, error) {
+	return nil, nil
+}
+
+func (s String) toLowerCase(args []Value) (Value, error) {
+	return nil, nil
+}
+
+func (s String) toUpperCase(args []Value) (Value, error) {
+	return nil, nil
+}
+
+func (s String) trim(args []Value) (Value, error) {
+	return nil, nil
+}
+
+func (s String) trimEnd(args []Value) (Value, error) {
+	return nil, nil
+}
+
+func (s String) trimStart(args []Value) (Value, error) {
+	return nil, nil
+}

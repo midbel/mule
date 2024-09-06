@@ -9,9 +9,11 @@ import (
 
 func Default() environ.Environment[Value] {
 	top := Empty()
-	top.Define("console", Console{})
-	top.Define("JSON", Json{})
-	top.Define("Math", Math{})
+	top.Define("console", makeConsole())
+	top.Define("Math", makeMath())
+	top.Define("JSON", makeJson())
+	top.Define("Object", makeObject())
+	top.Define("Array", makeArray())
 	top.Define("parseInt", createBuiltinFunc("parseInt", execParseInt))
 	top.Define("parseFloat", createBuiltinFunc("parseFloat", execParseFloat))
 	top.Define("isNaN", createBuiltinFunc("isNaN", execIsNaN))

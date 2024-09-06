@@ -2,7 +2,9 @@ package play
 
 import (
 	"bytes"
+	"encoding/json"
 	"fmt"
+	"os"
 	"slices"
 	"strings"
 )
@@ -17,15 +19,16 @@ type Field struct {
 type Object struct {
 	Fields map[Value]Value
 	Frozen bool
+	Sealed bool
 }
 
-func createObject() Object {
-	return Object{
+func createObject() *Object {
+	return &Object{
 		Fields: make(map[Value]Value),
 	}
 }
 
-func (o Object) String() string {
+func (o *Object) String() string {
 	var (
 		buf bytes.Buffer
 		ix  int
@@ -54,19 +57,19 @@ func (o Object) String() string {
 	return buf.String()
 }
 
-func (o Object) True() Value {
+func (o *Object) True() Value {
 	return getBool(len(o.Fields) != 0)
 }
 
-func (o Object) Not() Value {
+func (o *Object) Not() Value {
 	return getBool(len(o.Fields) == 0)
 }
 
-func (o Object) At(ix Value) (Value, error) {
+func (o *Object) At(ix Value) (Value, error) {
 	return o.Fields[ix], nil
 }
 
-func (o Object) Call(ident string, args []Value) (Value, error) {
+func (o *Object) Call(ident string, args []Value) (Value, error) {
 	fn, ok := o.Fields[getString(ident)]
 	if !ok {
 		return nil, fmt.Errorf("%s: undefined function", ident)
@@ -81,16 +84,16 @@ func (o Object) Call(ident string, args []Value) (Value, error) {
 	return call.Call(args)
 }
 
-func (o Object) SetAt(prop, value Value) error {
+func (o *Object) SetAt(prop, value Value) error {
 	return o.Set(prop, value)
 }
 
-func (o Object) Set(prop, value Value) error {
+func (o *Object) Set(prop, value Value) error {
 	o.Fields[prop] = value
 	return nil
 }
 
-func (o Object) Get(prop Value) (Value, error) {
+func (o *Object) Get(prop Value) (Value, error) {
 	v, ok := o.Fields[prop]
 	if !ok {
 		var x Void
@@ -99,7 +102,7 @@ func (o Object) Get(prop Value) (Value, error) {
 	return v, nil
 }
 
-func (o Object) Values() []Value {
+func (o *Object) Values() []Value {
 	var vs []Value
 	for k := range o.Fields {
 		vs = append(vs, o.Fields[k])
@@ -108,17 +111,17 @@ func (o Object) Values() []Value {
 }
 
 type Array struct {
-	Object
+	*Object
 	Values []Value
 }
 
-func createArray() Array {
-	return Array{
+func createArray() *Array {
+	return &Array{
 		Object: createObject(),
 	}
 }
 
-func (a Array) String() string {
+func (a *Array) String() string {
 	var buf bytes.Buffer
 	buf.WriteRune(lsquare)
 	for i := range a.Values {
@@ -132,15 +135,15 @@ func (a Array) String() string {
 	return buf.String()
 }
 
-func (a Array) True() Value {
+func (a *Array) True() Value {
 	return getBool(len(a.Values) != 0)
 }
 
-func (a Array) Not() Value {
+func (a *Array) Not() Value {
 	return getBool(len(a.Values) == 0)
 }
 
-func (a Array) At(ix Value) (Value, error) {
+func (a *Array) At(ix Value) (Value, error) {
 	x, ok := ix.(Float)
 	if !ok {
 		return nil, ErrEval
@@ -151,7 +154,7 @@ func (a Array) At(ix Value) (Value, error) {
 	return nil, ErrIndex
 }
 
-func (a Array) SetAt(ix Value, value Value) error {
+func (a *Array) SetAt(ix Value, value Value) error {
 	x, ok := ix.(Float)
 	if !ok {
 		return ErrEval
@@ -163,7 +166,7 @@ func (a Array) SetAt(ix Value, value Value) error {
 	return ErrIndex
 }
 
-func (a Array) Get(ident Value) (Value, error) {
+func (a *Array) Get(ident Value) (Value, error) {
 	str, ok := ident.(fmt.Stringer)
 	if !ok {
 		return nil, ErrEval
@@ -177,7 +180,7 @@ func (a Array) Get(ident Value) (Value, error) {
 	}
 }
 
-func (a Array) Call(ident string, args []Value) (Value, error) {
+func (a *Array) Call(ident string, args []Value) (Value, error) {
 	var fn func([]Value) (Value, error)
 	switch ident {
 	case "at":
@@ -245,15 +248,15 @@ func (a Array) Call(ident string, args []Value) (Value, error) {
 	return fn(args)
 }
 
-func (a Array) List() []Value {
+func (a *Array) List() []Value {
 	return a.Values
 }
 
-func (a Array) Return() {
+func (a *Array) Return() {
 	return
 }
 
-func (a Array) at(args []Value) (Value, error) {
+func (a *Array) at(args []Value) (Value, error) {
 	ix, ok := args[0].(Float)
 	if !ok {
 		return nil, ErrType
@@ -268,12 +271,12 @@ func (a Array) at(args []Value) (Value, error) {
 	return Void{}, nil
 }
 
-func (a Array) concat(args []Value) (Value, error) {
+func (a *Array) concat(args []Value) (Value, error) {
 	if len(args) == 0 {
 		return a, nil
 	}
 	for i := range args {
-		if other, ok := args[i].(Array); ok {
+		if other, ok := args[i].(*Array); ok {
 			a.Values = slices.Concat(a.Values, other.Values)
 		} else {
 			a.Values = append(a.Values, args[i])
@@ -282,11 +285,11 @@ func (a Array) concat(args []Value) (Value, error) {
 	return a, nil
 }
 
-func (a Array) entries(args []Value) (Value, error) {
+func (a *Array) entries(args []Value) (Value, error) {
 	return nil, nil
 }
 
-func (a Array) every(args []Value) (Value, error) {
+func (a *Array) every(args []Value) (Value, error) {
 	check, ok := args[0].(Callable)
 	if !ok {
 		return nil, ErrType
@@ -308,7 +311,7 @@ func (a Array) every(args []Value) (Value, error) {
 	return getBool(true), nil
 }
 
-func (a Array) fill(args []Value) (Value, error) {
+func (a *Array) fill(args []Value) (Value, error) {
 	if len(args) == 0 {
 		return nil, ErrOp
 	}
@@ -349,7 +352,7 @@ func (a Array) fill(args []Value) (Value, error) {
 	return a, nil
 }
 
-func (a Array) filter(args []Value) (Value, error) {
+func (a *Array) filter(args []Value) (Value, error) {
 	keep, ok := args[0].(Callable)
 	if !ok {
 		return nil, ErrType
@@ -373,7 +376,7 @@ func (a Array) filter(args []Value) (Value, error) {
 	return arr, nil
 }
 
-func (a Array) find(args []Value) (Value, error) {
+func (a *Array) find(args []Value) (Value, error) {
 	find, ok := args[0].(Callable)
 	if !ok {
 		return nil, ErrType
@@ -395,7 +398,7 @@ func (a Array) find(args []Value) (Value, error) {
 	return Void{}, nil
 }
 
-func (a Array) findIndex(args []Value) (Value, error) {
+func (a *Array) findIndex(args []Value) (Value, error) {
 	find, ok := args[0].(Callable)
 	if !ok {
 		return nil, ErrType
@@ -417,7 +420,7 @@ func (a Array) findIndex(args []Value) (Value, error) {
 	return Void{}, nil
 }
 
-func (a Array) findLast(args []Value) (Value, error) {
+func (a *Array) findLast(args []Value) (Value, error) {
 	find, ok := args[0].(Callable)
 	if !ok {
 		return nil, ErrType
@@ -441,7 +444,7 @@ func (a Array) findLast(args []Value) (Value, error) {
 	return Void{}, nil
 }
 
-func (a Array) findLastIndex(args []Value) (Value, error) {
+func (a *Array) findLastIndex(args []Value) (Value, error) {
 	find, ok := args[0].(Callable)
 	if !ok {
 		return nil, ErrType
@@ -465,7 +468,7 @@ func (a Array) findLastIndex(args []Value) (Value, error) {
 	return Void{}, nil
 }
 
-func (a Array) flat(args []Value) (Value, error) {
+func (a *Array) flat(args []Value) (Value, error) {
 	var (
 		depth   = 1
 		flatten func(Value, int) []Value
@@ -479,7 +482,7 @@ func (a Array) flat(args []Value) (Value, error) {
 	}
 
 	flatten = func(v Value, level int) []Value {
-		arr, ok := v.(Array)
+		arr, ok := v.(*Array)
 		if !ok || level < 0 {
 			return []Value{v}
 		}
@@ -495,7 +498,7 @@ func (a Array) flat(args []Value) (Value, error) {
 	return res, nil
 }
 
-func (a Array) flatMap(args []Value) (Value, error) {
+func (a *Array) flatMap(args []Value) (Value, error) {
 	transform, ok := args[0].(Callable)
 	if !ok {
 		return nil, ErrType
@@ -511,7 +514,7 @@ func (a Array) flatMap(args []Value) (Value, error) {
 		if err != nil {
 			return nil, err
 		}
-		if x, ok := ret.(Array); ok {
+		if x, ok := ret.(*Array); ok {
 			arr.Values = append(arr.Values, x.Values...)
 		} else {
 			arr.Values = append(arr.Values, ret)
@@ -520,7 +523,7 @@ func (a Array) flatMap(args []Value) (Value, error) {
 	return arr, nil
 }
 
-func (a Array) forEach(args []Value) (Value, error) {
+func (a *Array) forEach(args []Value) (Value, error) {
 	each, ok := args[0].(Callable)
 	if !ok {
 		return nil, ErrType
@@ -539,7 +542,7 @@ func (a Array) forEach(args []Value) (Value, error) {
 	return Void{}, nil
 }
 
-func (a Array) includes(args []Value) (Value, error) {
+func (a *Array) includes(args []Value) (Value, error) {
 	if len(args) == 0 {
 		return getBool(false), nil
 	}
@@ -565,7 +568,7 @@ func (a Array) includes(args []Value) (Value, error) {
 	return getBool(false), nil
 }
 
-func (a Array) indexOf(args []Value) (Value, error) {
+func (a *Array) indexOf(args []Value) (Value, error) {
 	if len(args) == 0 {
 		return Void{}, nil
 	}
@@ -591,7 +594,7 @@ func (a Array) indexOf(args []Value) (Value, error) {
 	return getFloat(-1), nil
 }
 
-func (a Array) lastIndexOf(args []Value) (Value, error) {
+func (a *Array) lastIndexOf(args []Value) (Value, error) {
 	if len(args) == 0 {
 		return Void{}, nil
 	}
@@ -620,7 +623,7 @@ func (a Array) lastIndexOf(args []Value) (Value, error) {
 	return getFloat(-1), nil
 }
 
-func (a Array) join(args []Value) (Value, error) {
+func (a *Array) join(args []Value) (Value, error) {
 	var (
 		list []string
 		sep  = ","
@@ -642,7 +645,7 @@ func (a Array) join(args []Value) (Value, error) {
 	return getString(strings.Join(list, sep)), nil
 }
 
-func (a Array) mapArray(args []Value) (Value, error) {
+func (a *Array) mapArray(args []Value) (Value, error) {
 	transform, ok := args[0].(Callable)
 	if !ok {
 		return nil, ErrType
@@ -663,7 +666,7 @@ func (a Array) mapArray(args []Value) (Value, error) {
 	return arr, nil
 }
 
-func (a Array) pop(args []Value) (Value, error) {
+func (a *Array) pop(args []Value) (Value, error) {
 	if len(a.Values) == 0 {
 		return Void{}, nil
 	}
@@ -672,13 +675,13 @@ func (a Array) pop(args []Value) (Value, error) {
 	return ret, nil
 }
 
-func (a Array) push(args []Value) (Value, error) {
+func (a *Array) push(args []Value) (Value, error) {
 	a.Values = slices.Concat(a.Values, args)
 	n := len(a.Values)
 	return getFloat(float64(n)), nil
 }
 
-func (a Array) reduce(args []Value) (Value, error) {
+func (a *Array) reduce(args []Value) (Value, error) {
 	apply, ok := args[0].(Callable)
 	if !ok {
 		return nil, ErrType
@@ -702,7 +705,7 @@ func (a Array) reduce(args []Value) (Value, error) {
 	return ret, nil
 }
 
-func (a Array) reduceRight(args []Value) (Value, error) {
+func (a *Array) reduceRight(args []Value) (Value, error) {
 	apply, ok := args[0].(Callable)
 	if !ok {
 		return nil, ErrType
@@ -728,12 +731,12 @@ func (a Array) reduceRight(args []Value) (Value, error) {
 	return ret, nil
 }
 
-func (a Array) reverse(args []Value) (Value, error) {
+func (a *Array) reverse(args []Value) (Value, error) {
 	slices.Reverse(a.Values)
 	return a, nil
 }
 
-func (a Array) shift(args []Value) (Value, error) {
+func (a *Array) shift(args []Value) (Value, error) {
 	if len(a.Values) == 0 {
 		return Void{}, nil
 	}
@@ -742,7 +745,7 @@ func (a Array) shift(args []Value) (Value, error) {
 	return ret, nil
 }
 
-func (a Array) slice(args []Value) (Value, error) {
+func (a *Array) slice(args []Value) (Value, error) {
 	var (
 		beg int
 		end = len(a.Values)
@@ -772,7 +775,7 @@ func (a Array) slice(args []Value) (Value, error) {
 	return arr, nil
 }
 
-func (a Array) splice(args []Value) (Value, error) {
+func (a *Array) splice(args []Value) (Value, error) {
 	var (
 		start int
 		size  int
@@ -817,7 +820,7 @@ func (a Array) splice(args []Value) (Value, error) {
 	return arr, nil
 }
 
-func (a Array) some(args []Value) (Value, error) {
+func (a *Array) some(args []Value) (Value, error) {
 	check, ok := args[0].(Callable)
 	if !ok {
 		return nil, ErrType
@@ -839,8 +842,232 @@ func (a Array) some(args []Value) (Value, error) {
 	return getBool(false), nil
 }
 
-func (a Array) unshift(args []Value) (Value, error) {
+func (a *Array) unshift(args []Value) (Value, error) {
 	a.Values = slices.Concat(args, a.Values)
 	n := len(a.Values)
 	return getFloat(float64(n)), nil
+}
+
+type callableFunc func([]Value) (Value, error)
+
+func (fn callableFunc) Call(args []Value) (Value, error) {
+	return fn(args)
+}
+
+func asCallable(fn func([]Value) (Value, error)) Callable {
+	return callableFunc(fn)
+}
+
+type global struct {
+	name  string
+	fnset map[string]Callable
+}
+
+func (g global) True() Value {
+	return getBool(true)
+}
+
+func (g global) String() string {
+	return g.name
+}
+
+func (g global) Call(ident string, args []Value) (Value, error) {
+	call, ok := g.fnset[ident]
+	if !ok {
+		return nil, fmt.Errorf("%s: undefined function", ident)
+	}
+	return call.Call(args)
+}
+
+func makeObject() Value {
+	g := global{
+		name:  "Object",
+		fnset: make(map[string]Callable),
+	}
+	g.fnset["seal"] = nil
+	g.fnset["freeze"] = nil
+	g.fnset["isSealed"] = nil
+	g.fnset["isFrozen"] = nil
+	g.fnset["create"] = nil
+	g.fnset["assign"] = nil
+	g.fnset["entries"] = nil
+	g.fnset["values"] = nil
+	g.fnset["is"] = nil
+	g.fnset["groupBy"] = nil
+	return g
+}
+
+func makeArray() Value {
+	g := global{
+		name:  "Array",
+		fnset: make(map[string]Callable),
+	}
+	g.fnset["isArray"] = nil
+	g.fnset["from"] = nil
+	g.fnset["of"] = nil
+	return g
+}
+
+func makeJson() Value {
+	g := global{
+		name:  "JSON",
+		fnset: make(map[string]Callable),
+	}
+
+	g.fnset["parse"] = asCallable(jsonParse)
+	g.fnset["stringify"] = asCallable(jsonString)
+
+	return g
+}
+
+func jsonParse(args []Value) (Value, error) {
+	if len(args) != 1 {
+		return Void{}, ErrArgument
+	}
+	str, ok := args[0].(String)
+	if !ok {
+		return args[0], nil
+	}
+	var (
+		obj interface{}
+		buf = strings.NewReader(str.value)
+	)
+	if err := json.NewDecoder(buf).Decode(&obj); err != nil {
+		return Void{}, err
+	}
+	return nativeToValues(obj)
+}
+
+func jsonString(args []Value) (Value, error) {
+	if len(args) != 1 {
+		return Void{}, ErrArgument
+	}
+	v, err := valuesToNative(args[0])
+	if err != nil {
+		return nil, err
+	}
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(v); err != nil {
+		return nil, err
+	}
+	return getString(buf.String()), nil
+}
+
+func valuesToNative(arg Value) (interface{}, error) {
+	switch a := arg.(type) {
+	case String:
+		return a.value, nil
+	case Float:
+		return a.value, nil
+	case Bool:
+		return a.value, nil
+	case *Array:
+		var arr []interface{}
+		for i := range a.Values {
+			v, err := valuesToNative(a.Values[i])
+			if err != nil {
+				return nil, err
+			}
+			arr = append(arr, v)
+		}
+		return arr, nil
+	case *Object:
+		arr := make(map[string]interface{})
+		for k, v := range a.Fields {
+			vv, err := valuesToNative(v)
+			if err != nil {
+				return nil, err
+			}
+			arr[fmt.Sprintf("%s", k)] = vv
+		}
+		return arr, nil
+	default:
+		return nil, fmt.Errorf("type can not be converted to json")
+	}
+}
+
+func nativeToValues(obj interface{}) (Value, error) {
+	switch v := obj.(type) {
+	case string:
+		return getString(v), nil
+	case float64:
+		return getFloat(v), nil
+	case bool:
+		return getBool(v), nil
+	case []interface{}:
+		arr := createArray()
+		for i := range v {
+			a, err := nativeToValues(v[i])
+			if err != nil {
+				return nil, err
+			}
+			arr.Values = append(arr.Values, a)
+		}
+		return arr, nil
+	case map[string]interface{}:
+		obj := createObject()
+		for kv, vv := range v {
+			a, err := nativeToValues(vv)
+			if err != nil {
+				return nil, err
+			}
+			obj.Fields[getString(kv)] = a
+		}
+		return obj, nil
+	default:
+		return nil, fmt.Errorf("%v: unsupported JSON type", obj)
+	}
+}
+
+func makeMath() Value {
+	g := global{
+		name:  "Math",
+		fnset: make(map[string]Callable),
+	}
+
+	g.fnset["abs"] = nil
+	g.fnset["ceil"] = nil
+	g.fnset["cos"] = nil
+	g.fnset["exp"] = nil
+	g.fnset["floor"] = nil
+	g.fnset["log"] = nil
+	g.fnset["round"] = nil
+	g.fnset["max"] = nil
+	g.fnset["min"] = nil
+	g.fnset["pow"] = nil
+	g.fnset["random"] = nil
+	g.fnset["sin"] = nil
+	g.fnset["tan"] = nil
+	g.fnset["trunc"] = nil
+
+	return g
+}
+
+func makeConsole() Value {
+	g := global{
+		name:  "Array",
+		fnset: make(map[string]Callable),
+	}
+	g.fnset["log"] = asCallable(consoleLog)
+	g.fnset["error"] = asCallable(consoleError)
+	g.fnset["warning"] = nil
+	return g
+}
+
+func consoleLog(args []Value) (Value, error) {
+	for i := range args {
+		fmt.Fprint(os.Stdout, args[i])
+		fmt.Fprint(os.Stdout, " ")
+	}
+	fmt.Fprintln(os.Stdout)
+	return Void{}, nil
+}
+
+func consoleError(args []Value) (Value, error) {
+	for i := range args {
+		fmt.Fprint(os.Stderr, args[i])
+		fmt.Fprint(os.Stderr, " ")
+	}
+	fmt.Fprintln(os.Stderr)
+	return Void{}, nil
 }
