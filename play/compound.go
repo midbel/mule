@@ -220,7 +220,9 @@ func (a Array) Call(ident string, args []Value) (Value, error) {
 	case "shift":
 		fn = checkArity(0, a.shift)
 	case "slice":
+		fn = checkArity(2, a.slice)
 	case "splice":
+		fn = checkArity(-1, a.slice)
 	case "some":
 		fn = checkArity(1, a.some)
 	case "unshift":
@@ -587,6 +589,81 @@ func (a Array) shift(args []Value) (Value, error) {
 	ret := a.Values[0]
 	a.Values = a.Values[1:]
 	return ret, nil
+}
+
+func (a Array) slice(args []Value) (Value, error) {
+	var (
+		beg int
+		end = len(a.Values)
+	)
+	if len(args) >= 1 {
+		x, ok := args[0].(Float)
+		if !ok {
+			return nil, ErrType
+		}
+		beg = int(x.value)
+		if beg < 0 {
+			beg = len(a.Values) + beg
+		}
+	}
+	if len(args) >= 2 {
+		x, ok := args[1].(Float)
+		if !ok {
+			return nil, ErrType
+		}
+		end = int(x.value)
+		if end < 0 {
+			end = len(a.Values) + end
+		}
+	}
+	arr := createArray()
+	arr.Values = slices.Clone(a.Values[beg:end])
+	return arr, nil
+}
+
+func (a Array) splice(args []Value) (Value, error) {
+	var (
+		start int
+		size  int
+		list  []Value
+	)
+	x, ok := args[0].(Float)
+	if !ok {
+		return nil, ErrType
+	}
+	if start = int(x.value); start < 0 {
+		start = len(a.Values) + start
+	}
+	if len(args) >= 2 {
+		x, ok := args[0].(Float)
+		if !ok {
+			return nil, ErrType
+		}
+		if size = int(x.value); size < 0 {
+			return nil, fmt.Errorf("negative count")
+		}
+		if start+size >= len(a.Values) {
+			a.Values, list = a.Values[:start], a.Values[start:]
+			size = 0
+		} else {
+			list = a.Values[start : start+size]
+			a.Values = append(a.Values[:start], a.Values[start+size:]...)
+		}
+	} else {
+		a.Values = a.Values[:start]
+
+		arr := createArray()
+		arr.Values = a.Values[start:]
+		return arr, nil
+	}
+	if len(args) >= 3 {
+		rest := slices.Clone(args[2:])
+		a.Values = append(a.Values[:start], append(rest, a.Values[start+size:]...)...)
+	}
+
+	arr := createArray()
+	arr.Values = list
+	return arr, nil
 }
 
 func (a Array) some(args []Value) (Value, error) {
