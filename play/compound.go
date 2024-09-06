@@ -1023,7 +1023,16 @@ func objectIsSealed(args []Value) (Value, error) {
 	if !ok {
 		return nil, ErrType
 	}
-	return getBool(obj.isSealed()), nil
+	if obj.canBeExtended() {
+		return getBool(false), nil
+	}
+	for k := range obj.Fields {
+		f, ok := obj.Fields[k].(Field)
+		if !ok || f.configurable {
+			return getBool(false), nil
+		}
+	}
+	return getBool(true), nil
 }
 
 func objectIsFrozen(args []Value) (Value, error) {
@@ -1034,7 +1043,16 @@ func objectIsFrozen(args []Value) (Value, error) {
 	if !ok {
 		return nil, ErrType
 	}
-	return getBool(obj.isFrozen()), nil
+	if obj.canBeExtended() {
+		return getBool(false), nil
+	}
+	for k := range obj.Fields {
+		f, ok := obj.Fields[k].(Field)
+		if !ok || f.configurable || f.writable {
+			return getBool(false), nil
+		}
+	}
+	return getBool(true), nil
 }
 
 func objectKeys(args []Value) (Value, error) {
