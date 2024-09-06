@@ -941,12 +941,24 @@ func makeObject() Value {
 	g.fnset["values"] = asCallable(objectValues)
 	g.fnset["is"] = asCallable(objectIs)
 	g.fnset["groupBy"] = nil
-	g.fnset["preventExtension"] = asCallable(objectPreventExtension)
+	g.fnset["preventExtensions"] = asCallable(objectPreventExtensions)
+	g.fnset["isExtensible"] = asCallable(objectIsExtensible)
 	g.fnset["propertyIsEnumerable"] = nil
 	return g
 }
 
-func objectPreventExtension(args []Value) (Value, error) {
+func objectIsExtensible(args []Value) (Value, error) {
+	if len(args) != 1 {
+		return nil, ErrArgument
+	}
+	obj, ok := args[0].(*Object)
+	if !ok {
+		return nil, ErrType
+	}
+	return getBool(obj.canBeExtended()), nil
+}
+
+func objectPreventExtensions(args []Value) (Value, error) {
 	if len(args) != 1 {
 		return nil, ErrArgument
 	}
