@@ -196,13 +196,22 @@ func (a Array) Call(ident string, args []Value) (Value, error) {
 		fn = checkArity(1, a.find)
 	case "findIndex":
 		fn = checkArity(1, a.findIndex)
+	case "findLast":
+		fn = checkArity(1, a.findLast)
+	case "findLastIndex":
+		fn = checkArity(1, a.findLastIndex)
 	case "flat":
 		fn = checkArity(1, a.flat)
+	case "flatMap":
+		fn = checkArity(1, a.flatMap)
 	case "forEach":
 		fn = checkArity(1, a.forEach)
 	case "includes":
+		fn = checkArity(1, a.includes)
 	case "indexOf":
-		fn = checkArity(1, a.indexOf)
+		fn = checkArity(2, a.indexOf)
+	case "lastIndexOf":
+		fn = checkArity(2, a.lastIndexOf)
 	case "join":
 		fn = checkArity(1, a.join)
 	case "map":
@@ -408,6 +417,54 @@ func (a Array) findIndex(args []Value) (Value, error) {
 	return Void{}, nil
 }
 
+func (a Array) findLast(args []Value) (Value, error) {
+	find, ok := args[0].(Callable)
+	if !ok {
+		return nil, ErrType
+	}
+	values := slices.Clone(a.Values)
+	slices.Reverse(values)
+	for i := range values {
+		args := []Value{
+			values[i],
+			NewFloat(float64(len(a.Values) - (i + 1))),
+			a,
+		}
+		ok, err := find.Call(args)
+		if err != nil {
+			return nil, err
+		}
+		if isTrue(ok) {
+			return values[i], nil
+		}
+	}
+	return Void{}, nil
+}
+
+func (a Array) findLastIndex(args []Value) (Value, error) {
+	find, ok := args[0].(Callable)
+	if !ok {
+		return nil, ErrType
+	}
+	values := slices.Clone(a.Values)
+	slices.Reverse(values)
+	for i := range values {
+		args := []Value{
+			values[i],
+			NewFloat(float64(len(a.Values) - (i + 1))),
+			a,
+		}
+		ok, err := find.Call(args)
+		if err != nil {
+			return nil, err
+		}
+		if isTrue(ok) {
+			return NewFloat(float64(len(a.Values) - (i + 1))), nil
+		}
+	}
+	return Void{}, nil
+}
+
 func (a Array) flat(args []Value) (Value, error) {
 	var (
 		depth   = 1
@@ -438,6 +495,31 @@ func (a Array) flat(args []Value) (Value, error) {
 	return res, nil
 }
 
+func (a Array) flatMap(args []Value) (Value, error) {
+	transform, ok := args[0].(Callable)
+	if !ok {
+		return nil, ErrType
+	}
+	arr := createArray()
+	for i := range a.Values {
+		args := []Value{
+			a.Values[i],
+			NewFloat(float64(i)),
+			a,
+		}
+		ret, err := transform.Call(args)
+		if err != nil {
+			return nil, err
+		}
+		if x, ok := ret.(Array); ok {
+			arr.Values = append(arr.Values, x.Values...)
+		} else {
+			arr.Values = append(arr.Values, ret)
+		}
+	}
+	return arr, nil
+}
+
 func (a Array) forEach(args []Value) (Value, error) {
 	each, ok := args[0].(Callable)
 	if !ok {
@@ -457,13 +539,82 @@ func (a Array) forEach(args []Value) (Value, error) {
 	return Void{}, nil
 }
 
+func (a Array) includes(args []Value) (Value, error) {
+	if len(args) == 0 {
+		return getBool(false), nil
+	}
+	var beg int
+	if len(args) >= 2 {
+		x, ok := args[1].(Float)
+		if !ok {
+			return nil, ErrType
+		}
+		beg = int(x.value)
+		if beg < 0 {
+			beg = len(a.Values) + beg
+		}
+		if beg >= len(a.Values) || beg < 0 {
+			return getBool(false), nil
+		}
+	}
+	for i := range a.Values[beg:] {
+		if isEqual(args[0], a.Values[beg+i]) {
+			return getBool(true), nil
+		}
+	}
+	return getBool(false), nil
+}
+
 func (a Array) indexOf(args []Value) (Value, error) {
 	if len(args) == 0 {
 		return Void{}, nil
 	}
-	for i := range a.Values {
-		if isEqual(a.Values[i], args[0]) {
-			return getFloat(float64(i)), nil
+	var beg int
+	if len(args) >= 2 {
+		x, ok := args[1].(Float)
+		if !ok {
+			return nil, ErrType
+		}
+		beg = int(x.value)
+		if beg < 0 {
+			beg = len(a.Values) + beg
+		}
+		if beg >= len(a.Values) || beg < 0 {
+			return getBool(false), nil
+		}
+	}
+	for i := range a.Values[beg:] {
+		if isEqual(a.Values[beg+i], args[0]) {
+			return getFloat(float64(beg + i)), nil
+		}
+	}
+	return getFloat(-1), nil
+}
+
+func (a Array) lastIndexOf(args []Value) (Value, error) {
+	if len(args) == 0 {
+		return Void{}, nil
+	}
+	var beg int
+	if len(args) >= 2 {
+		x, ok := args[1].(Float)
+		if !ok {
+			return nil, ErrType
+		}
+		beg = int(x.value)
+		if beg < 0 {
+			beg = len(a.Values) + beg
+		}
+		if beg >= len(a.Values) || beg < 0 {
+			return getBool(false), nil
+		}
+	}
+	values := slices.Clone(a.Values[beg:])
+	slices.Reverse(values)
+	for i := range values {
+		if isEqual(values[i], args[0]) {
+			ix := len(a.Values) - (i + 1)
+			return getFloat(float64(ix)), nil
 		}
 	}
 	return getFloat(-1), nil
