@@ -9,6 +9,12 @@ import (
 	"strings"
 )
 
+const (
+	frozenObject = 1 << iota
+	sealedObject
+	lockedObject
+)
+
 type Field struct {
 	Value
 	writable     bool
@@ -16,10 +22,18 @@ type Field struct {
 	configurable bool
 }
 
+func fieldByAssignment(value Value) Value {
+	return Field{
+		Value:        value,
+		writable:     true,
+		enumerable:   true,
+		configurable: true,
+	}
+}
+
 type Object struct {
 	Fields map[Value]Value
-	Frozen bool
-	Sealed bool
+	locked int
 }
 
 func createObject() *Object {
@@ -91,15 +105,10 @@ func (o *Object) SetAt(prop, value Value) error {
 func (o *Object) Set(prop, value Value) error {
 	v, ok := o.Fields[prop]
 	if !ok {
-		if o.Frozen || o.Sealed {
+		if !o.canBeExtended() {
 			return fmt.Errorf("object can not be extended")
 		}
-		o.Fields[prop] = Field{
-			configurable: true,
-			writable:     true,
-			enumerable:   true,
-			Value:        value,
-		}
+		o.Fields[prop] = fieldByAssignment(value)
 		return nil
 	}
 	f, ok := v.(Field)
@@ -133,6 +142,18 @@ func (o *Object) Values() []Value {
 		vs = append(vs, o.Fields[k])
 	}
 	return vs
+}
+
+func (o *Object) canBeExtended() bool {
+	return o.locked == 0
+}
+
+func (o *Object) isFrozen() bool {
+	return (o.locked & frozenObject) == frozenObject
+}
+
+func (o *Object) isSealed() bool {
+	return (o.locked & sealedObject) == sealedObject
 }
 
 type Array struct {
@@ -920,7 +941,24 @@ func makeObject() Value {
 	g.fnset["values"] = asCallable(objectValues)
 	g.fnset["is"] = asCallable(objectIs)
 	g.fnset["groupBy"] = nil
+	g.fnset["preventExtension"] = asCallable(objectPreventExtension)
+	g.fnset["propertyIsEnumerable"] = nil
 	return g
+}
+
+func objectPreventExtension(args []Value) (Value, error) {
+	if len(args) != 1 {
+		return nil, ErrArgument
+	}
+	obj, ok := args[0].(*Object)
+	if !ok {
+		return nil, ErrType
+	}
+	if obj.isFrozen() || obj.isSealed() {
+		return obj, nil
+	}
+	obj.locked |= lockedObject
+	return obj, nil
 }
 
 func objectSeal(args []Value) (Value, error) {
@@ -931,7 +969,10 @@ func objectSeal(args []Value) (Value, error) {
 	if !ok {
 		return nil, ErrType
 	}
-	obj.Sealed = true
+	if obj.isFrozen() {
+		return obj, nil
+	}
+	obj.locked |= sealedObject
 	for k, d := range obj.Fields {
 		f, ok := d.(Field)
 		if !ok {
@@ -955,7 +996,10 @@ func objectFreeze(args []Value) (Value, error) {
 	if !ok {
 		return nil, ErrType
 	}
-	obj.Frozen = true
+	if obj.isFrozen() {
+		return obj, nil
+	}
+	obj.locked |= lockedObject
 	for k, d := range obj.Fields {
 		f, ok := d.(Field)
 		if !ok {
@@ -979,7 +1023,7 @@ func objectIsSealed(args []Value) (Value, error) {
 	if !ok {
 		return nil, ErrType
 	}
-	return getBool(obj.Sealed), nil
+	return getBool(obj.isSealed()), nil
 }
 
 func objectIsFrozen(args []Value) (Value, error) {
@@ -990,7 +1034,7 @@ func objectIsFrozen(args []Value) (Value, error) {
 	if !ok {
 		return nil, ErrType
 	}
-	return getBool(obj.Frozen), nil
+	return getBool(obj.isFrozen()), nil
 }
 
 func objectKeys(args []Value) (Value, error) {
