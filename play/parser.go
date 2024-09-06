@@ -95,7 +95,9 @@ func Parse(r io.Reader) *Parser {
 	p.registerPrefix(Keyword, p.parseKeyword)
 
 	p.registerInfix(Dot, p.parseDot)
+	p.registerInfix(Optional, p.parseDot)
 	p.registerInfix(Assign, p.parseAssign)
+	p.registerInfix(Nullish, p.parseBinary)
 	p.registerInfix(Add, p.parseBinary)
 	p.registerInfix(Sub, p.parseBinary)
 	p.registerInfix(Mul, p.parseBinary)
@@ -110,8 +112,6 @@ func Parse(r io.Reader) *Parser {
 	p.registerInfix(Le, p.parseBinary)
 	p.registerInfix(Gt, p.parseBinary)
 	p.registerInfix(Ge, p.parseBinary)
-	p.registerInfix(And, p.parseBinary)
-	p.registerInfix(Or, p.parseBinary)
 	p.registerInfix(Incr, p.parseIncrPostfix)
 	p.registerInfix(Decr, p.parseDecrPostfix)
 	p.registerInfix(Arrow, p.parseArrow)
@@ -1111,6 +1111,7 @@ func (p *Parser) parseGroup() (Node, error) {
 
 func (p *Parser) parseDot(left Node) (Node, error) {
 	access := Access{
+		Optional: p.is(Optional),
 		Node:     left,
 		Position: p.curr.Position,
 	}

@@ -46,7 +46,8 @@ type Index struct {
 }
 
 type Access struct {
-	Ident Node
+	Optional bool
+	Ident    Node
 	Node
 	Position
 }

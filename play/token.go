@@ -11,6 +11,12 @@ const (
 	Number
 	Boolean
 	Invalid
+	New
+	TypeOf
+	InstanceOf
+	Delete
+	Optional
+	Nullish
 	Incr
 	Decr
 	Add
@@ -32,6 +38,7 @@ const (
 	And
 	Or
 	Arrow
+	Spread
 	Dot
 	Comma
 	Question
@@ -95,6 +102,8 @@ func (t Token) String() string {
 		return "<eof>"
 	case EOL:
 		return "<eol>"
+	case Spread:
+		return "spread"
 	case Dot:
 		return "<dot>"
 	case Arrow:
@@ -153,8 +162,20 @@ func (t Token) String() string {
 		return "<and>"
 	case Or:
 		return "<or>"
+	case New:
+		return "<new>"
+	case TypeOf:
+		return "<typeof>"
+	case InstanceOf:
+		return "<instanceof>"
+	case Delete:
+		return "<delete>"
 	case Question:
 		return "<question>"
+	case Nullish:
+		return "<nullish>"
+	case Optional:
+		return "<optional>"
 	case Colon:
 		return "<colon>"
 	case Keyword:

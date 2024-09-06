@@ -72,8 +72,18 @@ func (s *Scanner) scanIdent(tok *Token) {
 		s.read()
 	}
 	tok.Literal = s.literal()
-	tok.Type = Ident
-
+	switch tok.Literal {
+	case "new":
+		tok.Type = New
+	case "instanceof":
+		tok.Type = InstanceOf
+	case "typeof":
+		tok.Type = TypeOf
+	case "delete":
+		tok.Type = Delete
+	default:
+		tok.Type = Ident
+	}
 	if slices.Contains(keywords, tok.Literal) {
 		tok.Type = Keyword
 		if tok.Literal == "true" || tok.Literal == "false" {
@@ -211,10 +221,28 @@ func (s *Scanner) scanOperator(tok *Token) {
 		}
 	case question:
 		tok.Type = Question
+		if s.peek() == question {
+			s.read()
+			tok.Type = Nullish
+		}
+		if s.peek() == dot {
+			s.read()
+			tok.Type = Optional
+		}
 	case colon:
 		tok.Type = Colon
 	case dot:
 		tok.Type = Dot
+		if s.peek() == dot {
+			s.save()
+			s.read()
+			s.read()
+			if s.char != dot {
+				s.restore()
+				break
+			}
+			tok.Type = Spread
+		}
 	case comma:
 		tok.Type = Comma
 	default:
