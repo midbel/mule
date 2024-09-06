@@ -1019,6 +1019,7 @@ func (p *Parser) parseKey() (Node, error) {
 	if err != nil {
 		return nil, err
 	}
+	p.skip(p.eol)
 	fn.Body = body
 	return fn, nil
 }

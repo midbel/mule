@@ -89,7 +89,28 @@ func (o *Object) SetAt(prop, value Value) error {
 }
 
 func (o *Object) Set(prop, value Value) error {
-	o.Fields[prop] = value
+	v, ok := o.Fields[prop]
+	if !ok {
+		if o.Frozen || o.Sealed {
+			return fmt.Errorf("object can not be extended")
+		}
+		o.Fields[prop] = Field{
+			configurable: true,
+			writable:     true,
+			enumerable:   true,
+			Value:        value,
+		}
+		return nil
+	}
+	f, ok := v.(Field)
+	if !ok {
+		return ErrEval
+	}
+	if !f.writable {
+		return fmt.Errorf("%s: property not writable", prop)
+	}
+	f.Value = value
+	o.Fields[prop] = f
 	return nil
 }
 
@@ -98,6 +119,10 @@ func (o *Object) Get(prop Value) (Value, error) {
 	if !ok {
 		var x Void
 		return x, nil
+	}
+	f, ok := v.(Field)
+	if ok {
+		return f.Value, nil
 	}
 	return v, nil
 }
@@ -884,17 +909,133 @@ func makeObject() Value {
 		name:  "Object",
 		fnset: make(map[string]Callable),
 	}
-	g.fnset["seal"] = nil
-	g.fnset["freeze"] = nil
-	g.fnset["isSealed"] = nil
-	g.fnset["isFrozen"] = nil
+	g.fnset["seal"] = asCallable(objectSeal)
+	g.fnset["freeze"] = asCallable(objectFreeze)
+	g.fnset["isSealed"] = asCallable(objectIsSealed)
+	g.fnset["isFrozen"] = asCallable(objectIsFrozen)
 	g.fnset["create"] = nil
 	g.fnset["assign"] = nil
 	g.fnset["entries"] = nil
-	g.fnset["values"] = nil
-	g.fnset["is"] = nil
+	g.fnset["keys"] = asCallable(objectKeys)
+	g.fnset["values"] = asCallable(objectValues)
+	g.fnset["is"] = asCallable(objectIs)
 	g.fnset["groupBy"] = nil
 	return g
+}
+
+func objectSeal(args []Value) (Value, error) {
+	if len(args) != 1 {
+		return nil, ErrArgument
+	}
+	obj, ok := args[0].(*Object)
+	if !ok {
+		return nil, ErrType
+	}
+	obj.Sealed = true
+	for k, d := range obj.Fields {
+		f, ok := d.(Field)
+		if !ok {
+			continue
+		}
+
+		f.writable = true
+		f.configurable = false
+		f.enumerable = false
+
+		obj.Fields[k] = f
+	}
+	return obj, nil
+}
+
+func objectFreeze(args []Value) (Value, error) {
+	if len(args) != 1 {
+		return nil, ErrArgument
+	}
+	obj, ok := args[0].(*Object)
+	if !ok {
+		return nil, ErrType
+	}
+	obj.Frozen = true
+	for k, d := range obj.Fields {
+		f, ok := d.(Field)
+		if !ok {
+			continue
+		}
+
+		f.writable = false
+		f.configurable = false
+		f.enumerable = false
+
+		obj.Fields[k] = f
+	}
+	return obj, nil
+}
+
+func objectIsSealed(args []Value) (Value, error) {
+	if len(args) != 1 {
+		return nil, ErrArgument
+	}
+	obj, ok := args[0].(*Object)
+	if !ok {
+		return nil, ErrType
+	}
+	return getBool(obj.Sealed), nil
+}
+
+func objectIsFrozen(args []Value) (Value, error) {
+	if len(args) != 1 {
+		return nil, ErrArgument
+	}
+	obj, ok := args[0].(*Object)
+	if !ok {
+		return nil, ErrType
+	}
+	return getBool(obj.Frozen), nil
+}
+
+func objectKeys(args []Value) (Value, error) {
+	if len(args) != 1 {
+		return nil, ErrArgument
+	}
+	obj, ok := args[0].(*Object)
+	if !ok {
+		return nil, ErrType
+	}
+	arr := createArray()
+	for k := range obj.Fields {
+		arr.Values = append(arr.Values, k)
+	}
+	return arr, nil
+}
+
+func objectValues(args []Value) (Value, error) {
+	if len(args) != 1 {
+		return nil, ErrArgument
+	}
+	obj, ok := args[0].(*Object)
+	if !ok {
+		return nil, ErrType
+	}
+	arr := createArray()
+	for k := range obj.Fields {
+		arr.Values = append(arr.Values, obj.Fields[k])
+	}
+	return arr, nil
+}
+
+func objectIs(args []Value) (Value, error) {
+	if len(args) != 2 {
+		return nil, ErrArgument
+	}
+	obj1, ok := args[0].(*Object)
+	if !ok {
+		return nil, ErrType
+	}
+	obj2, ok := args[1].(*Object)
+	if !ok {
+		return nil, ErrType
+	}
+	return getBool(obj1 == obj2), nil
 }
 
 func makeArray() Value {
@@ -902,10 +1043,18 @@ func makeArray() Value {
 		name:  "Array",
 		fnset: make(map[string]Callable),
 	}
-	g.fnset["isArray"] = nil
+	g.fnset["isArray"] = asCallable(arrayIsArray)
 	g.fnset["from"] = nil
 	g.fnset["of"] = nil
 	return g
+}
+
+func arrayIsArray(args []Value) (Value, error) {
+	if len(args) != 1 {
+		return nil, ErrArgument
+	}
+	_, ok := args[0].(*Array)
+	return getBool(ok), nil
 }
 
 func makeJson() Value {
