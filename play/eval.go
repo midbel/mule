@@ -3,6 +3,7 @@ package play
 import (
 	"errors"
 	"io"
+	"slices"
 
 	"github.com/midbel/mule/environ"
 )
@@ -61,6 +62,8 @@ func eval(n Node, env environ.Environment[Value]) (Value, error) {
 		return evalIndex(n, env)
 	case Access:
 		return evalAccess(n, env)
+	case Extend:
+		return eval(n.Node, env)
 	case Unary:
 		return evalUnary(n, env)
 	case Binary:
@@ -420,7 +423,15 @@ func evalCall(c Call, env environ.Environment[Value]) (Value, error) {
 		if err != nil {
 			return nil, err
 		}
-		args = append(args, a)
+		if _, ok := c.Args[i].(Extend); ok {
+			xs, ok := a.(*Array)
+			if !ok {
+				return nil, ErrEval
+			}
+			args = slices.Concat(args, xs.Values)
+		} else {
+			args = append(args, a)
+		}
 	}
 	if call, ok := value.(interface{ Call([]Value) (Value, error) }); ok {
 		res, err := call.Call(args)
@@ -482,7 +493,15 @@ func evalList(a List, env environ.Environment[Value]) (Value, error) {
 		if err != nil {
 			return nil, err
 		}
-		arr.Values = append(arr.Values, v)
+		if _, ok := n.(Extend); ok {
+			xs, ok := v.(*Array)
+			if !ok {
+				return nil, ErrEval
+			}
+			arr.Values = slices.Concat(arr.Values, xs.Values)
+		} else {
+			arr.Values = append(arr.Values, v)
+		}
 	}
 	return arr, nil
 }

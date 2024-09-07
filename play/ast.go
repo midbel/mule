@@ -45,6 +45,11 @@ type Index struct {
 	Position
 }
 
+type Extend struct {
+	Position
+	Node
+}
+
 type Access struct {
 	Optional bool
 	Ident    Node

@@ -95,6 +95,7 @@ func Parse(r io.Reader) *Parser {
 	p.registerPrefix(Keyword, p.parseKeyword)
 	p.registerPrefix(TypeOf, p.parseTypeOf)
 	p.registerPrefix(Del, p.parseDelete)
+	p.registerPrefix(Spread, p.parseSpread)
 
 	p.registerInfix(Dot, p.parseDot)
 	p.registerInfix(Optional, p.parseDot)
@@ -809,6 +810,18 @@ func (p *Parser) parseTypeOf() (Node, error) {
 		Position: p.curr.Position,
 	}
 	p.next()
+	n, err := p.parseExpression(powPrefix)
+	if err != nil {
+		return nil, err
+	}
+	expr.Node = n
+	return expr, nil
+}
+
+func (p *Parser) parseSpread() (Node, error) {
+	expr := Extend{
+		Position: p.curr.Position,
+	}
 	n, err := p.parseExpression(powPrefix)
 	if err != nil {
 		return nil, err
