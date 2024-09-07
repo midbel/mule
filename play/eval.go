@@ -469,6 +469,16 @@ func evalMap(a Map, env environ.Environment[Value]) (Value, error) {
 		} else {
 			key, err = eval(k, env)
 		}
+		if _, ok := k.(Extend); ok {
+			tmp, ok := key.(*Object)
+			if !ok {
+				return nil, ErrEval
+			}
+			for k, v := range tmp.Fields {
+				obj.Fields[k] = fieldByAssignment(v)
+			}
+			continue
+		}
 		if err != nil {
 			return nil, err
 		}
@@ -481,7 +491,7 @@ func evalMap(a Map, env environ.Environment[Value]) (Value, error) {
 		if err != nil {
 			return nil, err
 		}
-		obj.Fields[key] = val
+		obj.Fields[key] = fieldByAssignment(val)
 	}
 	return obj, nil
 }

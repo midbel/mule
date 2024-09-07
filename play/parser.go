@@ -822,6 +822,7 @@ func (p *Parser) parseSpread() (Node, error) {
 	expr := Extend{
 		Position: p.curr.Position,
 	}
+	p.next()
 	n, err := p.parseExpression(powPrefix)
 	if err != nil {
 		return nil, err
@@ -1015,6 +1016,9 @@ func (p *Parser) parseKey() (Node, error) {
 	if p.is(Boolean) {
 		return p.parseBoolean()
 	}
+	if p.is(Spread) {
+		return p.parseSpread()
+	}
 
 	if !p.is(Ident) {
 		return nil, p.unexpected()
@@ -1094,8 +1098,8 @@ func (p *Parser) parseMap() (Node, error) {
 			obj.Nodes[key] = val
 			if p.is(Comma) {
 				p.next()
-				p.skip(p.eol)
 			}
+			p.skip(p.eol)
 			continue
 		}
 		if !p.is(Colon) {
@@ -1108,6 +1112,8 @@ func (p *Parser) parseMap() (Node, error) {
 		}
 		obj.Nodes[key] = val
 		switch {
+		case p.is(EOL):
+			p.skip(p.eol)
 		case p.is(Comma):
 			p.next()
 			p.skip(p.eol)
@@ -1120,7 +1126,6 @@ func (p *Parser) parseMap() (Node, error) {
 		return nil, p.unexpected()
 	}
 	p.next()
-	p.skip(p.eol)
 	return obj, nil
 }
 

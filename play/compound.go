@@ -25,6 +25,9 @@ type Field struct {
 }
 
 func fieldByAssignment(value Value) Value {
+	if _, ok := value.(Field); ok {
+		return value
+	}
 	return Field{
 		Value:        value,
 		writable:     true,
@@ -86,7 +89,14 @@ func (o *Object) Not() Value {
 }
 
 func (o *Object) At(ix Value) (Value, error) {
-	return o.Fields[ix], nil
+	v, ok := o.Fields[ix]
+	if !ok {
+		return Void{}, nil
+	}
+	if f, ok := v.(Field); ok {
+		return f.Value, nil
+	}
+	return v, nil
 }
 
 func (o *Object) Call(ident string, args []Value) (Value, error) {
