@@ -42,6 +42,10 @@ func createObject() *Object {
 	}
 }
 
+func (o *Object) Type() string {
+	return "object"
+}
+
 func (o *Object) String() string {
 	var (
 		buf bytes.Buffer
@@ -123,6 +127,29 @@ func (o *Object) Set(prop, value Value) error {
 	return nil
 }
 
+func (o *Object) Del(prop Value) error {
+	if o.isFrozen() || o.isSealed() {
+		return fmt.Errorf("property can not be delete from sealed/frozen object")
+	}
+	v, ok := o.Fields[prop]
+	if !ok {
+		return nil
+	}
+	f, ok := v.(Field) 
+	if !ok {
+		delete(o.Fields, prop)
+	}
+	if !f.configurable {
+		return fmt.Errorf("propery can not be deleted")
+	}
+	delete(o.Fields, prop)
+	return nil
+}
+
+func (o *Object) DelAt(prop Value) error {
+	return o.Del(prop)
+}
+
 func (o *Object) Get(prop Value) (Value, error) {
 	v, ok := o.Fields[prop]
 	if !ok {
@@ -165,6 +192,10 @@ func createArray() *Array {
 	return &Array{
 		Object: createObject(),
 	}
+}
+
+func (a *Array) Type() string {
+	return "array"
 }
 
 func (a *Array) String() string {
@@ -210,6 +241,10 @@ func (a *Array) SetAt(ix Value, value Value) error {
 		return nil
 	}
 	return ErrIndex
+}
+
+func (a *Array) DelAt(prop Value) error {
+	return nil
 }
 
 func (a *Array) Get(ident Value) (Value, error) {
@@ -907,6 +942,10 @@ func asCallable(fn func([]Value) (Value, error)) Callable {
 type global struct {
 	name  string
 	fnset map[string]Callable
+}
+
+func (g global) Type() string {
+	return "object"
 }
 
 func (g global) True() Value {

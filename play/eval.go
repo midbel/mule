@@ -71,6 +71,8 @@ func eval(n Node, env environ.Environment[Value]) (Value, error) {
 		return evalLet(n, env)
 	case Const:
 		return evalConst(n, env)
+	case Delete:
+		return evalDelete(n, env)
 	case Increment:
 		return evalIncrement(n, env)
 	case Decrement:
@@ -651,6 +653,51 @@ func evalDecrement(i Decrement, env environ.Environment[Value]) (Value, error) {
 	return val, nil
 }
 
+func evalDelete(d Delete, env environ.Environment[Value]) (Value, error) {
+	switch n := d.Node.(type) {
+	case Access:
+		res, err := eval(n.Node, env)
+		if err != nil {
+			return nil, err
+		}
+		ident, ok := n.Ident.(Identifier)
+		if !ok {
+			return nil, ErrOp
+		}
+		expr, err := eval(ident, env)
+		if err != nil {
+			return nil, err
+		}
+		del, ok := res.(interface{Del(Value) error })
+		if !ok {
+			return nil, ErrOp
+		}
+		if err = del.Del(expr); err != nil {
+			return getBool(false), nil
+		}
+		return getBool(true), nil
+	case Index:
+		res, err := eval(n.Ident, env)
+		if err != nil {
+			return nil, err
+		}
+		expr, err := eval(n.Expr, env)
+		if err != nil {
+			return nil, err
+		}
+		del, ok := res.(interface{ DelAt(Value) error })
+		if !ok {
+			return nil, ErrOp
+		}
+		if err = del.DelAt(expr); err != nil {
+			return getBool(false), nil
+		}
+		return getBool(true), nil
+	default:
+		return getBool(false), nil 
+	}
+}
+
 func evalUnary(u Unary, env environ.Environment[Value]) (Value, error) {
 	right, err := eval(u.Node, env)
 	if err != nil {
@@ -659,6 +706,12 @@ func evalUnary(u Unary, env environ.Environment[Value]) (Value, error) {
 	switch u.Op {
 	default:
 		return nil, ErrEval
+	case TypeOf:
+		res, ok := right.(interface{ Type() string })
+		if !ok {
+			return nil, ErrOp
+		}
+		return getString(res.Type()), nil
 	case Sub:
 		res, ok := right.(interface{ Rev() Value })
 		if !ok {
@@ -696,6 +749,13 @@ func evalBinary(b Binary, env environ.Environment[Value]) (Value, error) {
 		return getBool(isTrue(left) && isTrue(right)), nil
 	case Or:
 		return getBool(isTrue(left) || isTrue(right)), nil
+	case Nullish:
+		if isNull(left) || isUndefined(left) {
+			return right, nil
+		}
+		return left, nil
+	case InstanceOf:
+		return nil, ErrEval
 	case Eq:
 		left, ok := left.(interface{ Equal(Value) (Value, error) })
 		if !ok {

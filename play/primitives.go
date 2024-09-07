@@ -13,6 +13,10 @@ func isUndefined(v Value) bool {
 	return ok
 }
 
+func (_ Void) Type() string {
+	return "undefined"
+}
+
 func (_ Void) String() string {
 	return "undefined"
 }
@@ -82,6 +86,10 @@ type Nil struct{}
 func isNull(v Value) bool {
 	_, ok := v.(Nil)
 	return ok
+}
+
+func (_ Nil) Type() string {
+	return "null"
 }
 
 func (_ Nil) String() string {
@@ -164,6 +172,10 @@ func getFloat(val float64) Float {
 
 func nan() Float {
 	return getFloat(math.NaN())
+}
+
+func (_ Float) Type() string {
+	return "number"
 }
 
 func (f Float) String() string {
@@ -442,6 +454,10 @@ func getBool(val bool) Value {
 	}
 }
 
+func (_ Bool) Type() string {
+	return "boolean"
+}
+
 func (b Bool) String() string {
 	return strconv.FormatBool(b.value)
 }
@@ -497,6 +513,10 @@ func getString(val string) Value {
 	return String{
 		value: val,
 	}
+}
+
+func (_ String) Type() string {
+	return "string"
 }
 
 func (s String) String() string {

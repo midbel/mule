@@ -93,6 +93,8 @@ func Parse(r io.Reader) *Parser {
 	p.registerPrefix(Lsquare, p.parseList)
 	p.registerPrefix(Lcurly, p.parseMap)
 	p.registerPrefix(Keyword, p.parseKeyword)
+	p.registerPrefix(TypeOf, p.parseTypeOf)
+	p.registerPrefix(Del, p.parseDelete)
 
 	p.registerInfix(Dot, p.parseDot)
 	p.registerInfix(Optional, p.parseDot)
@@ -112,6 +114,8 @@ func Parse(r io.Reader) *Parser {
 	p.registerInfix(Le, p.parseBinary)
 	p.registerInfix(Gt, p.parseBinary)
 	p.registerInfix(Ge, p.parseBinary)
+	p.registerInfix(Nullish, p.parseBinary)
+	p.registerInfix(InstanceOf, p.parseBinary)
 	p.registerInfix(Incr, p.parseIncrPostfix)
 	p.registerInfix(Decr, p.parseDecrPostfix)
 	p.registerInfix(Arrow, p.parseArrow)
@@ -784,6 +788,33 @@ func (p *Parser) parseExpression(pow int) (Node, error) {
 		}
 	}
 	return left, nil
+}
+
+func (p *Parser) parseDelete() (Node, error) {
+	expr := Delete{
+		Position: p.curr.Position,
+	}
+	p.next()
+	n, err := p.parseExpression(powPrefix)
+	if err != nil {
+		return nil, err
+	}
+	expr.Node = n
+	return expr, nil
+}
+
+func (p *Parser) parseTypeOf() (Node, error) {
+	expr := Unary{
+		Op:       TypeOf,
+		Position: p.curr.Position,
+	}
+	p.next()
+	n, err := p.parseExpression(powPrefix)
+	if err != nil {
+		return nil, err
+	}
+	expr.Node = n
+	return expr, nil
 }
 
 func (p *Parser) parseNot() (Node, error) {

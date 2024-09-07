@@ -14,7 +14,7 @@ const (
 	New
 	TypeOf
 	InstanceOf
-	Delete
+	Del
 	Optional
 	Nullish
 	Incr
@@ -168,7 +168,7 @@ func (t Token) String() string {
 		return "<typeof>"
 	case InstanceOf:
 		return "<instanceof>"
-	case Delete:
+	case Del:
 		return "<delete>"
 	case Question:
 		return "<question>"

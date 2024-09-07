@@ -52,6 +52,11 @@ type Access struct {
 	Position
 }
 
+type Delete struct {
+	Position
+	Node
+}
+
 type Unary struct {
 	Op rune
 	Node

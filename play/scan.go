@@ -80,7 +80,7 @@ func (s *Scanner) scanIdent(tok *Token) {
 	case "typeof":
 		tok.Type = TypeOf
 	case "delete":
-		tok.Type = Delete
+		tok.Type = Del
 	default:
 		tok.Type = Ident
 	}
