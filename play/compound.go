@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"io"
 	"os"
 	"slices"
 	"strings"
@@ -135,7 +136,7 @@ func (o *Object) Del(prop Value) error {
 	if !ok {
 		return nil
 	}
-	f, ok := v.(Field) 
+	f, ok := v.(Field)
 	if !ok {
 		delete(o.Fields, prop)
 	}
@@ -1317,19 +1318,35 @@ func makeConsole() Value {
 }
 
 func consoleLog(args []Value) (Value, error) {
-	for i := range args {
-		fmt.Fprint(os.Stdout, args[i])
-		fmt.Fprint(os.Stdout, " ")
-	}
-	fmt.Fprintln(os.Stdout)
-	return Void{}, nil
+	return writeConsole(os.Stdout, args)
 }
 
 func consoleError(args []Value) (Value, error) {
+	return writeConsole(os.Stderr, args)
+}
+
+func writeConsole(w io.Writer, args []Value) (Value, error) {
 	for i := range args {
-		fmt.Fprint(os.Stderr, args[i])
-		fmt.Fprint(os.Stderr, " ")
+		var (
+			val = args[i]
+			str string
+		)
+		if call, ok := val.(interface {
+			Call(string, []Value) (Value, error)
+		}); ok {
+			v, err := call.Call("toString", []Value{})
+			if err == nil {
+				val = v
+			}
+		}
+		if s, ok := val.(fmt.Stringer); ok {
+			str = s.String()
+		} else {
+			str = fmt.Sprint(val)
+		}
+		fmt.Fprint(w, str)
+		fmt.Fprint(w, " ")
 	}
-	fmt.Fprintln(os.Stderr)
+	fmt.Fprintln(w)
 	return Void{}, nil
 }

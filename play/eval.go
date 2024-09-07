@@ -664,15 +664,11 @@ func evalDelete(d Delete, env environ.Environment[Value]) (Value, error) {
 		if !ok {
 			return nil, ErrOp
 		}
-		expr, err := eval(ident, env)
-		if err != nil {
-			return nil, err
-		}
-		del, ok := res.(interface{Del(Value) error })
+		del, ok := res.(interface{ Del(Value) error })
 		if !ok {
 			return nil, ErrOp
 		}
-		if err = del.Del(expr); err != nil {
+		if err = del.Del(getString(ident.Name)); err != nil {
 			return getBool(false), nil
 		}
 		return getBool(true), nil
@@ -694,7 +690,7 @@ func evalDelete(d Delete, env environ.Environment[Value]) (Value, error) {
 		}
 		return getBool(true), nil
 	default:
-		return getBool(false), nil 
+		return getBool(false), nil
 	}
 }
 
