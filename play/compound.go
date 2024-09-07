@@ -1335,7 +1335,7 @@ func writeConsole(w io.Writer, args []Value) (Value, error) {
 			Call(string, []Value) (Value, error)
 		}); ok {
 			v, err := call.Call("toString", []Value{})
-			if err == nil {
+			if err == nil || errors.Is(err, ErrReturn) {
 				val = v
 			}
 		}
