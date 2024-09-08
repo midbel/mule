@@ -88,15 +88,3 @@ func isEqual(fst Value, snd Value) bool {
 	res, _ := eq.Equal(snd)
 	return isTrue(res)
 }
-
-func checkArity(max int, fn func([]Value) (Value, error)) func([]Value) (Value, error) {
-	if max < 0 {
-		return fn
-	}
-	return func(args []Value) (Value, error) {
-		if len(args) > max {
-			return nil, ErrArgument
-		}
-		return fn(args)
-	}
-}

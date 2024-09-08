@@ -281,61 +281,61 @@ func (a *Array) Call(ident string, args []Value) (Value, error) {
 	var fn func([]Value) (Value, error)
 	switch ident {
 	case "at":
-		fn = checkArity(1, a.at)
+		fn = a.at
 	case "concat":
-		fn = checkArity(-1, a.concat)
+		fn = a.concat
 	case "entries":
-		fn = checkArity(0, a.entries)
+		fn = a.entries
 	case "every":
-		fn = checkArity(1, a.every)
+		fn = a.every
 	case "fill":
-		fn = checkArity(3, a.fill)
+		fn = a.fill
 	case "filter":
-		fn = checkArity(1, a.filter)
+		fn = a.filter
 	case "find":
-		fn = checkArity(1, a.find)
+		fn = a.find
 	case "findIndex":
-		fn = checkArity(1, a.findIndex)
+		fn = a.findIndex
 	case "findLast":
-		fn = checkArity(1, a.findLast)
+		fn = a.findLast
 	case "findLastIndex":
-		fn = checkArity(1, a.findLastIndex)
+		fn = a.findLastIndex
 	case "flat":
-		fn = checkArity(1, a.flat)
+		fn = a.flat
 	case "flatMap":
-		fn = checkArity(1, a.flatMap)
+		fn = a.flatMap
 	case "forEach":
-		fn = checkArity(1, a.forEach)
+		fn = a.forEach
 	case "includes":
-		fn = checkArity(1, a.includes)
+		fn = a.includes
 	case "indexOf":
-		fn = checkArity(2, a.indexOf)
+		fn = a.indexOf
 	case "lastIndexOf":
-		fn = checkArity(2, a.lastIndexOf)
+		fn = a.lastIndexOf
 	case "join":
-		fn = checkArity(1, a.join)
+		fn = a.join
 	case "map":
-		fn = checkArity(1, a.mapArray)
+		fn = a.mapArray
 	case "pop":
-		fn = checkArity(0, a.pop)
+		fn = a.pop
 	case "push":
-		fn = checkArity(-1, a.push)
+		fn = a.push
 	case "reduce":
-		fn = checkArity(2, a.reduce)
+		fn = a.reduce
 	case "reduceRight":
-		fn = checkArity(2, a.reduceRight)
+		fn = a.reduceRight
 	case "reverse":
-		fn = checkArity(0, a.reverse)
+		fn = a.reverse
 	case "shift":
-		fn = checkArity(0, a.shift)
+		fn = a.shift
 	case "slice":
-		fn = checkArity(2, a.slice)
+		fn = a.slice
 	case "splice":
-		fn = checkArity(-1, a.slice)
+		fn = a.slice
 	case "some":
-		fn = checkArity(1, a.some)
+		fn = a.some
 	case "unshift":
-		fn = checkArity(-1, a.unshift)
+		fn = a.unshift
 	default:
 		return nil, fmt.Errorf("%s: undefined function", ident)
 	}
@@ -354,6 +354,9 @@ func (a *Array) Return() {
 }
 
 func (a *Array) at(args []Value) (Value, error) {
+	if len(args) == 0 {
+		return Void{}, nil
+	}
 	ix, ok := args[0].(Float)
 	if !ok {
 		return nil, ErrType
@@ -387,6 +390,9 @@ func (a *Array) entries(args []Value) (Value, error) {
 }
 
 func (a *Array) every(args []Value) (Value, error) {
+	if len(args) == 0 {
+		return getBool(false), nil
+	}
 	check, ok := args[0].(Callable)
 	if !ok {
 		return nil, ErrType
@@ -450,6 +456,9 @@ func (a *Array) fill(args []Value) (Value, error) {
 }
 
 func (a *Array) filter(args []Value) (Value, error) {
+	if len(args) == 0 {
+		return a, nil
+	}
 	keep, ok := args[0].(Callable)
 	if !ok {
 		return nil, ErrType
@@ -474,6 +483,9 @@ func (a *Array) filter(args []Value) (Value, error) {
 }
 
 func (a *Array) find(args []Value) (Value, error) {
+	if len(args) == 0 {
+		return Void{}, nil
+	}
 	find, ok := args[0].(Callable)
 	if !ok {
 		return nil, ErrType
@@ -496,6 +508,9 @@ func (a *Array) find(args []Value) (Value, error) {
 }
 
 func (a *Array) findIndex(args []Value) (Value, error) {
+	if len(args) == 0 {
+		return getFloat(-1), nil
+	}
 	find, ok := args[0].(Callable)
 	if !ok {
 		return nil, ErrType
@@ -518,6 +533,9 @@ func (a *Array) findIndex(args []Value) (Value, error) {
 }
 
 func (a *Array) findLast(args []Value) (Value, error) {
+	if len(args) == 0 {
+		return Void{}, nil
+	}
 	find, ok := args[0].(Callable)
 	if !ok {
 		return nil, ErrType
@@ -542,6 +560,9 @@ func (a *Array) findLast(args []Value) (Value, error) {
 }
 
 func (a *Array) findLastIndex(args []Value) (Value, error) {
+	if len(args) == 0 {
+		return getFloat(-1), nil
+	}
 	find, ok := args[0].(Callable)
 	if !ok {
 		return nil, ErrType
@@ -596,6 +617,9 @@ func (a *Array) flat(args []Value) (Value, error) {
 }
 
 func (a *Array) flatMap(args []Value) (Value, error) {
+	if len(args) == 0 {
+		return a, nil
+	}
 	transform, ok := args[0].(Callable)
 	if !ok {
 		return nil, ErrType
@@ -621,6 +645,9 @@ func (a *Array) flatMap(args []Value) (Value, error) {
 }
 
 func (a *Array) forEach(args []Value) (Value, error) {
+	if len(args) == 0 {
+		return Void{}, nil
+	}
 	each, ok := args[0].(Callable)
 	if !ok {
 		return nil, ErrType
@@ -667,7 +694,7 @@ func (a *Array) includes(args []Value) (Value, error) {
 
 func (a *Array) indexOf(args []Value) (Value, error) {
 	if len(args) == 0 {
-		return Void{}, nil
+		return getFloat(-1), nil
 	}
 	var beg int
 	if len(args) >= 2 {
@@ -693,7 +720,7 @@ func (a *Array) indexOf(args []Value) (Value, error) {
 
 func (a *Array) lastIndexOf(args []Value) (Value, error) {
 	if len(args) == 0 {
-		return Void{}, nil
+		return getFloat(-1), nil
 	}
 	var beg int
 	if len(args) >= 2 {
@@ -723,7 +750,7 @@ func (a *Array) lastIndexOf(args []Value) (Value, error) {
 func (a *Array) join(args []Value) (Value, error) {
 	var (
 		list []string
-		sep  = ","
+		sep  = " "
 	)
 	if len(args) >= 1 {
 		str, ok := args[0].(fmt.Stringer)
@@ -743,6 +770,9 @@ func (a *Array) join(args []Value) (Value, error) {
 }
 
 func (a *Array) mapArray(args []Value) (Value, error) {
+	if len(args) == 0 {
+		return a, nil
+	}
 	transform, ok := args[0].(Callable)
 	if !ok {
 		return nil, ErrType
@@ -779,6 +809,9 @@ func (a *Array) push(args []Value) (Value, error) {
 }
 
 func (a *Array) reduce(args []Value) (Value, error) {
+	if len(args) == 0 {
+		return Void{}, nil
+	}
 	apply, ok := args[0].(Callable)
 	if !ok {
 		return nil, ErrType
@@ -803,6 +836,9 @@ func (a *Array) reduce(args []Value) (Value, error) {
 }
 
 func (a *Array) reduceRight(args []Value) (Value, error) {
+	if len(args) == 0 {
+		return Void{}, nil
+	}
 	apply, ok := args[0].(Callable)
 	if !ok {
 		return nil, ErrType
@@ -918,6 +954,9 @@ func (a *Array) splice(args []Value) (Value, error) {
 }
 
 func (a *Array) some(args []Value) (Value, error) {
+	if len(args) == 0 {
+		return getBool(false), nil
+	}
 	check, ok := args[0].(Callable)
 	if !ok {
 		return nil, ErrType

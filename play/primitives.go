@@ -667,14 +667,15 @@ func (s String) Call(ident string, args []Value) (Value, error) {
 	var fn func([]Value) (Value, error)
 	switch ident {
 	case "concat":
-		fn = checkArity(-1, s.concat)
+		fn = s.concat
 	case "endsWith":
-		fn = checkArity(1, s.endsWith)
+		fn = s.endsWith
 	case "includes":
-		fn = checkArity(-1, s.includes)
+		fn = s.includes
 	case "indexOf":
-		fn = checkArity(-1, s.indexOf)
+		fn = s.indexOf
 	case "lastIndexOf":
+		fn = s.lastIndexOf
 	case "padEnd":
 	case "padStart":
 	case "repeat":
@@ -683,12 +684,12 @@ func (s String) Call(ident string, args []Value) (Value, error) {
 	case "slice":
 	case "split":
 	case "startsWith":
-		fn = checkArity(1, s.startsWith)
+		fn = s.startsWith
 	case "substring":
 	case "toLowerCase":
-		fn = checkArity(0, s.toLowerCase)
+		fn = s.toLowerCase
 	case "toUpperCase":
-		fn = checkArity(0, s.toUpperCase)
+		fn = s.toUpperCase
 	case "trim":
 	case "trimEnd":
 	case "trimStart":
@@ -740,12 +741,15 @@ func (s String) endsWith(args []Value) (Value, error) {
 			size = len(s.value)
 		}
 	}
-	str, ok := args[0].(String)
-	if !ok {
-		return nil, ErrOp
+	if len(args) >= 1 {
+		str, ok := args[0].(String)
+		if !ok {
+			return nil, ErrOp
+		}
+		ok = strings.HasSuffix(s.value[:size], str.value)
+		return getBool(ok), nil
 	}
-	ok = strings.HasSuffix(s.value[:size], str.value)
-	return getBool(ok), nil
+	return getBool(false), nil
 }
 
 func (s String) includes(args []Value) (Value, error) {
@@ -816,12 +820,15 @@ func (s String) startsWith(args []Value) (Value, error) {
 			size = len(s.value)
 		}
 	}
-	str, ok := args[0].(String)
-	if !ok {
-		return nil, ErrOp
+	if len(args) >= 1 {
+		str, ok := args[0].(String)
+		if !ok {
+			return nil, ErrOp
+		}
+		ok = strings.HasPrefix(s.value[:size], str.value)
+		return getBool(ok), nil
 	}
-	ok = strings.HasPrefix(s.value[:size], str.value)
-	return getBool(ok), nil
+	return getBool(false), nil
 }
 
 func (s String) substring(args []Value) (Value, error) {
