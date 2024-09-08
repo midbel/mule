@@ -5,6 +5,7 @@ import (
 	"math"
 	"strconv"
 	"strings"
+	"unicode"
 )
 
 type Void struct{}
@@ -677,8 +678,11 @@ func (s String) Call(ident string, args []Value) (Value, error) {
 	case "lastIndexOf":
 		fn = s.lastIndexOf
 	case "padEnd":
+		fn = s.padEnd
 	case "padStart":
+		fn = s.padStart
 	case "repeat":
+		fn = s.repeat
 	case "replace":
 	case "replaceAll":
 	case "slice":
@@ -691,8 +695,11 @@ func (s String) Call(ident string, args []Value) (Value, error) {
 	case "toUpperCase":
 		fn = s.toUpperCase
 	case "trim":
+		fn = s.trim
 	case "trimEnd":
+		fn = s.trimEnd
 	case "trimStart":
+		fn = s.trimStart
 	default:
 		return nil, fmt.Errorf("%s: undefined function", ident)
 	}
@@ -773,23 +780,131 @@ func (s String) includes(args []Value) (Value, error) {
 }
 
 func (s String) indexOf(args []Value) (Value, error) {
-	return nil, nil
+	if len(args) == 0 {
+		return getFloat(-1), nil
+	}
+	var position int
+	if len(args) >= 2 {
+		x, ok := args[1].(Float)
+		if !ok {
+			return nil, ErrType
+		}
+		position = int(x.value)
+		if position < 0 {
+			position = len(s.value) + position
+		}
+	}
+	str, ok := args[0].(String)
+	if !ok {
+		return nil, ErrOp
+	}
+	ix := strings.Index(s.value[position:], str.value)
+	return getFloat(float64(ix)), nil
 }
 
 func (s String) lastIndexOf(args []Value) (Value, error) {
-	return nil, nil
+	if len(args) == 0 {
+		return getFloat(-1), nil
+	}
+	var position int
+	if len(args) >= 2 {
+		x, ok := args[1].(Float)
+		if !ok {
+			return nil, ErrType
+		}
+		position = int(x.value)
+		if position < 0 {
+			position = len(s.value) + position
+		}
+	}
+	str, ok := args[0].(String)
+	if !ok {
+		return nil, ErrOp
+	}
+	ix := strings.LastIndex(s.value[position:], str.value)
+	return getFloat(float64(ix)), nil
 }
 
 func (s String) padEnd(args []Value) (Value, error) {
-	return nil, nil
+	if len(args) == 0 {
+		return s, nil
+	}
+	var (
+		char = " "
+		size int
+	)
+	if len(args) >= 1 {
+		x, ok := args[0].(Float)
+		if !ok {
+			return nil, ErrOp
+		}
+		size = int(x.value)
+		if size < 0 {
+			return nil, ErrEval
+		}
+	}
+	if len(args) >= 2 {
+		x, ok := args[1].(String)
+		if ok {
+			char = x.value
+		}
+	}
+	if len(s.value) >= size {
+		return s, nil
+	}
+	var (
+		delta = size - len(s.value)
+		prefix = strings.Repeat(char, delta)
+	)
+	return getString(s.value + prefix), nil
 }
 
 func (s String) padStart(args []Value) (Value, error) {
-	return nil, nil
+	if len(args) == 0 {
+		return s, nil
+	}
+	var (
+		char = " "
+		size int
+	)
+	if len(args) >= 1 {
+		x, ok := args[0].(Float)
+		if !ok {
+			return nil, ErrOp
+		}
+		size = int(x.value)
+		if size < 0 {
+			return nil, ErrEval
+		}
+	}
+	if len(args) >= 2 {
+		x, ok := args[1].(String)
+		if ok {
+			char = x.value
+		}
+	}
+	if len(s.value) >= size {
+		return s, nil
+	}
+	var (
+		delta = size - len(s.value)
+		prefix = strings.Repeat(char, delta)
+	)
+	return getString(prefix + s.value), nil
 }
 
 func (s String) repeat(args []Value) (Value, error) {
-	return nil, nil
+	if len(args) == 0 {
+		return Void{}, nil
+	}
+	x, ok := args[0].(Float)
+	if !ok {
+		return nil, ErrEval
+	}
+	if x.value < 0 {
+		return nil, ErrEval
+	}
+	return getString(strings.Repeat(s.value, int(x.value))), nil
 }
 
 func (s String) replace(args []Value) (Value, error) {
@@ -846,13 +961,16 @@ func (s String) toUpperCase(args []Value) (Value, error) {
 }
 
 func (s String) trim(args []Value) (Value, error) {
-	return nil, nil
+	str := strings.TrimSpace(s.value)
+	return getString(str), nil
 }
 
 func (s String) trimEnd(args []Value) (Value, error) {
-	return nil, nil
+	str := strings.TrimRightFunc(s.value, unicode.IsSpace)
+	return getString(str), nil
 }
 
 func (s String) trimStart(args []Value) (Value, error) {
-	return nil, nil
+	str := strings.TrimLeftFunc(s.value, unicode.IsSpace)
+	return getString(str), nil
 }
