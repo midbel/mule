@@ -79,6 +79,22 @@ func (f Function) True() Value {
 	return getBool(true)
 }
 
+func (f Function) Get(ident Value) (Value, error) {
+	str, ok := ident.(fmt.Stringer)
+	if !ok {
+		return nil, ErrEval
+	}
+	switch name := str.String(); name {
+	case "name":
+		return getString(f.Ident), nil
+	case "length":
+		n := len(f.Args)
+		return getFloat(float64(n)), nil
+	default:
+		return Void{}, fmt.Errorf("%s: undefined property", str)
+	}
+}
+
 func (f Function) Call(args []Value) (Value, error) {
 	for i := range f.Args {
 		var arg Value
