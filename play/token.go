@@ -14,6 +14,7 @@ const (
 	New
 	TypeOf
 	InstanceOf
+	Decorate
 	Del
 	Optional
 	Nullish
@@ -54,6 +55,7 @@ const (
 var keywords = []string{
 	"let",
 	"const",
+	"using",
 	"break",
 	"continue",
 	"for",
@@ -178,6 +180,8 @@ func (t Token) String() string {
 		return "<optional>"
 	case Colon:
 		return "<colon>"
+	case Decorate:
+		return "<decorator>"
 	case Keyword:
 		prefix = "keyword"
 	case Boolean:

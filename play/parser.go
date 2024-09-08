@@ -96,6 +96,7 @@ func Parse(r io.Reader) *Parser {
 	p.registerPrefix(TypeOf, p.parseTypeOf)
 	p.registerPrefix(Del, p.parseDelete)
 	p.registerPrefix(Spread, p.parseSpread)
+	p.registerPrefix(Decorate, p.parseDecorator)
 
 	p.registerInfix(Dot, p.parseDot)
 	p.registerInfix(Optional, p.parseDot)
@@ -157,6 +158,8 @@ func (p *Parser) parseKeyword() (Node, error) {
 		return p.parseLet()
 	case "const":
 		return p.parseConst()
+	case "using":
+		return p.parseUsing()
 	case "if":
 		return p.parseIf()
 	case "else":
@@ -283,6 +286,10 @@ func (p *Parser) parseConst() (Node, error) {
 		Node:  value,
 	}
 	return expr, nil
+}
+
+func (p *Parser) parseUsing() (Node, error) {
+	return nil, nil
 }
 
 func (p *Parser) parseIf() (Node, error) {
@@ -816,6 +823,10 @@ func (p *Parser) parseTypeOf() (Node, error) {
 	}
 	expr.Node = n
 	return expr, nil
+}
+
+func (p *Parser) parseDecorator() (Node, error) {
+	return nil, nil
 }
 
 func (p *Parser) parseSpread() (Node, error) {

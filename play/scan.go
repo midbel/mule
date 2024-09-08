@@ -149,6 +149,8 @@ func (s *Scanner) scanPunct(tok *Token) {
 
 func (s *Scanner) scanOperator(tok *Token) {
 	switch s.char {
+	case arobase:
+		tok.Type = Decorate
 	case plus:
 		tok.Type = Add
 		if s.peek() == plus {
@@ -346,6 +348,7 @@ const (
 	semi       = ';'
 	question   = '?'
 	colon      = ':'
+	arobase    = '@'
 )
 
 func isDelim(r rune) bool {
@@ -398,5 +401,6 @@ func isOperator(r rune) bool {
 	return r == equal || r == ampersand || r == pipe ||
 		r == plus || r == minus || r == star || r == slash ||
 		r == bang || r == langle || r == rangle || r == percent ||
-		r == question || r == colon || r == dot || r == comma
+		r == question || r == colon || r == dot || r == comma ||
+		r == arobase
 }
