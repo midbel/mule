@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"math"
 	"strconv"
+	"strings"
 )
 
 type Void struct{}
@@ -663,11 +664,16 @@ func (s String) GreaterEqual(other Value) (Value, error) {
 }
 
 func (s String) Call(ident string, args []Value) (Value, error) {
+	var fn func([]Value) (Value, error)
 	switch ident {
 	case "concat":
+		fn = checkArity(-1, s.concat)
 	case "endsWith":
+		fn = checkArity(1, s.endsWith)
 	case "includes":
+		fn = checkArity(-1, s.includes)
 	case "indexOf":
+		fn = checkArity(-1, s.indexOf)
 	case "lastIndexOf":
 	case "padEnd":
 	case "padStart":
@@ -677,16 +683,22 @@ func (s String) Call(ident string, args []Value) (Value, error) {
 	case "slice":
 	case "split":
 	case "startsWith":
+		fn = checkArity(1, s.startsWith)
 	case "substring":
 	case "toLowerCase":
+		fn = checkArity(0, s.toLowerCase)
 	case "toUpperCase":
+		fn = checkArity(0, s.toUpperCase)
 	case "trim":
 	case "trimEnd":
 	case "trimStart":
 	default:
 		return nil, fmt.Errorf("%s: undefined function", ident)
 	}
-	return nil, ErrImpl
+	if fn == nil {
+		return nil, ErrImpl
+	}
+	return fn(args)
 }
 
 func (s String) Get(ident Value) (Value, error) {
@@ -704,15 +716,56 @@ func (s String) Get(ident Value) (Value, error) {
 }
 
 func (s String) concat(args []Value) (Value, error) {
-	return nil, nil
+	var str strings.Builder
+	str.WriteString(s.value)
+	for _, a := range args {
+		s, ok := a.(fmt.Stringer)
+		if !ok {
+			continue
+		}
+		str.WriteString(s.String())
+	}
+	return getString(str.String()), nil
 }
 
 func (s String) endsWith(args []Value) (Value, error) {
-	return nil, nil
+	size := len(s.value)
+	if len(args) >= 2 {
+		x, ok := args[1].(Float)
+		if !ok {
+			return nil, ErrType
+		}
+		size = int(x.value)
+		if size >= len(s.value) {
+			size = len(s.value)
+		}
+	}
+	str, ok := args[0].(String)
+	if !ok {
+		return nil, ErrOp
+	}
+	ok = strings.HasSuffix(s.value[:size], str.value)
+	return getBool(ok), nil
 }
 
 func (s String) includes(args []Value) (Value, error) {
-	return nil, nil
+	var position int
+	if len(args) >= 2 {
+		x, ok := args[1].(Float)
+		if !ok {
+			return nil, ErrType
+		}
+		position = int(x.value)
+		if position < 0 {
+			position = len(s.value) + position
+		}
+	}
+	str, ok := args[0].(String)
+	if !ok {
+		return nil, ErrOp
+	}
+	ok = strings.Contains(s.value[position:], str.value)
+	return getBool(ok), nil
 }
 
 func (s String) indexOf(args []Value) (Value, error) {
@@ -752,7 +805,23 @@ func (s String) split(args []Value) (Value, error) {
 }
 
 func (s String) startsWith(args []Value) (Value, error) {
-	return nil, nil
+	size := len(s.value)
+	if len(args) >= 2 {
+		x, ok := args[1].(Float)
+		if !ok {
+			return nil, ErrType
+		}
+		size = int(x.value)
+		if size >= len(s.value) {
+			size = len(s.value)
+		}
+	}
+	str, ok := args[0].(String)
+	if !ok {
+		return nil, ErrOp
+	}
+	ok = strings.HasPrefix(s.value[:size], str.value)
+	return getBool(ok), nil
 }
 
 func (s String) substring(args []Value) (Value, error) {
@@ -760,11 +829,13 @@ func (s String) substring(args []Value) (Value, error) {
 }
 
 func (s String) toLowerCase(args []Value) (Value, error) {
-	return nil, nil
+	str := strings.ToLower(s.value)
+	return getString(str), nil
 }
 
 func (s String) toUpperCase(args []Value) (Value, error) {
-	return nil, nil
+	str := strings.ToUpper(s.value)
+	return getString(str), nil
 }
 
 func (s String) trim(args []Value) (Value, error) {

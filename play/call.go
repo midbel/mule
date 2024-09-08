@@ -1,6 +1,7 @@
 package play
 
 import (
+	"fmt"
 	"math"
 
 	"github.com/midbel/mule/environ"
@@ -64,6 +65,14 @@ type Function struct {
 	Args  []Parameter
 	Body  Node
 	Env   environ.Environment[Value]
+}
+
+func (f Function) String() string {
+	return fmt.Sprintf("function(%s)", f.Ident)
+}
+
+func (_ Function) Type() string {
+	return "function"
 }
 
 func (f Function) True() Value {

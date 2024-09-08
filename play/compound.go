@@ -132,7 +132,7 @@ func (o *Object) Set(prop, value Value) error {
 		return ErrEval
 	}
 	if !f.writable {
-		return fmt.Errorf("%s: property not writable", prop)
+		return fmt.Errorf("%s: property is not writable", prop)
 	}
 	f.Value = value
 	o.Fields[prop] = f
@@ -152,7 +152,7 @@ func (o *Object) Del(prop Value) error {
 		delete(o.Fields, prop)
 	}
 	if !f.configurable {
-		return fmt.Errorf("propery can not be deleted")
+		return fmt.Errorf("property can not be deleted")
 	}
 	delete(o.Fields, prop)
 	return nil
@@ -178,7 +178,11 @@ func (o *Object) Get(prop Value) (Value, error) {
 func (o *Object) Values() []Value {
 	var vs []Value
 	for k := range o.Fields {
-		vs = append(vs, o.Fields[k])
+		v := o.Fields[k]
+		if f, ok := v.(Field); ok {
+			v = f.Value
+		}
+		vs = append(vs, v)
 	}
 	return vs
 }
@@ -1142,9 +1146,7 @@ func objectValues(args []Value) (Value, error) {
 		return nil, ErrType
 	}
 	arr := createArray()
-	for k := range obj.Fields {
-		arr.Values = append(arr.Values, obj.Fields[k])
-	}
+	arr.Values = obj.Values()
 	return arr, nil
 }
 
