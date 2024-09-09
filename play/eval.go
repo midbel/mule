@@ -62,8 +62,6 @@ func eval(n Node, env environ.Environment[Value]) (Value, error) {
 		return evalIndex(n, env)
 	case Access:
 		return evalAccess(n, env)
-	case Extend:
-		return eval(n.Node, env)
 	case Unary:
 		return evalUnary(n, env)
 	case Binary:
