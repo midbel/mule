@@ -3,6 +3,10 @@ package play
 import (
 	"errors"
 	"io"
+	"net/http"
+	"net/url"
+	"os"
+	"path"
 	"slices"
 
 	"github.com/midbel/mule/environ"
@@ -110,9 +114,55 @@ func eval(n Node, env environ.Environment[Value]) (Value, error) {
 		return evalCall(n, env)
 	case Func:
 		return evalFunc(n, env)
+	case Import:
+		return evalImport(n, env)
+	case Export:
+		res, err := evalExport(n, env)
+		if err != nil {
+			return nil, ErrEval
+		}
+		_ = res
+		return Void{}, nil
 	default:
 		return nil, ErrEval
 	}
+}
+
+func evalImport(i Import, env environ.Environment[Value]) (Value, error) {
+	u, err := url.Parse(i.From)
+	if err != nil {
+		return nil, err
+	}
+	var (
+		r io.Reader
+		n = path.Base(u.Path)
+	)
+	switch u.Scheme {
+	case "http", "https":
+		res, err := http.Get(i.From)
+		if err != nil {
+			return nil, err
+		}
+		defer res.Body.Close()
+		r = res.Body
+	default:
+		res, err := os.Open(i.From)
+		if err != nil {
+			return nil, err
+		}
+		defer res.Close()
+		r = res
+	}
+	mod := createModule(n)
+	mod.Env = Enclosed(Default())
+	if _, err := EvalWithEnv(r, mod.Env); err != nil {
+		return nil, err
+	}
+	return nil, nil
+}
+
+func evalExport(e Export, env environ.Environment[Value]) (Value, error) {
+	return nil, nil
 }
 
 func evalBody(b Body, env environ.Environment[Value]) (Value, error) {

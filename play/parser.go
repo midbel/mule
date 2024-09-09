@@ -689,11 +689,59 @@ func (p *Parser) parseFunction() (Node, error) {
 }
 
 func (p *Parser) parseImport() (Node, error) {
-	return nil, nil
+	expr := Import{
+		Position: p.curr.Position,
+	}
+	p.next()
+	switch {
+	case p.is(Mul):
+		p.next()
+		if !p.is(Keyword) && p.curr.Literal != "as" {
+			return nil, p.unexpected()
+		}
+		p.next()
+		if !p.is(Ident) {
+			return nil, p.unexpected()
+		}
+		p.next()
+	case p.is(Lcurly):
+		p.next()
+		for !p.done() && !p.is(Rcurly) {
+
+		}
+		if !p.is(Rcurly) {
+			return nil, p.unexpected()
+		}
+		p.next()
+	case p.is(Ident):
+		p.next()
+	case p.is(Keyword) && p.curr.Literal == "from":
+	default:
+		return nil, p.unexpected()
+	}
+	if !p.is(Keyword) && p.curr.Literal != "from" {
+		return nil, p.unexpected()
+	}
+	p.next()
+	if !p.is(String) {
+		return nil, p.unexpected()
+	}
+	expr.From = p.curr.Literal
+	p.next()
+	return expr, nil
 }
 
 func (p *Parser) parseExport() (Node, error) {
-	return nil, nil
+	expr := Export{
+		Position: p.curr.Position,
+	}
+	p.next()
+	n, err := p.parseExpression(powPrefix)
+	if err != nil {
+		return nil, err
+	}
+	expr.Node = n
+	return expr, nil
 }
 
 func (p *Parser) parseTry() (Node, error) {

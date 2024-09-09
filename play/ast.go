@@ -202,3 +202,14 @@ type Func struct {
 	Arrow bool
 	Position
 }
+
+type Import struct {
+	Position
+	Type Node
+	From string
+}
+
+type Export struct {
+	Position
+	Node
+}
