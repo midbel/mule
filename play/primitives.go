@@ -684,9 +684,13 @@ func (s String) Call(ident string, args []Value) (Value, error) {
 	case "repeat":
 		fn = s.repeat
 	case "replace":
+		fn = s.replace
 	case "replaceAll":
+		fn = s.replaceAll
 	case "slice":
+		fn = s.slice
 	case "split":
+		fn = s.split
 	case "startsWith":
 		fn = s.startsWith
 	case "substring":
@@ -741,17 +745,18 @@ func (s String) endsWith(args []Value) (Value, error) {
 	if len(args) >= 2 {
 		x, ok := args[1].(Float)
 		if !ok {
-			return nil, ErrType
+			return Void{}, ErrType
 		}
 		size = int(x.value)
 		if size >= len(s.value) {
 			size = len(s.value)
 		}
+		size = min(size, len(s.value))
 	}
 	if len(args) >= 1 {
 		str, ok := args[0].(String)
 		if !ok {
-			return nil, ErrOp
+			return Void{}, ErrEval
 		}
 		ok = strings.HasSuffix(s.value[:size], str.value)
 		return getBool(ok), nil
@@ -760,22 +765,23 @@ func (s String) endsWith(args []Value) (Value, error) {
 }
 
 func (s String) includes(args []Value) (Value, error) {
-	var position int
+	var pos int
 	if len(args) >= 2 {
 		x, ok := args[1].(Float)
 		if !ok {
-			return nil, ErrType
+			return Void{}, ErrType
 		}
-		position = int(x.value)
-		if position < 0 {
-			position = len(s.value) + position
+		pos = int(x.value)
+		if pos < 0 {
+			pos = len(s.value) + pos
 		}
+		pos = min(pos, len(s.value))
 	}
 	str, ok := args[0].(String)
 	if !ok {
-		return nil, ErrOp
+		return Void{}, ErrType
 	}
-	ok = strings.Contains(s.value[position:], str.value)
+	ok = strings.Contains(s.value[pos:], str.value)
 	return getBool(ok), nil
 }
 
@@ -783,22 +789,22 @@ func (s String) indexOf(args []Value) (Value, error) {
 	if len(args) == 0 {
 		return getFloat(-1), nil
 	}
-	var position int
+	var pos int
 	if len(args) >= 2 {
 		x, ok := args[1].(Float)
 		if !ok {
-			return nil, ErrType
+			return Void{}, ErrType
 		}
-		position = int(x.value)
-		if position < 0 {
-			position = len(s.value) + position
+		if pos = int(x.value); pos < 0 {
+			pos = len(s.value) + pos
 		}
+		pos = min(pos, len(s.value))
 	}
 	str, ok := args[0].(String)
 	if !ok {
-		return nil, ErrOp
+		return Void{}, ErrType
 	}
-	ix := strings.Index(s.value[position:], str.value)
+	ix := strings.Index(s.value[pos:], str.value)
 	return getFloat(float64(ix)), nil
 }
 
@@ -806,22 +812,22 @@ func (s String) lastIndexOf(args []Value) (Value, error) {
 	if len(args) == 0 {
 		return getFloat(-1), nil
 	}
-	var position int
+	var pos int
 	if len(args) >= 2 {
 		x, ok := args[1].(Float)
 		if !ok {
-			return nil, ErrType
+			return Void{}, ErrType
 		}
-		position = int(x.value)
-		if position < 0 {
-			position = len(s.value) + position
+		if pos = int(x.value); pos < 0 {
+			pos = len(s.value) + pos
 		}
+		pos = min(pos, len(s.value))
 	}
 	str, ok := args[0].(String)
 	if !ok {
-		return nil, ErrOp
+		return Void{}, ErrType
 	}
-	ix := strings.LastIndex(s.value[position:], str.value)
+	ix := strings.LastIndex(s.value[pos:], str.value)
 	return getFloat(float64(ix)), nil
 }
 
@@ -836,11 +842,11 @@ func (s String) padEnd(args []Value) (Value, error) {
 	if len(args) >= 1 {
 		x, ok := args[0].(Float)
 		if !ok {
-			return nil, ErrOp
+			return Void{}, ErrType
 		}
 		size = int(x.value)
 		if size < 0 {
-			return nil, ErrEval
+			return Void{}, ErrEval
 		}
 	}
 	if len(args) >= 2 {
@@ -853,7 +859,7 @@ func (s String) padEnd(args []Value) (Value, error) {
 		return s, nil
 	}
 	var (
-		delta = size - len(s.value)
+		delta  = size - len(s.value)
 		prefix = strings.Repeat(char, delta)
 	)
 	return getString(s.value + prefix), nil
@@ -870,7 +876,7 @@ func (s String) padStart(args []Value) (Value, error) {
 	if len(args) >= 1 {
 		x, ok := args[0].(Float)
 		if !ok {
-			return nil, ErrOp
+			return Void{}, ErrType
 		}
 		size = int(x.value)
 		if size < 0 {
@@ -887,7 +893,7 @@ func (s String) padStart(args []Value) (Value, error) {
 		return s, nil
 	}
 	var (
-		delta = size - len(s.value)
+		delta  = size - len(s.value)
 		prefix = strings.Repeat(char, delta)
 	)
 	return getString(prefix + s.value), nil
@@ -899,7 +905,7 @@ func (s String) repeat(args []Value) (Value, error) {
 	}
 	x, ok := args[0].(Float)
 	if !ok {
-		return nil, ErrEval
+		return Void{}, ErrType
 	}
 	if x.value < 0 {
 		return nil, ErrEval
@@ -908,19 +914,128 @@ func (s String) repeat(args []Value) (Value, error) {
 }
 
 func (s String) replace(args []Value) (Value, error) {
-	return nil, nil
+	if len(args) == 0 {
+		return s, nil
+	}
+	var (
+		pattern string
+		replace string
+	)
+	if len(args) >= 1 {
+		s, ok := args[0].(String)
+		if !ok {
+			return Void{}, ErrType
+		}
+		pattern = s.value
+	}
+	if len(args) >= 2 {
+		s, ok := args[0].(String)
+		if !ok {
+			return Void{}, ErrType
+		}
+		replace = s.value
+	}
+	res := strings.Replace(s.value, pattern, replace, 1)
+	return getString(res), nil
 }
 
 func (s String) replaceAll(args []Value) (Value, error) {
-	return nil, nil
+	if len(args) == 0 {
+		return s, nil
+	}
+	var (
+		pattern string
+		replace string
+	)
+	if len(args) >= 1 {
+		s, ok := args[0].(String)
+		if !ok {
+			return Void{}, ErrType
+		}
+		pattern = s.value
+	}
+	if len(args) >= 2 {
+		s, ok := args[0].(String)
+		if !ok {
+			return Void{}, ErrType
+		}
+		replace = s.value
+	}
+	res := strings.ReplaceAll(s.value, pattern, replace)
+	return getString(res), nil
 }
 
 func (s String) slice(args []Value) (Value, error) {
-	return nil, nil
+	var (
+		beg int
+		end = len(s.value)
+	)
+	if len(args) == 0 {
+		return s, nil
+	}
+	if len(args) >= 1 {
+		x, ok := args[0].(Float)
+		if !ok {
+			return Void{}, ErrType
+		}
+		if beg = int(x.value); beg < 0 {
+			beg = len(s.value) + beg
+		}
+		beg = max(beg, 0)
+	}
+	if len(args) >= 2 {
+		x, ok := args[1].(Float)
+		if !ok {
+			return Void{}, ErrType
+		}
+		if end = int(x.value); end < 0 {
+			end = len(s.value) + end
+		}
+		end = max(end, len(s.value))
+	}
+	return getString(s.value[beg:end]), nil
 }
 
 func (s String) split(args []Value) (Value, error) {
-	return nil, nil
+	if len(args) == 0 {
+		arr := createArray()
+		arr.Values = append(arr.Values, s)
+		return arr, nil
+	}
+	var (
+		str   string
+		limit int
+	)
+	if len(args) >= 1 {
+		if isUndefined(args[0]) {
+			arr := createArray()
+			arr.Values = append(arr.Values, s)
+			return arr, nil
+		}
+		s, ok := args[0].(String)
+		if !ok {
+			return Void{}, ErrType
+		}
+		str = s.value
+	}
+	if len(args) >= 2 {
+		x, ok := args[1].(Float)
+		if !ok {
+			return Void{}, ErrType
+		}
+		limit = int(x.value)
+		if limit < 0 {
+			return Void{}, ErrEval
+		}
+		if limit == 0 {
+			return createArray(), nil
+		}
+	}
+	arr := createArray()
+	for _, str := range strings.SplitN(s.value, str, limit) {
+		arr.Values = append(arr.Values, getString(str))
+	}
+	return arr, nil
 }
 
 func (s String) startsWith(args []Value) (Value, error) {
@@ -928,17 +1043,15 @@ func (s String) startsWith(args []Value) (Value, error) {
 	if len(args) >= 2 {
 		x, ok := args[1].(Float)
 		if !ok {
-			return nil, ErrType
+			return Void{}, ErrType
 		}
 		size = int(x.value)
-		if size >= len(s.value) {
-			size = len(s.value)
-		}
+		size = min(size, len(s.value))
 	}
 	if len(args) >= 1 {
 		str, ok := args[0].(String)
 		if !ok {
-			return nil, ErrOp
+			return Void{}, ErrType
 		}
 		ok = strings.HasPrefix(s.value[:size], str.value)
 		return getBool(ok), nil
@@ -947,7 +1060,7 @@ func (s String) startsWith(args []Value) (Value, error) {
 }
 
 func (s String) substring(args []Value) (Value, error) {
-	return nil, nil
+	return s.slice(args)
 }
 
 func (s String) toLowerCase(args []Value) (Value, error) {
