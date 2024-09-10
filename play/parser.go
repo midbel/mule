@@ -795,6 +795,45 @@ func (p *Parser) parseImport() (Node, error) {
 	return expr, nil
 }
 
+func (p *Parser) parseNamedExport() (Node, error) {
+	expr := NamedExport{
+		Names: make(map[string]string),
+	}
+	p.next()
+	for !p.done() && !p.is(Rcurly) {
+		p.skip(p.eol)
+		if !p.is(Ident) {
+			return nil, p.unexpected()
+		}
+		var (
+			ident = p.curr.Literal
+			alias string
+		)
+		p.next()
+		if p.is(Keyword) && p.curr.Literal == "as" {
+			p.next()
+			if !p.is(Ident) {
+				return nil, p.unexpected()
+			}
+			alias = p.curr.Literal
+			p.next()
+		}
+		expr.Names[ident] = alias
+		switch {
+		case p.is(Comma):
+			p.next()
+		case p.is(Rcurly):
+		default:
+			return nil, p.unexpected()
+		}
+	}
+	if !p.is(Rcurly) {
+		return nil, p.unexpected()
+	}
+	p.next()
+	return expr, nil
+}
+
 func (p *Parser) parseExport() (Node, error) {
 	expr := Export{
 		Position: p.curr.Position,
@@ -802,37 +841,11 @@ func (p *Parser) parseExport() (Node, error) {
 	p.next()
 	switch {
 	case p.is(Lcurly):
-		p.next()
-		for !p.done() && !p.is(Rcurly) {
-			p.skip(p.eol)
-			if !p.is(Ident) {
-				return nil, p.unexpected()
-			}
-			var (
-				ident = p.curr.Literal
-				alias string
-			)
-			p.next()
-			if p.is(Keyword) && p.curr.Literal == "as" {
-				p.next()
-				if !p.is(Ident) {
-					return nil, p.unexpected()
-				}
-				alias = p.curr.Literal
-				p.next()
-			}
-			switch {
-			case p.is(Comma):
-				p.next()
-			case p.is(Rcurly):
-			default:
-				return nil, p.unexpected()
-			}
+		n, err := p.parseNamedExport()
+		if err != nil {
+			return nil, err
 		}
-		if !p.is(Rcurly) {
-			return nil, p.unexpected()
-		}
-		p.next()
+		expr.Node = n
 	case p.is(Mul):
 		p.next()
 	case p.is(Keyword):

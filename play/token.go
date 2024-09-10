@@ -84,6 +84,7 @@ var keywords = []string{
 	"undefined",
 	"instanceof",
 	"typeof",
+	"with",
 }
 
 type Position struct {

@@ -7,6 +7,20 @@ import (
 	"github.com/midbel/mule/environ"
 )
 
+type ptr struct {
+	Alias string
+}
+
+func ptrValue(alias string) Value {
+	return ptr{
+		Alias: alias,
+	}
+}
+
+func (_ ptr) True() Value {
+	return getBool(true)
+}
+
 type envValue struct {
 	Const bool
 	Value
@@ -65,6 +79,9 @@ func Enclosed(parent environ.Environment[Value]) environ.Environment[Value] {
 func (e *Env) Resolve(ident string) (Value, error) {
 	v, ok := e.values[ident]
 	if ok {
+		if p, ok := v.(ptr); ok {
+			return e.Resolve(p.Alias)
+		}
 		return v, nil
 	}
 	if e.parent != nil {

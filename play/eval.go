@@ -26,6 +26,10 @@ func Default() environ.Environment[Value] {
 	return top
 }
 
+type Evaluable interface {
+	Eval(Node) (Value, error)
+}
+
 func Eval(r io.Reader) (Value, error) {
 	return EvalWithEnv(r, Enclosed(Default()))
 }
@@ -160,10 +164,20 @@ func evalImport(i Import, env environ.Environment[Value]) (Value, error) {
 	if i.Type == nil {
 		return Void{}, nil
 	}
-	switch i.Type.(type) {
+	switch i := i.Type.(type) {
 	case DefaultImport:
+		env.Define(i.Name, mod)
 	case NamespaceImport:
+		env.Define(i.Name, mod)
 	case NamedImport:
+		for ident, alias := range i.Names {
+			if alias == "" {
+				env.Define(ident, mod)
+			} else {
+				env.Define(alias, mod)
+				mod.Env.Define(alias, ptrValue(ident))
+			}
+		}
 	default:
 		return nil, ErrEval
 	}
@@ -474,6 +488,9 @@ func evalCall(c Call, env environ.Environment[Value]) (Value, error) {
 	if err != nil {
 		return nil, err
 	}
+	if mod, ok := value.(Evaluable); ok {
+		return mod.Eval(c)
+	}
 	var args []Value
 	for i := range c.Args {
 		a, err := eval(c.Args[i], env)
@@ -577,6 +594,9 @@ func evalAccess(a Access, env environ.Environment[Value]) (Value, error) {
 	res, err := eval(a.Node, env)
 	if err != nil {
 		return nil, err
+	}
+	if mod, ok := res.(Evaluable); ok {
+		return mod.Eval(a.Ident)
 	}
 	if i, ok := a.Ident.(Identifier); ok {
 		get, ok := res.(interface{ Get(Value) (Value, error) })

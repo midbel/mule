@@ -227,3 +227,16 @@ type Export struct {
 	Default bool
 	Node
 }
+
+type NamedExport struct {
+	Names map[string]string
+}
+
+type DefaultExport struct {
+	Name string
+}
+
+type Alias struct {
+	Alias string
+	Ident string
+}
