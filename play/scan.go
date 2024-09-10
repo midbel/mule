@@ -144,6 +144,7 @@ func (s *Scanner) scanPunct(tok *Token) {
 	}
 	if tok.Type != Invalid {
 		s.read()
+		s.skip(isBlank)
 	}
 }
 

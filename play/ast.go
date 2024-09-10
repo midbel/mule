@@ -205,9 +205,9 @@ type Func struct {
 
 type Import struct {
 	Position
-	Type Node
+	Type  Node
 	Attrs map[string]string
-	From string
+	From  string
 }
 
 type DefaultImport struct {

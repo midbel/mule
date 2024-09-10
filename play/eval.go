@@ -115,8 +115,7 @@ func eval(n Node, env environ.Environment[Value]) (Value, error) {
 	case Func:
 		return evalFunc(n, env)
 	case Import:
-		return Void{}, nil
-		// return evalImport(n, env)
+		return evalImport(n, env)
 	case Export:
 		res, err := evalExport(n, env)
 		if err != nil {
