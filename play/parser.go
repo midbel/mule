@@ -691,6 +691,7 @@ func (p *Parser) parseFunction() (Node, error) {
 func (p *Parser) parseImport() (Node, error) {
 	expr := Import{
 		Position: p.curr.Position,
+		Attrs: make(map[string]string),
 	}
 	p.next()
 	switch {
@@ -703,19 +704,53 @@ func (p *Parser) parseImport() (Node, error) {
 		if !p.is(Ident) {
 			return nil, p.unexpected()
 		}
+		expr.Type = NamespaceImport{
+			Name: p.curr.Literal,
+		}
 		p.next()
 	case p.is(Lcurly):
 		p.next()
+		names := make(map[string]string)
 		for !p.done() && !p.is(Rcurly) {
-
+			p.skip(p.eol)
+			if !p.is(Ident) {
+				return nil, p.unexpected()
+			}
+			var (
+				ident = p.curr.Literal
+				alias string
+			)
+			p.next()
+			if p.is(Keyword) && p.curr.Literal == "as" {
+				p.next()
+				if !p.is(Ident) {
+					return nil, p.unexpected()
+				}
+				alias = p.curr.Literal
+				p.next()
+			}
+			names[ident] = alias
+			switch {
+			case p.is(Comma):
+				p.next()
+			case p.is(Rcurly):
+			default:
+				return nil, p.unexpected()
+			}
 		}
 		if !p.is(Rcurly) {
 			return nil, p.unexpected()
 		}
 		p.next()
 	case p.is(Ident):
+		expr.Type = DefaultImport {
+			Name: p.curr.Literal,
+		}
 		p.next()
-	case p.is(Keyword) && p.curr.Literal == "from":
+	case p.is(Text):
+		expr.From = p.curr.Literal
+		p.next()
+		return expr, nil
 	default:
 		return nil, p.unexpected()
 	}
@@ -723,7 +758,7 @@ func (p *Parser) parseImport() (Node, error) {
 		return nil, p.unexpected()
 	}
 	p.next()
-	if !p.is(String) {
+	if !p.is(Text) {
 		return nil, p.unexpected()
 	}
 	expr.From = p.curr.Literal
@@ -736,11 +771,31 @@ func (p *Parser) parseExport() (Node, error) {
 		Position: p.curr.Position,
 	}
 	p.next()
-	n, err := p.parseExpression(powPrefix)
-	if err != nil {
-		return nil, err
+	switch {
+	case p.is(Lcurly):
+		p.next()
+		for !p.done() && !p.is(Rcurly) {
+			p.skip(p.eol)
+		}
+		if !p.is(Rcurly) {
+			return nil, p.unexpected()
+		}
+		p.next()
+	case p.is(Mul):
+		p.next()
+	case p.is(Keyword):
+		if p.is(Keyword) && p.curr.Literal == "default" {
+			expr.Default = true
+			p.next()
+		}
+		n, err := p.parseExpression(powPrefix)
+		if err != nil {
+			return nil, err
+		}
+		expr.Node = n
+	default:
+		return nil, p.unexpected()
 	}
-	expr.Node = n
 	return expr, nil
 }
 

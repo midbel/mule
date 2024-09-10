@@ -115,7 +115,8 @@ func eval(n Node, env environ.Environment[Value]) (Value, error) {
 	case Func:
 		return evalFunc(n, env)
 	case Import:
-		return evalImport(n, env)
+		return Void{}, nil
+		// return evalImport(n, env)
 	case Export:
 		res, err := evalExport(n, env)
 		if err != nil {
@@ -154,11 +155,20 @@ func evalImport(i Import, env environ.Environment[Value]) (Value, error) {
 		r = res
 	}
 	mod := createModule(n)
-	mod.Env = Enclosed(Default())
 	if _, err := EvalWithEnv(r, mod.Env); err != nil {
 		return nil, err
 	}
-	return nil, nil
+	if i.Type == nil {
+		return Void{}, nil
+	}
+	switch i.Type.(type) {
+	case DefaultImport:
+	case NamespaceImport:
+	case NamedImport:
+	default:
+		return nil, ErrEval
+	}
+	return Void{}, nil
 }
 
 func evalExport(e Export, env environ.Environment[Value]) (Value, error) {

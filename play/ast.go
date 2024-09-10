@@ -206,10 +206,24 @@ type Func struct {
 type Import struct {
 	Position
 	Type Node
+	Attrs map[string]string
 	From string
+}
+
+type DefaultImport struct {
+	Name string
+}
+
+type NamespaceImport struct {
+	Name string
+}
+
+type NamedImport struct {
+	Names map[string]string
 }
 
 type Export struct {
 	Position
+	Default bool
 	Node
 }
