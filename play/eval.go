@@ -175,7 +175,6 @@ func evalImport(i Import, env environ.Environment[Value]) (Value, error) {
 				env.Define(ident, mod)
 			} else {
 				env.Define(alias, mod)
-				mod.Env.Define(alias, ptrValue(ident))
 			}
 		}
 	default:
