@@ -4,18 +4,6 @@ import (
 	"github.com/midbel/mule/environ"
 )
 
-type ptr struct {
-	Ident string
-	Value
-}
-
-func ptrValue(ident string, value Value) Value {
-	return ptr{
-		Ident: ident,
-		Value: value,
-	}
-}
-
 type module struct {
 	Name  string
 	Attrs *Object
@@ -50,10 +38,10 @@ func (m *module) True() Value {
 	return getBool(true)
 }
 
-func (m *module) GetExportedValues() []string {
-	return nil
+func (m *module) Resolve(ident string) (Value, error) {
+	return m.Env.Resolve(ident)
 }
 
-func (m *module) GetDefaultExport() string {
-	return ""
+func (m *module) Define(ident string, value Value) error {
+	return m.Env.Define(ident, value)
 }

@@ -51,6 +51,18 @@ type ReadOnlyValue interface {
 	ReadOnly() bool
 }
 
+type ptr struct {
+	Ident string
+	Value
+}
+
+func ptrValue(ident string, value Value) Value {
+	return ptr{
+		Ident: ident,
+		Value: value,
+	}
+}
+
 type Env struct {
 	parent environ.Environment[Value]
 	values map[string]Value
@@ -70,6 +82,12 @@ func Enclosed(parent environ.Environment[Value]) environ.Environment[Value] {
 func (e *Env) Resolve(ident string) (Value, error) {
 	v, ok := e.values[ident]
 	if ok {
+		if p, ok := v.(ptr); ok {
+			e, ok := p.Value.(environ.Environment[Value])
+			if ok {
+				return e.Resolve(p.Ident)
+			}
+		}
 		return v, nil
 	}
 	if e.parent != nil {
@@ -86,7 +104,7 @@ func (e *Env) Define(ident string, value Value) error {
 			return fmt.Errorf("%s: %w", ident, ErrConst)
 		}
 		if p, ok := v.(ptr); ok {
-			v = p.Value 
+			v = p.Value
 		}
 		if r, ok := v.(ReadOnlyValue); ok && r.ReadOnly() {
 			return fmt.Errorf("%s: %w", ident, ErrConst)

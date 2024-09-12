@@ -2,6 +2,7 @@ package play
 
 import (
 	"errors"
+	"fmt"
 	"io"
 	"net/http"
 	"net/url"
@@ -187,6 +188,7 @@ func evalImport(i Import, env environ.Environment[Value]) (Value, error) {
 }
 
 func evalExport(e Export, env environ.Environment[Value]) (Value, error) {
+	fmt.Println("evalExport", e)
 	return nil, nil
 }
 
@@ -490,10 +492,6 @@ func evalCall(c Call, env environ.Environment[Value]) (Value, error) {
 	if err != nil {
 		return nil, err
 	}
-	if p, ok := value.(ptr); ok {
-		ident.Name, value = p.Ident, p.Value
-		c.Ident = ident
-	}
 	if mod, ok := value.(Evaluable); ok {
 		return mod.Eval(c)
 	}
@@ -667,12 +665,6 @@ func evalIdent(i Identifier, env environ.Environment[Value]) (Value, error) {
 	v, err := env.Resolve(i.Name)
 	if err != nil {
 		return nil, err
-	}
-	if p, ok := v.(ptr); ok {
-		i.Name, v = p.Ident, p.Value
-		if mod, ok := v.(Evaluable); ok {
-			return mod.Eval(i)
-		}
 	}
 	if x, ok := v.(envValue); ok {
 		v = x.Value
