@@ -19,9 +19,21 @@ type List struct {
 	Nodes []Node
 }
 
+type ListComp struct {
+	Position
+	Iter Node
+	Node
+}
+
 type Map struct {
 	Position
 	Nodes map[Node]Node
+}
+
+type MapComp struct {
+	Position
+	Iter Node
+	Node
 }
 
 type Literal[T string | float64 | bool] struct {

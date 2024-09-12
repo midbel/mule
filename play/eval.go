@@ -171,11 +171,14 @@ func evalImport(i Import, env environ.Environment[Value]) (Value, error) {
 		env.Define(i.Name, mod)
 	case NamedImport:
 		for ident, alias := range i.Names {
-			if alias == "" {
-				env.Define(ident, mod)
+			var target Value
+			if alias != "" {
+				target = ptrValue(ident, mod)
+				ident = alias
 			} else {
-				env.Define(alias, mod)
+				target = mod
 			}
+			env.Define(ident, target)
 		}
 	default:
 		return nil, ErrEval
@@ -487,6 +490,10 @@ func evalCall(c Call, env environ.Environment[Value]) (Value, error) {
 	if err != nil {
 		return nil, err
 	}
+	if p, ok := value.(ptr); ok {
+		ident.Name, value = p.Ident, p.Value
+		c.Ident = ident
+	}
 	if mod, ok := value.(Evaluable); ok {
 		return mod.Eval(c)
 	}
@@ -530,6 +537,10 @@ func evalGroup(g Group, env environ.Environment[Value]) (Value, error) {
 	return res, nil
 }
 
+func evalMapComp(a MapComp, env environ.Environment[Value]) (Value, error) {
+	return nil, nil
+}
+
 func evalMap(a Map, env environ.Environment[Value]) (Value, error) {
 	obj := createObject()
 	for k, v := range a.Nodes {
@@ -567,6 +578,10 @@ func evalMap(a Map, env environ.Environment[Value]) (Value, error) {
 		obj.Fields[key] = fieldByAssignment(val)
 	}
 	return obj, nil
+}
+
+func evalListComp(a ListComp, env environ.Environment[Value]) (Value, error) {
+	return nil, nil
 }
 
 func evalList(a List, env environ.Environment[Value]) (Value, error) {
@@ -652,6 +667,12 @@ func evalIdent(i Identifier, env environ.Environment[Value]) (Value, error) {
 	v, err := env.Resolve(i.Name)
 	if err != nil {
 		return nil, err
+	}
+	if p, ok := v.(ptr); ok {
+		i.Name, v = p.Ident, p.Value
+		if mod, ok := v.(Evaluable); ok {
+			return mod.Eval(i)
+		}
 	}
 	if x, ok := v.(envValue); ok {
 		v = x.Value

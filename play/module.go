@@ -4,6 +4,18 @@ import (
 	"github.com/midbel/mule/environ"
 )
 
+type ptr struct {
+	Ident string
+	Value
+}
+
+func ptrValue(ident string, value Value) Value {
+	return ptr{
+		Ident: ident,
+		Value: value,
+	}
+}
+
 type module struct {
 	Name  string
 	Attrs *Object
@@ -16,6 +28,10 @@ func createModule(ident string) *module {
 		Env:   Enclosed(Default()),
 		Attrs: createObject(),
 	}
+}
+
+func (m *module) ReadOnly() bool {
+	return true
 }
 
 func (m *module) Eval(n Node) (Value, error) {

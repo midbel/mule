@@ -7,20 +7,6 @@ import (
 	"github.com/midbel/mule/environ"
 )
 
-type ptr struct {
-	Alias string
-}
-
-func ptrValue(alias string) Value {
-	return ptr{
-		Alias: alias,
-	}
-}
-
-func (_ ptr) True() Value {
-	return getBool(true)
-}
-
 type envValue struct {
 	Const bool
 	Value
@@ -60,6 +46,11 @@ func (e *frozenEnv) Define(_ string, _ Value) error {
 	return ErrFrozen
 }
 
+type ReadOnlyValue interface {
+	Value
+	ReadOnly() bool
+}
+
 type Env struct {
 	parent environ.Environment[Value]
 	values map[string]Value
@@ -79,9 +70,6 @@ func Enclosed(parent environ.Environment[Value]) environ.Environment[Value] {
 func (e *Env) Resolve(ident string) (Value, error) {
 	v, ok := e.values[ident]
 	if ok {
-		if p, ok := v.(ptr); ok {
-			return e.Resolve(p.Alias)
-		}
 		return v, nil
 	}
 	if e.parent != nil {
@@ -95,6 +83,12 @@ func (e *Env) Define(ident string, value Value) error {
 	if err == nil {
 		x, ok := v.(envValue)
 		if ok && x.Const {
+			return fmt.Errorf("%s: %w", ident, ErrConst)
+		}
+		if p, ok := v.(ptr); ok {
+			v = p.Value 
+		}
+		if r, ok := v.(ReadOnlyValue); ok && r.ReadOnly() {
 			return fmt.Errorf("%s: %w", ident, ErrConst)
 		}
 	}
