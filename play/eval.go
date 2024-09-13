@@ -2,7 +2,6 @@ package play
 
 import (
 	"errors"
-	"fmt"
 	"io"
 	"net/http"
 	"net/url"
@@ -167,22 +166,10 @@ func evalImport(i Import, env environ.Environment[Value]) (Value, error) {
 	}
 	switch i := i.Type.(type) {
 	case DefaultImport:
-		env.Define(i.Name, mod)
 	case NamespaceImport:
-		env.Define(i.Name, mod)
 	case NamedImport:
 		for ident, alias := range i.Names {
-			if !mod.Exports(ident) {
-				return nil, fmt.Errorf("%s: %w", ident, ErrExport)
-			}
-			var target Value
-			if alias != "" {
-				target = ptrValue(ident, mod)
-				ident = alias
-			} else {
-				target = mod
-			}
-			env.Define(ident, target)
+			_, _ = ident, alias
 		}
 	default:
 		return nil, ErrEval
@@ -191,54 +178,6 @@ func evalImport(i Import, env environ.Environment[Value]) (Value, error) {
 }
 
 func evalExport(e Export, env environ.Environment[Value]) (Value, error) {
-	switch n := e.Node.(type) {
-	case NamedExport:
-		for ident, alias := range n.Names {
-			_, _ = ident, alias
-		}
-	case Let:
-		a, ok := n.Node.(Assignment)
-		if !ok {
-			return nil, ErrEval
-		}
-		value, err := eval(a.Node, env)
-		if err != nil {
-			return nil, err
-		}
-		id, ok := a.Ident.(Identifier)
-		if !ok {
-			return nil, ErrOp
-		}
-		if err := env.Define(id.Name, exportLetValue(value)); err != nil {
-			return nil, err
-		}
-	case Const:
-		a, ok := n.Node.(Assignment)
-		if !ok {
-			return nil, ErrEval
-		}
-		value, err := eval(a.Node, env)
-		if err != nil {
-			return nil, err
-		}
-		id, ok := a.Ident.(Identifier)
-		if !ok {
-			return nil, ErrOp
-		}
-		if err := env.Define(id.Name, exportConstValue(value)); err != nil {
-			return nil, err
-		}
-	case Func:
-		fn, err := eval(n, env)
-		if err != nil {
-			return nil, err
-		}
-		if err := env.Define(n.Ident, exportConstValue(fn)); err != nil {
-			return nil, err
-		}
-	default:
-		return nil, ErrEval
-	}
 	return Void{}, nil
 }
 
@@ -542,9 +481,6 @@ func evalCall(c Call, env environ.Environment[Value]) (Value, error) {
 	if err != nil {
 		return nil, err
 	}
-	if mod, ok := value.(Evaluable); ok {
-		return mod.Eval(c)
-	}
 	var args []Value
 	for i := range c.Args {
 		a, err := eval(c.Args[i], env)
@@ -561,7 +497,7 @@ func evalCall(c Call, env environ.Environment[Value]) (Value, error) {
 			args = append(args, a)
 		}
 	}
-	if call, ok := value.(interface{ Call([]Value) (Value, error) }); ok {
+	if call, ok := value.(Callable); ok {
 		res, err := call.Call(args)
 		if errors.Is(err, ErrReturn) {
 			err = nil
@@ -656,9 +592,6 @@ func evalAccess(a Access, env environ.Environment[Value]) (Value, error) {
 	res, err := eval(a.Node, env)
 	if err != nil {
 		return nil, err
-	}
-	if mod, ok := res.(Evaluable); ok {
-		return mod.Eval(a.Ident)
 	}
 	if i, ok := a.Ident.(Identifier); ok {
 		get, ok := res.(interface{ Get(Value) (Value, error) })

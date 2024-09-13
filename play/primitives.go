@@ -31,6 +31,10 @@ func (_ Void) Rev() Value {
 	return nan()
 }
 
+func (_ Void) Not() Value {
+	return getBool(true)
+}
+
 func (_ Void) Add(_ Value) (Value, error) {
 	return nan(), nil
 }
@@ -104,6 +108,10 @@ func (_ Nil) True() Value {
 
 func (_ Nil) Rev() Value {
 	return getFloat(0)
+}
+
+func (_ Nil) Not() Value {
+	return getBool(true)
 }
 
 func (_ Nil) Add(_ Value) (Value, error) {

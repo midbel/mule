@@ -228,7 +228,7 @@ func (p *Parser) parseKeywordCtrl(left Node) (Node, error) {
 		expr.Iter = right
 		return expr, nil
 	default:
-		return nil, fmt.Errorf("%s: keyword not supported/known", p.curr.Literal)
+		return nil, fmt.Errorf("%s: infix keyword not supported/known", p.curr.Literal)
 	}
 }
 
@@ -860,6 +860,10 @@ func (p *Parser) parseExport() (Node, error) {
 		expr.Node = n
 	default:
 		return nil, p.unexpected()
+	}
+	if p.is(Keyword) && p.curr.Literal == "from" {
+		p.next()
+		// TODO
 	}
 	return expr, nil
 }

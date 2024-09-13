@@ -22,20 +22,8 @@ func createModule(ident string) *module {
 	}
 }
 
-func (m *module) ReadOnly() bool {
-	return true
-}
-
-func (m *module) Exports(ident string) bool {
-	ex, ok := m.Env.(interface{ Exports(string) bool })
-	if !ok {
-		return false
-	}
-	return ex.Exports(ident)
-}
-
 func (m *module) Eval(n Node) (Value, error) {
-	return eval(n, m.Env)
+	return eval(n, m)
 }
 
 func (m *module) Type() string {

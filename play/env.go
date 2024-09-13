@@ -70,21 +70,16 @@ type ReadOnlyValue interface {
 	ReadOnly() bool
 }
 
-type ptr struct {
-	Ident string
-	Value
-}
-
-func ptrValue(ident string, value Value) Value {
-	return ptr{
-		Ident: ident,
-		Value: value,
-	}
-}
-
 type Env struct {
 	parent environ.Environment[Value]
 	values map[string]Value
+}
+
+func Combine(es ...environ.Environment[Value]) environ.Environment[Value] {
+	if len(es) == 0 {
+		return Empty()
+	}
+	return Empty()
 }
 
 func Empty() environ.Environment[Value] {
@@ -98,17 +93,15 @@ func Enclosed(parent environ.Environment[Value]) environ.Environment[Value] {
 	}
 }
 
+func (e *Env) Clone() environ.Environment[Value] {
+	return e
+}
+
 func (e *Env) Define(ident string, value Value) error {
 	v, err := e.Resolve(ident)
 	if err == nil {
 		x, ok := v.(envValue)
 		if ok && x.Const {
-			return fmt.Errorf("%s: %w", ident, ErrConst)
-		}
-		if p, ok := v.(ptr); ok {
-			v = p.Value
-		}
-		if r, ok := v.(ReadOnlyValue); ok && r.ReadOnly() {
 			return fmt.Errorf("%s: %w", ident, ErrConst)
 		}
 	}
@@ -121,26 +114,7 @@ func (e *Env) Resolve(ident string) (Value, error) {
 	if err != nil {
 		return nil, err
 	}
-	if p, ok := v.(ptr); ok {
-		e, ok := p.Value.(environ.Environment[Value])
-		if ok {
-			return e.Resolve(p.Ident)
-		}
-	}
 	return v, nil
-}
-
-func (e *Env) Exports(ident string) bool {
-	v, ok := e.values[ident]
-	if !ok {
-		return false
-	}
-	x, ok := v.(envValue)
-	if !ok {
-		return false
-	}
-	return x.Exported
-
 }
 
 func (e *Env) resolve(ident string) (Value, error) {
