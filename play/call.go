@@ -35,6 +35,44 @@ func execIsNaN(args []Value) (Value, error) {
 	return getBool(math.IsNaN(v.value)), nil
 }
 
+func execGetExportedNames(args []Value) (Value, error) {
+	if len(args) != 1 {
+		return nil, ErrArgument
+	}
+	mod, ok := args[0].(*module)
+	if !ok {
+		return nil, ErrEval
+	}
+	_ = mod
+	arr := createArray()
+	return arr, nil
+}
+
+func execGetExportedFuncs(args []Value) (Value, error) {
+	if len(args) != 1 {
+		return nil, ErrArgument
+	}
+	mod, ok := args[0].(*module)
+	if !ok {
+		return nil, ErrEval
+	}
+	_ = mod
+	arr := createArray()
+	return arr, nil
+}
+func execGetExportedIdents(args []Value) (Value, error) {
+	if len(args) != 1 {
+		return nil, ErrArgument
+	}
+	mod, ok := args[0].(*module)
+	if !ok {
+		return nil, ErrEval
+	}
+	_ = mod
+	arr := createArray()
+	return arr, nil
+}
+
 func NewBuiltinFunc(ident string, fn func([]Value) (Value, error)) Value {
 	return createBuiltinFunc(ident, fn)
 }

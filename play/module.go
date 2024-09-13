@@ -2,6 +2,7 @@ package play
 
 import (
 	"errors"
+	"fmt"
 
 	"github.com/midbel/mule/environ"
 )
@@ -44,4 +45,17 @@ func (m *module) Resolve(ident string) (Value, error) {
 
 func (m *module) Define(ident string, value Value) error {
 	return m.Env.Define(ident, value)
+}
+
+func (m *module) Get(ident Value) (Value, error) {
+	str, ok := ident.(fmt.Stringer)
+	if !ok {
+		return nil, ErrEval
+	}
+	switch name := str.String(); name {
+	case "name":
+		return getString(m.Name), nil
+	default:
+		return Void{}, fmt.Errorf("%s: undefined property", str)
+	}
 }

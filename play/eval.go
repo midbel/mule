@@ -2,6 +2,7 @@ package play
 
 import (
 	"errors"
+	"fmt"
 	"io"
 	"net/http"
 	"net/url"
@@ -22,6 +23,9 @@ func Default() environ.Environment[Value] {
 	top.Define("parseInt", createBuiltinFunc("parseInt", execParseInt))
 	top.Define("parseFloat", createBuiltinFunc("parseFloat", execParseFloat))
 	top.Define("isNaN", createBuiltinFunc("isNaN", execIsNaN))
+	top.Define("getExportedNames", createBuiltinFunc("getExportedNames", execGetExportedNames))
+	top.Define("getExportedFunctions", createBuiltinFunc("getExportedFunctions", execGetExportedFuncs))
+	top.Define("getExportedIdentifiers", createBuiltinFunc("getExportedIdentifiers", execGetExportedIdents))
 
 	return top
 }
@@ -167,10 +171,10 @@ func evalImport(i Import, env environ.Environment[Value]) (Value, error) {
 	switch i := i.Type.(type) {
 	case DefaultImport:
 	case NamespaceImport:
+		env.Define(i.Name, mod)
 	case NamedImport:
-		for ident, alias := range i.Names {
-			_, _ = ident, alias
-		}
+		// for ident, alias := range i.Names {
+		// }
 	default:
 		return nil, ErrEval
 	}
@@ -649,6 +653,7 @@ func evalIdent(i Identifier, env environ.Environment[Value]) (Value, error) {
 	if err != nil {
 		return nil, err
 	}
+	fmt.Println(i.Name, v)
 	if x, ok := v.(envValue); ok {
 		v = x.Value
 	}
