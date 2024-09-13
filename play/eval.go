@@ -216,6 +216,7 @@ func evalExport(e Export, env environ.Environment[Value]) (Value, error) {
 		if !ok {
 			return nil, ErrOp
 		}
+		fmt.Println("export let", id.Name, value)
 		return Void{}, env.Define(id.Name, exportLetValue(value))
 	case Const:
 		a, ok := n.Node.(Assignment)
@@ -253,7 +254,7 @@ func evalBody(b Body, env environ.Environment[Value]) (Value, error) {
 func evalFunc(f Func, env environ.Environment[Value]) (Value, error) {
 	fn := Function{
 		Ident: f.Ident,
-		Env:   Enclosed(Default()),
+		Env:   Enclosed(env),
 		Body:  f.Body,
 		Arrow: f.Arrow,
 	}
@@ -704,7 +705,6 @@ func evalIdent(i Identifier, env environ.Environment[Value]) (Value, error) {
 	if err != nil {
 		return nil, err
 	}
-	fmt.Println("evalIdent:", i.Name, v)
 	if x, ok := v.(envValue); ok {
 		v = x.Value
 	}

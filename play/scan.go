@@ -47,6 +47,8 @@ func (s *Scanner) Scan() Token {
 
 	s.skip(isSpace)
 	switch {
+	case s.char == slash && s.peek() == s.char:
+		s.scanComment(&tok)
 	case isDigit(s.char):
 		s.scanNumber(&tok)
 	case isPunct(s.char):
@@ -64,6 +66,19 @@ func (s *Scanner) Scan() Token {
 	}
 
 	return tok
+}
+
+func (s *Scanner) scanComment(tok *Token) {
+	s.read()
+	s.read()
+	s.skip(isSpace)
+	for !s.done() && !isNL(s.char) {
+		s.write()
+		s.read()
+	}
+	tok.Literal = s.literal()
+	tok.Type = Comment
+	s.skip(isBlank)
 }
 
 func (s *Scanner) scanIdent(tok *Token) {

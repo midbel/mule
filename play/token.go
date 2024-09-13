@@ -5,6 +5,7 @@ import "fmt"
 const (
 	EOF = -(iota + 1)
 	EOL
+	Comment
 	Keyword
 	Ident
 	Text
@@ -193,6 +194,8 @@ func (t Token) String() string {
 		prefix = "string"
 	case Number:
 		prefix = "number"
+	case Comment:
+		prefix = "comment"
 	case Invalid:
 		prefix = "invalid"
 	default:

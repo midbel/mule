@@ -135,6 +135,7 @@ func (p *Parser) Parse() (Node, error) {
 	var body Body
 	p.skip(p.eol)
 	for !p.done() {
+		p.skip(p.comment)
 		n, err := p.parseNode()
 		if err != nil {
 			return nil, err
@@ -1467,6 +1468,10 @@ func (p *Parser) skip(ok func() bool) {
 	for ok() {
 		p.next()
 	}
+}
+
+func (p *Parser) comment() bool {
+	return p.is(Comment)
 }
 
 func (p *Parser) eol() bool {

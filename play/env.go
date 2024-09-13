@@ -105,6 +105,9 @@ func (e *Env) Define(ident string, value Value) error {
 			return fmt.Errorf("%s: %w", ident, ErrConst)
 		}
 	}
+	if e.parent != nil {
+		return e.parent.Define(ident, value)
+	}
 	e.values[ident] = value
 	return nil
 }
