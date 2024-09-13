@@ -172,6 +172,9 @@ func evalImport(i Import, env environ.Environment[Value]) (Value, error) {
 		env.Define(i.Name, mod)
 	case NamedImport:
 		for ident, alias := range i.Names {
+			if !mod.Exports(ident) {
+				return nil, fmt.Errorf("%s: %w", ident, ErrExport)
+			}
 			var target Value
 			if alias != "" {
 				target = ptrValue(ident, mod)
@@ -188,8 +191,55 @@ func evalImport(i Import, env environ.Environment[Value]) (Value, error) {
 }
 
 func evalExport(e Export, env environ.Environment[Value]) (Value, error) {
-	fmt.Println("evalExport", e)
-	return nil, nil
+	switch n := e.Node.(type) {
+	case NamedExport:
+		for ident, alias := range n.Names {
+			_, _ = ident, alias
+		}
+	case Let:
+		a, ok := n.Node.(Assignment)
+		if !ok {
+			return nil, ErrEval
+		}
+		value, err := eval(a.Node, env)
+		if err != nil {
+			return nil, err
+		}
+		id, ok := a.Ident.(Identifier)
+		if !ok {
+			return nil, ErrOp
+		}
+		if err := env.Define(id.Name, exportLetValue(value)); err != nil {
+			return nil, err
+		}
+	case Const:
+		a, ok := n.Node.(Assignment)
+		if !ok {
+			return nil, ErrEval
+		}
+		value, err := eval(a.Node, env)
+		if err != nil {
+			return nil, err
+		}
+		id, ok := a.Ident.(Identifier)
+		if !ok {
+			return nil, ErrOp
+		}
+		if err := env.Define(id.Name, exportConstValue(value)); err != nil {
+			return nil, err
+		}
+	case Func:
+		fn, err := eval(n, env)
+		if err != nil {
+			return nil, err
+		}
+		if err := env.Define(n.Ident, exportConstValue(fn)); err != nil {
+			return nil, err
+		}
+	default:
+		return nil, ErrEval
+	}
+	return Void{}, nil
 }
 
 func evalBody(b Body, env environ.Environment[Value]) (Value, error) {

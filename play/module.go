@@ -1,8 +1,12 @@
 package play
 
 import (
+	"errors"
+
 	"github.com/midbel/mule/environ"
 )
+
+var ErrExport = errors.New("symbol not exported")
 
 type module struct {
 	Name  string
@@ -20,6 +24,14 @@ func createModule(ident string) *module {
 
 func (m *module) ReadOnly() bool {
 	return true
+}
+
+func (m *module) Exports(ident string) bool {
+	ex, ok := m.Env.(interface{ Exports(string) bool })
+	if !ok {
+		return false
+	}
+	return ex.Exports(ident)
 }
 
 func (m *module) Eval(n Node) (Value, error) {

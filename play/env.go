@@ -8,8 +8,27 @@ import (
 )
 
 type envValue struct {
-	Const bool
+	Const    bool
+	Exported bool
 	Value
+}
+
+func exportLetValue(val Value) Value {
+	e := envValue{
+		Value:    val,
+		Const:    false,
+		Exported: true,
+	}
+	return e
+}
+
+func exportConstValue(val Value) Value {
+	e := envValue{
+		Value:    val,
+		Const:    true,
+		Exported: true,
+	}
+	return e
 }
 
 func constValue(val Value) Value {
@@ -79,23 +98,6 @@ func Enclosed(parent environ.Environment[Value]) environ.Environment[Value] {
 	}
 }
 
-func (e *Env) Resolve(ident string) (Value, error) {
-	v, ok := e.values[ident]
-	if ok {
-		if p, ok := v.(ptr); ok {
-			e, ok := p.Value.(environ.Environment[Value])
-			if ok {
-				return e.Resolve(p.Ident)
-			}
-		}
-		return v, nil
-	}
-	if e.parent != nil {
-		return e.parent.Resolve(ident)
-	}
-	return nil, fmt.Errorf("%s: %w", ident, environ.ErrDefined)
-}
-
 func (e *Env) Define(ident string, value Value) error {
 	v, err := e.Resolve(ident)
 	if err == nil {
@@ -112,4 +114,45 @@ func (e *Env) Define(ident string, value Value) error {
 	}
 	e.values[ident] = value
 	return nil
+}
+
+func (e *Env) Resolve(ident string) (Value, error) {
+	v, err := e.resolve(ident)
+	if err != nil {
+		return nil, err
+	}
+	if p, ok := v.(ptr); ok {
+		e, ok := p.Value.(environ.Environment[Value])
+		if ok {
+			return e.Resolve(p.Ident)
+		}
+	}
+	return v, nil
+}
+
+func (e *Env) Exports(ident string) bool {
+	v, ok := e.values[ident]
+	if !ok {
+		return false
+	}
+	x, ok := v.(envValue)
+	if !ok {
+		return false
+	}
+	return x.Exported
+
+}
+
+func (e *Env) resolve(ident string) (Value, error) {
+	v, ok := e.values[ident]
+	if ok {
+		if e, ok := v.(envValue); ok {
+			return e.Value, nil
+		}
+		return v, nil
+	}
+	if e.parent != nil {
+		return e.parent.Resolve(ident)
+	}
+	return nil, fmt.Errorf("%s: %w", ident, environ.ErrDefined)
 }
