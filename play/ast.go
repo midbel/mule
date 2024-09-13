@@ -231,20 +231,23 @@ type NamespaceImport struct {
 }
 
 type NamedImport struct {
-	Names map[string]string
+	Names []AliasedName
+}
+
+type AliasedName struct {
+	Ident string
+	Alias string
 }
 
 type Export struct {
 	Position
-	Default bool
+	Node
+}
+
+type DefaultExport struct {
 	Node
 }
 
 type NamedExport struct {
-	Names map[string]string
-}
-
-type Alias struct {
-	Alias string
-	Ident string
+	Names []AliasedName
 }

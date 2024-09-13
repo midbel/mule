@@ -117,6 +117,18 @@ func (e *Env) Resolve(ident string) (Value, error) {
 	return v, nil
 }
 
+func (e *Env) Exports(ident string) bool {
+	v, ok := e.values[ident]
+	if !ok {
+		return false
+	}
+	x, ok := v.(envValue)
+	if ok && x.Exported {
+		return true
+	}
+	return false
+}
+
 func (e *Env) resolve(ident string) (Value, error) {
 	v, ok := e.values[ident]
 	if ok {
