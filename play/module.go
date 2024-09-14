@@ -1,27 +1,10 @@
 package play
 
 import (
-	"errors"
 	"fmt"
 
 	"github.com/midbel/mule/environ"
 )
-
-type proxyValue struct {
-	Value
-	env environ.Environment[Value]
-}
-
-func (p proxyValue) Call(args []Value) (Value, error) {
-	fn, ok := p.Value.(Function)
-	if !ok {
-		return nil, fmt.Errorf("variable is not callable")
-	}
-	fn.Env = Enclosed(p.env)
-	return fn.Call(args)
-}
-
-var ErrExport = errors.New("symbol not exported")
 
 type module struct {
 	Name  string
@@ -49,10 +32,22 @@ func (m *module) True() Value {
 	return getBool(true)
 }
 
-func (m *module) Call(ident string, args []Value) (Value, error) {
+func (m *module) Resolve(ident string) (Value, error) {
+	return m.Env.Resolve(ident)
+}
+
+func (m *module) Define(ident string, value Value) error {
+	return m.Env.Define(ident, value)
+}
+
+func (m *module) GetExportedValue(ident string) (Value, error) {
 	if err := m.isExported(ident); err != nil {
 		return nil, err
 	}
+	return m.Env.Resolve(ident)
+}
+
+func (m *module) Call(ident string, args []Value) (Value, error) {
 	val, err := m.Env.Resolve(ident)
 	if err != nil {
 		return nil, err
@@ -74,32 +69,14 @@ func (m *module) Get(ident Value) (Value, error) {
 	case "name":
 		return getString(m.Name), nil
 	default:
-		if err := m.isExported(name); err != nil {
-			return nil, err
-		}
 		return m.Env.Resolve(name)
 	}
 }
 
-func (m *module) GetExportedValue(ident string) (Value, error) {
-	if err := m.isExported(ident); err != nil {
-		return nil, err
-	}
-	v, err := m.Env.Resolve(ident)
-	if err != nil {
-		return nil, err
-	}
-	v = proxyValue{
-		Value: v,
-		env:   Enclosed(Freeze(m.Env)),
-	}
-	return v, nil
-}
-
 func (m *module) isExported(ident string) error {
-	e, ok := m.Env.(interface{ Exports(string) bool })
-	if ok && e.Exports(ident) {
-		return nil
+	e, ok := m.Env.(interface{ Exports(string) error })
+	if !ok {
+		return fmt.Errorf("%s: %w", ident, ErrExport)
 	}
-	return fmt.Errorf("%s: %w", ident, ErrExport)
+	return e.Exports(ident)
 }

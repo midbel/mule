@@ -162,7 +162,7 @@ func evalImport(i Import, env environ.Environment[Value]) (Value, error) {
 		r = res
 	}
 	mod := createModule(n)
-	if _, err := EvalWithEnv(r, mod.Env); err != nil {
+	if _, err := EvalWithEnv(r, mod); err != nil {
 		return nil, err
 	}
 	if i.Type == nil {
@@ -173,17 +173,19 @@ func evalImport(i Import, env environ.Environment[Value]) (Value, error) {
 	case NamespaceImport:
 		env.Define(i.Name, mod)
 	case NamedImport:
+		seen := make(map[string]struct{})
 		for _, n := range i.Names {
-			v, err := mod.GetExportedValue(n.Ident)
-			if err != nil {
-				return nil, err
+			var (
+				id = n.Ident
+				as = n.Alias
+			)
+			if as == "" {
+				as = id
 			}
-			if n.Alias != "" {
-				n.Ident = n.Alias
+			if _, ok := seen[as]; ok {
+				return nil, fmt.Errorf("%s: duplicated import", as)
 			}
-			if err := env.Define(n.Ident, v); err != nil {
-				return nil, err
-			}
+			env.Define(as, ptrValue(id, mod))
 		}
 	default:
 		return nil, ErrEval
@@ -196,19 +198,23 @@ func evalExport(e Export, env environ.Environment[Value]) (Value, error) {
 	case DefaultExport:
 		return Void{}, nil
 	case NamedExport:
-		return Void{}, nil
+		for _, n := range n.Names {
+			_ = n
+		}
 	case Func:
 		fn, err := eval(e.Node, env)
 		if err != nil {
 			return nil, err
 		}
-		return Void{}, env.Define(n.Ident, exportConstValue(fn))
+		if err := env.Define(n.Ident, exportConstValue(fn)); err != nil {
+			return nil, err
+		}
 	case Let:
 		a, ok := n.Node.(Assignment)
 		if !ok {
 			return nil, ErrEval
 		}
-		value, err := eval(a.Node, env)
+		value, err := eval(n.Node, env)
 		if err != nil {
 			return nil, err
 		}
@@ -216,14 +222,15 @@ func evalExport(e Export, env environ.Environment[Value]) (Value, error) {
 		if !ok {
 			return nil, ErrOp
 		}
-		fmt.Println("export let", id.Name, value)
-		return Void{}, env.Define(id.Name, exportLetValue(value))
+		if err := env.Define(id.Name, exportLetValue(value)); err != nil {
+			return nil, err
+		}
 	case Const:
 		a, ok := n.Node.(Assignment)
 		if !ok {
 			return nil, ErrEval
 		}
-		value, err := eval(a.Node, env)
+		value, err := eval(n.Node, env)
 		if err != nil {
 			return nil, err
 		}
@@ -231,10 +238,13 @@ func evalExport(e Export, env environ.Environment[Value]) (Value, error) {
 		if !ok {
 			return nil, ErrOp
 		}
-		return Void{}, env.Define(id.Name, exportConstValue(value))
+		if err := env.Define(id.Name, exportConstValue(value)); err != nil {
+			return nil, err
+		}
 	default:
 		return nil, ErrEval
 	}
+	return Void{}, nil
 }
 
 func evalBody(b Body, env environ.Environment[Value]) (Value, error) {

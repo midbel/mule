@@ -7,6 +7,22 @@ import (
 	"github.com/midbel/mule/environ"
 )
 
+type ptr struct {
+	Ident string
+	env   environ.Environment[Value]
+}
+
+func ptrValue(ident string, env environ.Environment[Value]) Value {
+	return ptr{
+		Ident: ident,
+		env:   env,
+	}
+}
+
+func (_ ptr) True() Value {
+	return getBool(true)
+}
+
 type envValue struct {
 	Const    bool
 	Exported bool
@@ -49,7 +65,10 @@ func createValueForEnv(val Value, ro bool) Value {
 	}
 }
 
-var ErrFrozen = errors.New("read only")
+var (
+	ErrFrozen = errors.New("read only")
+	ErrExport = errors.New("symbol not exported")
+)
 
 type frozenEnv struct {
 	environ.Environment[Value]
@@ -120,28 +139,47 @@ func (e *Env) Resolve(ident string) (Value, error) {
 	return v, nil
 }
 
-func (e *Env) Exports(ident string) bool {
-	v, ok := e.values[ident]
-	if !ok {
-		return false
-	}
-	x, ok := v.(envValue)
-	if ok && x.Exported {
-		return true
-	}
-	return false
-}
-
 func (e *Env) resolve(ident string) (Value, error) {
-	v, ok := e.values[ident]
-	if ok {
-		if e, ok := v.(envValue); ok {
-			return e.Value, nil
+	if v, ok := e.values[ident]; ok {
+		var exported bool
+		if p, ok := v.(ptr); ok {
+			exported = true
+			x, err := p.env.Resolve(p.Ident)
+			if err != nil {
+				return nil, err
+			}
+			v = x
+		}
+		if ev, ok := v.(envValue); ok {
+			if exported && !ev.Exported {
+				return nil, e.unexported(ident)
+			}
+			return ev.Value, nil
 		}
 		return v, nil
 	}
 	if e.parent != nil {
 		return e.parent.Resolve(ident)
 	}
-	return nil, fmt.Errorf("%s: %w", ident, environ.ErrDefined)
+	return nil, e.undefined(ident)
+}
+
+func (e *Env) Exports(ident string) error {
+	v, ok := e.values[ident]
+	if !ok {
+		return e.undefined(ident)
+	}
+	x, ok := v.(envValue)
+	if ok && x.Exported {
+		return nil
+	}
+	return e.unexported(ident)
+}
+
+func (e *Env) undefined(ident string) error {
+	return fmt.Errorf("%s: %w", ident, environ.ErrDefined)
+}
+
+func (e *Env) unexported(ident string) error {
+	return fmt.Errorf("%s: %w", ident, ErrExport)
 }
