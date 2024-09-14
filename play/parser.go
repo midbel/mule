@@ -732,6 +732,7 @@ func (p *Parser) parseNamedImport() (Node, error) {
 		default:
 			return nil, p.unexpected()
 		}
+		p.skip(p.eol)
 	}
 	if !p.is(Rcurly) {
 		return nil, p.unexpected()
@@ -819,6 +820,7 @@ func (p *Parser) parseNamedExport() (Node, error) {
 		default:
 			return nil, p.unexpected()
 		}
+		p.skip(p.eol)
 	}
 	if !p.is(Rcurly) {
 		return nil, p.unexpected()

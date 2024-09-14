@@ -21,7 +21,8 @@ type List struct {
 
 type ListComp struct {
 	Position
-	Iter Node
+	Iter   Node
+	Filter Node
 	Node
 }
 
@@ -32,7 +33,8 @@ type Map struct {
 
 type MapComp struct {
 	Position
-	Iter Node
+	Iter   Node
+	Filter Node
 	Node
 }
 
