@@ -183,8 +183,9 @@ func evalImport(i Import, env environ.Environment[Value]) (Value, error) {
 				as = id
 			}
 			if _, ok := seen[as]; ok {
-				return nil, fmt.Errorf("%s: duplicated import", as)
+				return nil, fmt.Errorf("%s: symbol already imported", as)
 			}
+			seen[as] = struct{}{}
 			env.Define(as, ptrValue(id, mod))
 		}
 	default:
@@ -198,8 +199,19 @@ func evalExport(e Export, env environ.Environment[Value]) (Value, error) {
 	case DefaultExport:
 		return Void{}, nil
 	case NamedExport:
+		seen := make(map[string]struct{})
 		for _, n := range n.Names {
-			_ = n
+			var (
+				id = n.Ident
+				as = n.Alias
+			)
+			if as == "" {
+				as = id
+			}
+			if _, ok := seen[as]; ok {
+				return nil, fmt.Errorf("%s: symbol already exported", as)
+			}
+			seen[as] = struct{}{}
 		}
 	case Func:
 		fn, err := eval(e.Node, env)
