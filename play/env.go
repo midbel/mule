@@ -29,15 +29,6 @@ type envValue struct {
 	Value
 }
 
-func exportLetValue(val Value) Value {
-	e := envValue{
-		Value:    val,
-		Const:    false,
-		Exported: true,
-	}
-	return e
-}
-
 func exportConstValue(val Value) Value {
 	e := envValue{
 		Value:    val,
@@ -82,11 +73,6 @@ func Freeze(env environ.Environment[Value]) environ.Environment[Value] {
 
 func (e *frozenEnv) Define(_ string, _ Value) error {
 	return ErrFrozen
-}
-
-type ReadOnlyValue interface {
-	Value
-	ReadOnly() bool
 }
 
 type Env struct {
@@ -141,19 +127,10 @@ func (e *Env) Resolve(ident string) (Value, error) {
 
 func (e *Env) resolve(ident string) (Value, error) {
 	if v, ok := e.values[ident]; ok {
-		var exported bool
 		if p, ok := v.(ptr); ok {
-			exported = true
-			x, err := p.env.Resolve(p.Ident)
-			if err != nil {
-				return nil, err
-			}
-			v = x
+			return p.env.Resolve(p.Ident)
 		}
 		if ev, ok := v.(envValue); ok {
-			if exported && !ev.Exported {
-				return nil, e.unexported(ident)
-			}
 			return ev.Value, nil
 		}
 		return v, nil

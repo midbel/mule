@@ -7,17 +7,44 @@ import (
 )
 
 type module struct {
-	Name  string
-	Attrs *Object
-	Env   environ.Environment[Value]
+	Name    string
+	Attrs   *Object
+	Env     environ.Environment[Value]
+	Exports map[string]string
 }
 
 func createModule(ident string) *module {
 	return &module{
-		Name:  ident,
-		Env:   Enclosed(Default()),
-		Attrs: createObject(),
+		Name:    ident,
+		Env:     Enclosed(Default()),
+		Attrs:   createObject(),
+		Exports: make(map[string]string),
 	}
+}
+
+func (m *module) Export(ident, alias string, val Value) error {
+	if _, ok := m.Exports[ident]; ok {
+		return fmt.Errorf("%s: symbol already exported", ident)
+	}
+	m.Exports[alias] = ident
+	if val == nil {
+		_, err := m.Resolve(ident)
+		return err
+	}
+	return m.Define(ident, val)
+}
+
+func (m *module) Import(ident string) (Value, error) {
+	id, ok := m.Exports[ident]
+	if !ok {
+		return nil, fmt.Errorf("%s: %w", ident, ErrExport)
+	}
+	v, err := m.Env.Resolve(id)
+	if err != nil {
+		return nil, err
+	}
+	_ = v
+	return ptrValue(id, m.Env), nil
 }
 
 func (m *module) Type() string {
@@ -40,15 +67,11 @@ func (m *module) Define(ident string, value Value) error {
 	return m.Env.Define(ident, value)
 }
 
-func (m *module) GetExportedValue(ident string) (Value, error) {
+func (m *module) Call(ident string, args []Value) (Value, error) {
 	if err := m.isExported(ident); err != nil {
 		return nil, err
 	}
-	return m.Env.Resolve(ident)
-}
-
-func (m *module) Call(ident string, args []Value) (Value, error) {
-	val, err := m.Env.Resolve(ident)
+	val, err := m.Env.Resolve(m.Exports[ident])
 	if err != nil {
 		return nil, err
 	}
@@ -69,14 +92,17 @@ func (m *module) Get(ident Value) (Value, error) {
 	case "name":
 		return getString(m.Name), nil
 	default:
-		return m.Env.Resolve(name)
+		if err := m.isExported(name); err != nil {
+			return nil, err
+		}
+		return m.Env.Resolve(m.Exports[name])
 	}
 }
 
 func (m *module) isExported(ident string) error {
-	e, ok := m.Env.(interface{ Exports(string) error })
+	_, ok := m.Exports[ident]
 	if !ok {
 		return fmt.Errorf("%s: %w", ident, ErrExport)
 	}
-	return e.Exports(ident)
+	return nil
 }

@@ -125,12 +125,7 @@ func eval(n Node, env environ.Environment[Value]) (Value, error) {
 	case Import:
 		return evalImport(n, env)
 	case Export:
-		res, err := evalExport(n, env)
-		if err != nil {
-			return nil, ErrEval
-		}
-		_ = res
-		return Void{}, nil
+		return evalExport(n, env)
 	default:
 		return nil, ErrEval
 	}
@@ -186,7 +181,11 @@ func evalImport(i Import, env environ.Environment[Value]) (Value, error) {
 				return nil, fmt.Errorf("%s: symbol already imported", as)
 			}
 			seen[as] = struct{}{}
-			env.Define(as, ptrValue(id, mod))
+			val, err := mod.Import(id)
+			if err != nil {
+				return nil, err
+			}
+			env.Define(as, val)
 		}
 	default:
 		return nil, ErrEval
@@ -195,11 +194,16 @@ func evalImport(i Import, env environ.Environment[Value]) (Value, error) {
 }
 
 func evalExport(e Export, env environ.Environment[Value]) (Value, error) {
+	ex, ok := env.(interface {
+		Export(string, string, Value) error
+	})
+	if !ok {
+		return nil, ErrEval
+	}
 	switch n := e.Node.(type) {
 	case DefaultExport:
 		return Void{}, nil
 	case NamedExport:
-		seen := make(map[string]struct{})
 		for _, n := range n.Names {
 			var (
 				id = n.Ident
@@ -208,17 +212,16 @@ func evalExport(e Export, env environ.Environment[Value]) (Value, error) {
 			if as == "" {
 				as = id
 			}
-			if _, ok := seen[as]; ok {
-				return nil, fmt.Errorf("%s: symbol already exported", as)
+			if err := ex.Export(id, as, nil); err != nil {
+				return Void{}, err
 			}
-			seen[as] = struct{}{}
 		}
 	case Func:
 		fn, err := eval(e.Node, env)
 		if err != nil {
 			return nil, err
 		}
-		if err := env.Define(n.Ident, exportConstValue(fn)); err != nil {
+		if err := ex.Export(n.Ident, n.Ident, fn); err != nil {
 			return nil, err
 		}
 	case Let:
@@ -234,7 +237,7 @@ func evalExport(e Export, env environ.Environment[Value]) (Value, error) {
 		if !ok {
 			return nil, ErrOp
 		}
-		if err := env.Define(id.Name, exportLetValue(value)); err != nil {
+		if err := ex.Export(id.Name, id.Name, value); err != nil {
 			return nil, err
 		}
 	case Const:
@@ -250,7 +253,7 @@ func evalExport(e Export, env environ.Environment[Value]) (Value, error) {
 		if !ok {
 			return nil, ErrOp
 		}
-		if err := env.Define(id.Name, exportConstValue(value)); err != nil {
+		if err := ex.Export(id.Name, id.Name, value); err != nil {
 			return nil, err
 		}
 	default:
