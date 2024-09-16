@@ -24,18 +24,8 @@ func (_ ptr) True() Value {
 }
 
 type envValue struct {
-	Const    bool
-	Exported bool
+	Const bool
 	Value
-}
-
-func exportConstValue(val Value) Value {
-	e := envValue{
-		Value:    val,
-		Const:    true,
-		Exported: true,
-	}
-	return e
 }
 
 func constValue(val Value) Value {
@@ -139,18 +129,6 @@ func (e *Env) resolve(ident string) (Value, error) {
 		return e.parent.Resolve(ident)
 	}
 	return nil, e.undefined(ident)
-}
-
-func (e *Env) Exports(ident string) error {
-	v, ok := e.values[ident]
-	if !ok {
-		return e.undefined(ident)
-	}
-	x, ok := v.(envValue)
-	if ok && x.Exported {
-		return nil
-	}
-	return e.unexported(ident)
 }
 
 func (e *Env) undefined(ident string) error {
