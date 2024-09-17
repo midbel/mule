@@ -3,6 +3,7 @@ package mule
 import (
 	"fmt"
 	"io"
+	"os"
 	"strings"
 )
 
@@ -432,14 +433,37 @@ func (p *Parser) parseMacro() error {
 }
 
 func (p *Parser) parseIncludeMacro() error {
-	return nil
+	p.next()
+	r, err := os.Open(p.getCurrLiteral())
+	if err != nil {
+		return err
+	}
+	defer r.Close()
+	p.next()
+
+	px, err := Parse(r)
+	if err != nil {
+		return err
+	}
+	_, err = px.Parse()
+	return err
 }
 
 func (p *Parser) parseReadFileMacro() error {
+	p.next()
+	buf, err := os.ReadFile(p.getCurrLiteral())
+	defer p.next()
+	if err != nil {
+		return err
+	}
+	fmt.Println(string(buf))
 	return nil
 }
 
 func (p *Parser) parseEnvMacro() error {
+	p.next()
+	os.Getenv(p.getCurrLiteral())
+	p.next()
 	return nil
 }
 
