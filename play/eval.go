@@ -13,6 +13,11 @@ import (
 	"github.com/midbel/mule/environ"
 )
 
+type Interpreter struct {
+	modules     map[string]*module
+	searchPaths []string
+}
+
 func Default() environ.Environment[Value] {
 	top := Empty()
 	top.Define("console", makeConsole())
@@ -28,10 +33,6 @@ func Default() environ.Environment[Value] {
 	top.Define("getExportedIdentifiers", createBuiltinFunc("getExportedIdentifiers", execGetExportedIdents))
 
 	return top
-}
-
-type Evaluable interface {
-	Eval(Node) (Value, error)
 }
 
 func Eval(r io.Reader) (Value, error) {
