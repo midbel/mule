@@ -4,8 +4,10 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"os"
 	"time"
 
+	"github.com/midbel/mule/environ"
 	"github.com/midbel/mule/play"
 )
 
@@ -21,6 +23,7 @@ type muleObject struct {
 	req  *muleRequest
 	res  *muleResponse
 	ctx  *muleCollection
+	vars *muleVars
 
 	play.EventHandler
 }
@@ -59,6 +62,10 @@ func (m *muleObject) Get(ident play.Value) (play.Value, error) {
 		return m.req, nil
 	case "response":
 		return m.res, nil
+	case "variables":
+		return play.Void{}, nil
+	case "environ":
+		return &muleEnviron{}, nil
 	default:
 		return nil, fmt.Errorf("%s: property not known", prop)
 	}
@@ -187,7 +194,7 @@ type muleHeader struct {
 }
 
 func (_ *muleHeader) True() play.Value {
-	return nil
+	return play.NewBool(true)
 }
 
 func (_ *muleHeader) Call(ident string, args []play.Value) (play.Value, error) {
@@ -200,4 +207,72 @@ func (_ *muleHeader) Call(ident string, args []play.Value) (play.Value, error) {
 		return nil, fmt.Errorf("%s: unknown function", ident)
 	}
 	return nil, play.ErrImpl
+}
+
+type muleEnviron struct{}
+
+func (_ *muleEnviron) String() string {
+	return "environ"
+}
+
+func (_ *muleEnviron) True() play.Value {
+	return play.NewBool(true)
+}
+
+func (_ *muleEnviron) Get(ident play.Value) (play.Value, error) {
+	prop, ok := ident.(fmt.Stringer)
+	if !ok {
+		return nil, play.ErrEval
+	}
+	return play.NewString(os.Getenv(prop.String())), nil
+}
+
+type muleVars struct {
+	env environ.Environment[play.Value]
+}
+
+func (_ *muleVars) String() string {
+	return "variables"
+}
+
+func (_ *muleVars) True() play.Value {
+	return play.NewBool(true)
+}
+
+func (v *muleVars) Call(ident string, args []play.Value) (play.Value, error) {
+	switch ident {
+	case "get":
+		if len(args) != 1 {
+			return nil, play.ErrArgument
+		}
+		str, ok := args[0].(fmt.Stringer)
+		if !ok {
+			return nil, play.ErrEval
+		}
+		return v.env.Resolve(str.String())
+	case "set":
+		if len(args) != 2 {
+			return nil, play.ErrArgument
+		}
+		str, ok := args[0].(fmt.Stringer)
+		if !ok {
+			return nil, play.ErrEval
+		}
+		return play.Void{}, v.env.Define(str.String(), args[1])
+	case "has":
+		if len(args) != 1 {
+			return nil, play.ErrArgument
+		}
+		str, ok := args[0].(fmt.Stringer)
+		if !ok {
+			return nil, play.ErrEval
+		}
+		_, err := v.env.Resolve(str.String())
+		if err == nil {
+			return play.NewBool(true), nil
+		}
+		return play.NewBool(false), nil
+	default:
+		return nil, fmt.Errorf("%s: unknown function", ident)
+	}
 }

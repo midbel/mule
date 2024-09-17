@@ -212,6 +212,9 @@ func (r *Request) Execute(ctx *Collection) error {
 	obj.ctx = &muleCollection{
 		collection: ctx,
 	}
+	obj.vars = &muleVars{
+		env: play.Empty(),
+	}
 	env.Define(muleVarName, &obj)
 
 	if _, err := play.EvalWithEnv(strings.NewReader(r.Before), play.Freeze(env)); err != nil {
