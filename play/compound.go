@@ -1334,6 +1334,25 @@ func nativeToValues(obj interface{}) (Value, error) {
 	}
 }
 
+func makeJWT() Value {
+	g := global{
+		name:  "JWT",
+		fnset: make(map[string]Callable),
+	}
+	g.fnset["parse"] = asCallable(jwtParse)
+	g.fnset["stringify"] = asCallable(jwtStringify)
+
+	return g
+}
+
+func jwtParse(args []Value) (Value, error) {
+	return nil, nil
+}
+
+func jwtStringify(args []Value) (Value, error) {
+	return nil, nil
+}
+
 func makeMath() Value {
 	g := global{
 		name:  "Math",

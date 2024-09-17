@@ -23,6 +23,7 @@ func Default() environ.Environment[Value] {
 	top.Define("console", makeConsole())
 	top.Define("Math", makeMath())
 	top.Define("JSON", makeJson())
+	top.Define("JWT", makeJWT())
 	top.Define("Object", makeObject())
 	top.Define("Array", makeArray())
 	top.Define("parseInt", createBuiltinFunc("parseInt", execParseInt))

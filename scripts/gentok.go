@@ -1,29 +1,29 @@
 package main
 
 import (
-	"encoding/json"
 	"flag"
 	"fmt"
-	"os"
 
 	"github.com/midbel/mule/jwt"
 )
 
 func main() {
+	var cfg jwt.Config
+	flag.StringVar(&cfg.Secret, "s", "supersecret11", "secret")
 	flag.Parse()
 
-	r, err := os.Open(flag.Arg(0))
-	if err != nil {
-		fmt.Fprintln(os.Stderr, err)
-		os.Exit(1)
+	dat := struct {
+		Name  string `json:"name"`
+		Level int    `json:"level"`
+		jwt.Claims
+	}{
+		Name:  "foobar",
+		Level: 100,
+		Claims: jwt.Claims{
+			Issuer: "token.midbel.org",
+			Subject: "demo",
+			Audience: "account",
+		},
 	}
-	defer r.Close()
-
-	var dat interface{}
-	if err := json.NewDecoder(r).Decode(&dat); err != nil {
-		fmt.Fprintln(os.Stderr, err)
-		os.Exit(2)
-	}
-	fmt.Println(dat)
-	fmt.Println(jwt.Encode(dat))
+	fmt.Println(jwt.Encode(dat, &cfg))
 }
