@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net/http"
 	"os"
+	"strings"
 	"time"
 
 	"github.com/midbel/mule/environ"
@@ -14,6 +15,7 @@ import (
 var (
 	ErrAbort  = errors.New("abort")
 	ErrCancel = errors.New("cancel")
+	ErrImmutable = errors.New("immutable")
 )
 
 const muleVarName = "mule"
@@ -63,7 +65,7 @@ func (m *muleObject) Get(ident play.Value) (play.Value, error) {
 	case "response":
 		return m.res, nil
 	case "variables":
-		return play.Void{}, nil
+		return m.vars, nil
 	case "environ":
 		return &muleEnviron{}, nil
 	default:
@@ -120,7 +122,9 @@ func (m *muleRequest) Get(ident play.Value) (play.Value, error) {
 	case "method":
 		return play.NewString(m.request.Method), nil
 	case "token":
-		return play.NewString(""), nil
+		token := m.request.Header.Get("authorization")
+		token, _ = strings.CutPrefix(token, "Bearer ")
+		return play.NewString(token), nil
 	case "username":
 		user, _, _ := m.request.BasicAuth()
 		return play.NewString(user), nil
@@ -129,7 +133,8 @@ func (m *muleRequest) Get(ident play.Value) (play.Value, error) {
 		return play.NewString(pass), nil
 	case "header":
 		return &muleHeader{
-			headers: m.request.Header,
+			headers:   m.request.Header,
+			immutable: false,
 		}, nil
 	default:
 		return play.Void{}, nil
@@ -158,10 +163,11 @@ func (m *muleResponse) Get(ident play.Value) (play.Value, error) {
 	case "body":
 		return play.NewString(""), nil
 	case "code":
-		return play.NewFloat(0), nil
+		return play.NewFloat(float64(m.response.StatusCode)), nil
 	case "header":
 		return &muleHeader{
-			headers: m.response.Header,
+			headers:   m.response.Header,
+			immutable: true,
 		}, nil
 	default:
 		return play.Void{}, nil
@@ -190,17 +196,21 @@ func (m *muleResponse) Call(ident string, args []play.Value) (play.Value, error)
 }
 
 type muleHeader struct {
-	headers http.Header
+	headers   http.Header
+	immutable bool
 }
 
 func (_ *muleHeader) True() play.Value {
 	return play.NewBool(true)
 }
 
-func (_ *muleHeader) Call(ident string, args []play.Value) (play.Value, error) {
+func (m *muleHeader) Call(ident string, args []play.Value) (play.Value, error) {
 	switch ident {
 	case "get":
 	case "set":
+		if m.immutable {
+			return nil, ErrImmutable
+		}
 	case "has":
 	case "entries":
 	default:

@@ -20,8 +20,8 @@ func main() {
 		Name:  "foobar",
 		Level: 100,
 		Claims: jwt.Claims{
-			Issuer: "token.midbel.org",
-			Subject: "demo",
+			Issuer:   "token.midbel.org",
+			Subject:  "demo",
 			Audience: "account",
 		},
 	}
