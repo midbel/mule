@@ -175,6 +175,18 @@ func (o *Object) Get(prop Value) (Value, error) {
 	return v, nil
 }
 
+func (o *Object) Entries() Value {
+	arr := createArray()
+	for k, v := range o.Fields {
+		a := createArray()
+		a.Values = append(a.Values, k)
+		a.Values = append(a.Values, v)
+
+		arr.Values = append(arr.Values, a)
+	}
+	return arr
+}
+
 func (o *Object) Values() []Value {
 	var vs []Value
 	for k := range o.Fields {
@@ -343,6 +355,17 @@ func (a *Array) Call(ident string, args []Value) (Value, error) {
 		return nil, ErrImpl
 	}
 	return fn(args)
+}
+
+func (a *Array) Entries() Value {
+	arr := createArray()
+	for i := range a.Values {
+		x := createArray()
+		x.Values = append(x.Values, getFloat(float64(i)))
+		x.Values = append(x.Values, a.Values[i])
+		arr.Values = append(arr.Values, x)
+	}
+	return arr
 }
 
 func (a *Array) List() []Value {
