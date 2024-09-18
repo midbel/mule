@@ -13,8 +13,8 @@ import (
 )
 
 var (
-	ErrAbort  = errors.New("abort")
-	ErrCancel = errors.New("cancel")
+	ErrAbort     = errors.New("abort")
+	ErrCancel    = errors.New("cancel")
 	ErrImmutable = errors.New("immutable")
 )
 

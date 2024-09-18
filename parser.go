@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"path/filepath"
 	"strings"
 )
 
@@ -12,8 +13,9 @@ type Parser struct {
 	curr Token
 	peek Token
 
-	depth  int
-	macros map[string]func() error
+	depth       int
+	searchPaths []string
+	macros      map[string]func() error
 }
 
 func Parse(r io.Reader) (*Parser, error) {
@@ -21,6 +23,7 @@ func Parse(r io.Reader) (*Parser, error) {
 		scan: Scan(r),
 	}
 	p.macros = map[string]func() error{
+		"path":     p.parseSearchPathMacro,
 		"include":  p.parseIncludeMacro,
 		"readfile": p.parseReadFileMacro,
 		"env":      p.parseEnvMacro,
@@ -64,6 +67,9 @@ func (p *Parser) parse(root *Collection) error {
 }
 
 func (p *Parser) parseItem(root *Collection) error {
+	if p.is(Macro) {
+		return p.parseMacro()
+	}
 	if !p.is(Keyword) {
 		return p.unexpected("collection")
 	}
@@ -432,38 +438,115 @@ func (p *Parser) parseMacro() error {
 	return fn()
 }
 
+func (p *Parser) parseSearchPathMacro() error {
+	return nil
+}
+
 func (p *Parser) parseIncludeMacro() error {
 	p.next()
-	r, err := os.Open(p.getCurrLiteral())
+	var (
+		file  string
+		alias string
+		path  string
+	)
+	if p.is(Lbrace) {
+		get := func() (string, error) {
+			p.next()
+			if !p.is(String) && !p.is(Ident) {
+				return "", p.unexpected("include")
+			}
+			defer p.next()
+			return p.getCurrLiteral(), nil
+		}
+		err := p.parseBraces("include", func() error {
+			p.skip(EOL)
+			if !p.is(Ident) && !p.is(Keyword) && !p.is(String) {
+				return p.unexpected("include")
+			}
+			var err error
+			switch p.getCurrLiteral() {
+			case "file":
+				file, err = get()
+			case "alias":
+				alias, err = get()
+			case "path":
+				path, err = get()
+			default:
+				return p.unexpected("include")
+			}
+			return err
+		})
+		if err != nil {
+			return err
+		}
+	} else {
+		file = p.getCurrLiteral()
+		p.next()
+	}
+	if !p.is(EOL) && !p.is(EOF) {
+		return p.unexpected("include")
+	}
+	p.next()
+
+	open := func(file string) (io.ReadCloser, error) {
+		r, err := os.Open(file)
+		if err == nil {
+			return r, nil
+		}
+		for _, d := range p.searchPaths {
+			r, err := os.Open(filepath.Join(d, file))
+			if err == nil {
+				return r, err
+			}
+		}
+		return nil, err
+	}
+
+	r, err := open(file)
 	if err != nil {
 		return err
 	}
 	defer r.Close()
-	p.next()
 
 	px, err := Parse(r)
 	if err != nil {
 		return err
 	}
-	_, err = px.Parse()
-	return err
+	el, err := px.Parse()
+	if err != nil {
+		return err
+	}
+	if alias == "" {
+		alias = filepath.Base(file)
+		alias = strings.TrimSuffix(alias, filepath.Ext(alias))
+	}
+	_ = path
+	_ = el
+	return nil
 }
 
 func (p *Parser) parseReadFileMacro() error {
 	p.next()
-	buf, err := os.ReadFile(p.getCurrLiteral())
-	defer p.next()
-	if err != nil {
-		return err
+	file := p.getCurrLiteral()
+	p.next()
+	if !p.is(EOL) && !p.is(EOF) {
+		return p.unexpected("readfile")
 	}
-	fmt.Println(string(buf))
-	return nil
+	p.next()
+
+	_, err := os.ReadFile(file)
+	return err
 }
 
 func (p *Parser) parseEnvMacro() error {
 	p.next()
-	os.Getenv(p.getCurrLiteral())
+	value := p.getCurrLiteral()
 	p.next()
+	if !p.is(EOL) && !p.is(EOF) {
+		return p.unexpected("env")
+	}
+	p.next()
+	os.Getenv(value)
 	return nil
 }
 

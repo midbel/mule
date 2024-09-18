@@ -74,6 +74,14 @@ func Make(name string, parent environ.Environment[Value]) *Collection {
 	}
 }
 
+func (c Collection) GetCollections() []*Collection {
+	return c.Collections
+}
+
+func (c Collection) GetRequests() []*Request {
+	return c.Requests
+}
+
 func (c Collection) Resolve(ident string) (Value, error) {
 	switch {
 	case c.URL != nil && ident == "url":
@@ -119,7 +127,7 @@ func (c *Collection) Run(name string, w io.Writer) error {
 			}
 			return other.Execute()
 		}
-		return req.Execute(c)
+		return req.Execute(c, w)
 	}
 	other, err := c.GetCollection(name)
 	if err != nil {
@@ -173,7 +181,7 @@ type Request struct {
 	After      string
 }
 
-func (r *Request) Execute(ctx *Collection) error {
+func (r *Request) Execute(ctx *Collection, out io.Writer) error {
 	target, err := r.target(ctx)
 	if err != nil {
 		return err
@@ -204,7 +212,6 @@ func (r *Request) Execute(ctx *Collection) error {
 		env = play.Enclosed(play.Default())
 		obj muleObject
 	)
-	obj.EventHandler = play.NewEventHandler()
 	obj.when = time.Now()
 	obj.req = &muleRequest{
 		request: req,
@@ -235,6 +242,7 @@ func (r *Request) Execute(ctx *Collection) error {
 	if _, err := play.EvalWithEnv(strings.NewReader(r.After), play.Freeze(env)); err != nil {
 		return err
 	}
+	io.Copy(out, res.Body)
 	if res.StatusCode >= http.StatusBadRequest {
 		return fmt.Errorf(http.StatusText(res.StatusCode))
 	}

@@ -52,7 +52,6 @@ const (
 	Variable
 	String
 	Number
-	Dot
 	Lbrace
 	Rbrace
 	Invalid
@@ -73,8 +72,6 @@ func (t Token) String() string {
 		return "<eol>"
 	case Quote:
 		return "<quote>"
-	case Dot:
-		return "<dot>"
 	case Lbrace:
 		return "<lbrace>"
 	case Rbrace:
@@ -350,8 +347,6 @@ func (s *Scanner) scanPunct(tok *Token) {
 		tok.Type = Lbrace
 	case rbrace:
 		tok.Type = Rbrace
-	case dot:
-		tok.Type = Dot
 	default:
 		tok.Type = Invalid
 	}
@@ -451,7 +446,7 @@ func isDelim(r rune) bool {
 }
 
 func isPunct(r rune) bool {
-	return r == dot || r == lbrace || r == rbrace
+	return r == lbrace || r == rbrace
 }
 
 func isComment(r rune) bool {
