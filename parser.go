@@ -15,18 +15,19 @@ type Parser struct {
 
 	depth       int
 	searchPaths []string
-	macros      map[string]func() error
+}
+
+func ParseReader(r io.Reader) (*Collection, error) {
+	p, err := Parse(r)
+	if err != nil {
+		return nil, err
+	}
+	return p.Parse()
 }
 
 func Parse(r io.Reader) (*Parser, error) {
 	p := Parser{
 		scan: Scan(r),
-	}
-	p.macros = map[string]func() error{
-		"path":     p.parseSearchPathMacro,
-		"include":  p.parseIncludeMacro,
-		"readfile": p.parseReadFileMacro,
-		"env":      p.parseEnvMacro,
 	}
 	p.next()
 	p.next()
@@ -431,18 +432,14 @@ func (p *Parser) parseBraces(ctx string, fn func() error) error {
 }
 
 func (p *Parser) parseMacro() error {
-	fn, ok := p.macros[p.getCurrLiteral()]
-	if !ok {
-		return fmt.Errorf("%s: undefined macro")
-	}
-	return fn()
+	return nil
 }
 
 func (p *Parser) parseSearchPathMacro() error {
 	return nil
 }
 
-func (p *Parser) parseIncludeMacro() error {
+func (p *Parser) parseIncludeMacro() (*Collection, error) {
 	p.next()
 	var (
 		file  string
@@ -477,14 +474,14 @@ func (p *Parser) parseIncludeMacro() error {
 			return err
 		})
 		if err != nil {
-			return err
+			return nil, err
 		}
 	} else {
 		file = p.getCurrLiteral()
 		p.next()
 	}
 	if !p.is(EOL) && !p.is(EOF) {
-		return p.unexpected("include")
+		return nil, p.unexpected("include")
 	}
 	p.next()
 
@@ -504,50 +501,44 @@ func (p *Parser) parseIncludeMacro() error {
 
 	r, err := open(file)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	defer r.Close()
 
-	px, err := Parse(r)
+	el, err := ParseReader(r)
 	if err != nil {
-		return err
-	}
-	el, err := px.Parse()
-	if err != nil {
-		return err
+		return nil, err
 	}
 	if alias == "" {
 		alias = filepath.Base(file)
 		alias = strings.TrimSuffix(alias, filepath.Ext(alias))
 	}
 	_ = path
-	_ = el
-	return nil
+	return el, nil
 }
 
-func (p *Parser) parseReadFileMacro() error {
+func (p *Parser) parseReadFileMacro() (string, error) {
 	p.next()
 	file := p.getCurrLiteral()
 	p.next()
 	if !p.is(EOL) && !p.is(EOF) {
-		return p.unexpected("readfile")
+		return "", p.unexpected("readfile")
 	}
 	p.next()
 
-	_, err := os.ReadFile(file)
-	return err
+	buf, err := os.ReadFile(file)
+	return string(buf), err
 }
 
-func (p *Parser) parseEnvMacro() error {
+func (p *Parser) parseEnvMacro() (string, error) {
 	p.next()
 	value := p.getCurrLiteral()
 	p.next()
 	if !p.is(EOL) && !p.is(EOF) {
-		return p.unexpected("env")
+		return "", p.unexpected("env")
 	}
 	p.next()
-	os.Getenv(value)
-	return nil
+	return os.Getenv(value), nil
 }
 
 func (p *Parser) done() bool {
