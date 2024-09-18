@@ -51,7 +51,13 @@ func animals() error {
 	if err != nil {
 		return err
 	}
-	http.Handle("/animals/", handle(data))
+	if ds, ok := data.(map[string]interface{}); ok {
+		http.Handle("/reigns/", handle(ds["reigns"]))
+		http.Handle("/animals/", handle(ds["animals"]))
+		http.Handle("/diets/", handle(ds["diets"]))
+	} else {
+		return fmt.Errorf("animals: unexpected data")
+	}
 	return nil
 }
 

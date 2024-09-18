@@ -1,18 +1,75 @@
-[
-	{
-		"id": 1,
-		"name": "oliphant",
-		"reign": "mammal",
-		"country": [],
-		"length": 5000,
-		"weight": 3000
-	},
-	{
-		"id": 2,
-		"name": "rat",
-		"reign": "mammal",
-		"country": [],
-		"length": 0.5,
-		"weight": 0.5
-	}
-]
+{
+	"reigns": [
+		{
+			"id": 1,
+			"name": "mammal"
+		}
+	],
+	"diets": [
+		 {
+		 	"id": 1,
+		 	"name": "carnivorous"
+		 },
+		 {
+		 	"id": 2,
+		 	"name": "omnivorous"
+		 },
+		 {
+		 	"id": 3,
+		 	"name": "vegetarian"
+		 },
+		 {
+		 	"id": 4,
+		 	"name": "frugivorous"
+		 },
+		 {
+		 	"id": 5,
+		 	"name": "granivorous"
+		 },
+		 {
+		 	"id": 6,
+		 	"name": "herbivorous"
+		 }
+	],
+	"animals": [
+		{
+			"id": 1,
+			"name": "oliphant",
+			"reign": 1,
+			"diet": [3],
+			"countries": [],
+			"length": 5000,
+			"weight": 3000,
+			"lifetime": 0
+		},
+		{
+			"id": 2,
+			"name": "rat",
+			"reign": 1,
+			"diet": [2],
+			"countries": [],
+			"length": 0.5,
+			"weight": 0.5,
+			"lifetime": 0
+		},
+		{
+			"id": 3,
+			"name": "cat",
+			"reign": 1,
+			"diet": [2],
+			"countries": [],
+			"length": 0.5,
+			"weight": 3,
+			"lifetime": 0
+		}, {
+			"id": 4,
+			"name": "cow",
+			"reign": 1,
+			"diet": [6],
+			"countries": [],
+			"length": 3,
+			"weight": 0,
+			"lifetime": 0
+		}		
+	]
+}
