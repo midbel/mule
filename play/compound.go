@@ -41,6 +41,10 @@ type Object struct {
 	locked int
 }
 
+func NewObject() *Object {
+	return createObject()
+}
+
 func createObject() *Object {
 	return &Object{
 		Fields: make(map[Value]Value),
@@ -214,6 +218,14 @@ func (o *Object) isSealed() bool {
 type Array struct {
 	*Object
 	Values []Value
+}
+
+func NewArray() *Array {
+	return createArray()
+}
+
+func (a *Array) Append(val Value) {
+	a.Values = append(a.Values, val)
 }
 
 func createArray() *Array {

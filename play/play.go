@@ -72,6 +72,17 @@ func (h *defaultEventHandler) Emit(name string) error {
 	return nil
 }
 
+func isTruthy(val Value) bool {
+	switch val.(type) {
+	case String, Float, Bool:
+		return isTrue(val)
+	case *Array, *Object:
+		return true
+	default:
+		return false
+	}
+}
+
 func isTrue(val Value) bool {
 	b, ok := val.True().(Bool)
 	if !ok {

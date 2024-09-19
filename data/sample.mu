@@ -17,6 +17,7 @@ geo {
 
 		after <<SCRIPT
 		(mule.response.json() || []).forEach(c => console.log(c.id, c.code, c.name))
+		console.log(mule.response.headers.entries())
 		SCRIPT
 	}
 

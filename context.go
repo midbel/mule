@@ -167,7 +167,7 @@ func (m *muleResponse) Get(ident play.Value) (play.Value, error) {
 		return play.NewString(string(m.body)), nil
 	case "code":
 		return play.NewFloat(float64(m.response.StatusCode)), nil
-	case "header":
+	case "headers":
 		return &muleHeader{
 			headers:   m.response.Header,
 			immutable: true,
@@ -188,7 +188,6 @@ func (m *muleResponse) Call(ident string, args []play.Value) (play.Value, error)
 			return play.Void{}, err
 		}
 		return play.NativeToValues(obj)
-		return play.Void{}, nil
 	case "success":
 		ok := m.response.StatusCode < http.StatusBadRequest
 		return play.NewBool(ok), nil
@@ -218,12 +217,47 @@ func (_ *muleHeader) True() play.Value {
 func (m *muleHeader) Call(ident string, args []play.Value) (play.Value, error) {
 	switch ident {
 	case "get":
+		if len(args) != 1 {
+			return nil, play.ErrArgument
+		}
+		id, ok := args[0].(fmt.Stringer)
+		if !ok {
+			return nil, play.ErrEval
+		}
+		arr := play.NewArray()
+		for _, h := range m.headers[id.String()] {
+			arr.Append(play.NewString(h))
+		}
+		return arr, nil
 	case "set":
 		if m.immutable {
 			return nil, ErrImmutable
 		}
 	case "has":
+		if len(args) != 1 {
+			return nil, play.ErrArgument
+		}
+		id, ok := args[0].(fmt.Stringer)
+		if !ok {
+			return nil, play.ErrEval
+		}
+		_, ok = m.headers[id.String()]
+		return play.NewBool(ok), nil
 	case "entries":
+		arr := play.NewArray()
+		for n, hs := range m.headers {
+			var (
+				sub = play.NewArray()
+				all = play.NewArray()
+			)
+			for _, h := range hs {
+				all.Append(play.NewString(h))
+			}
+			sub.Append(play.NewString(n))
+			sub.Append(all)
+			arr.Append(sub)
+		}
+		return arr, nil
 	default:
 		return nil, fmt.Errorf("%s: unknown function", ident)
 	}

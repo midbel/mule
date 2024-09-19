@@ -928,7 +928,13 @@ func evalBinary(b Binary, env environ.Environment[Value]) (Value, error) {
 	case And:
 		return getBool(isTrue(left) && isTrue(right)), nil
 	case Or:
-		return getBool(isTrue(left) || isTrue(right)), nil
+		if isTruthy(left) {
+			return left, nil
+		}
+		if isTruthy(right) {
+			return right, nil
+		}
+		return getBool(false), nil
 	case Nullish:
 		if isNull(left) || isUndefined(left) {
 			return right, nil
