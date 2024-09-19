@@ -504,12 +504,12 @@ func (p *Parser) parseIncludeMacro() (*Collection, error) {
 			return r, nil
 		}
 		for _, d := range p.searchPaths {
-			r, err := os.Open(filepath.Join(d, file))
+			r, err = os.Open(filepath.Join(d, file))
 			if err == nil {
-				return r, err
+				break
 			}
 		}
-		return nil, err
+		return r, err
 	}
 
 	r, err := open(file)
@@ -526,7 +526,13 @@ func (p *Parser) parseIncludeMacro() (*Collection, error) {
 		alias = filepath.Base(file)
 		alias = strings.TrimSuffix(alias, filepath.Ext(alias))
 	}
-	_ = path
+	if path != "" {
+		el, err = el.FindCollection(path)
+		if err != nil {
+			return nil, err
+		}
+	}
+	el.Name = alias
 	return el, nil
 }
 
@@ -534,12 +540,20 @@ func (p *Parser) parseReadFileMacro() (string, error) {
 	p.next()
 	file := p.getCurrLiteral()
 	p.next()
-	if !p.is(EOL) && !p.is(EOF) {
-		return "", p.unexpected("readfile")
-	}
-	p.next()
-
+	// if !p.is(EOL) && !p.is(EOF) {
+	// 	return "", p.unexpected("readfile")
+	// }
+	// p.next()
 	buf, err := os.ReadFile(file)
+	if err == nil {
+		return string(buf), err
+	}
+	for _, dir := range p.searchPaths {
+		buf, err = os.ReadFile(filepath.Join(dir, file))
+		if err == nil {
+			break
+		}
+	}
 	return string(buf), err
 }
 
@@ -547,10 +561,10 @@ func (p *Parser) parseEnvMacro() (string, error) {
 	p.next()
 	value := p.getCurrLiteral()
 	p.next()
-	if !p.is(EOL) && !p.is(EOF) {
-		return "", p.unexpected("env")
-	}
-	p.next()
+	// if !p.is(EOL) && !p.is(EOF) {
+	// 	return "", p.unexpected("env")
+	// }
+	// p.next()
 	return os.Getenv(value), nil
 }
 

@@ -3,6 +3,10 @@
 
 url http://localhost:8001
 
+variables {
+	sample @readfile data/sample.mu
+}
+
 get animals {
 	url /animals/
 }

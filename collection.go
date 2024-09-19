@@ -136,6 +136,19 @@ func (c *Collection) Run(name string, w io.Writer) error {
 	return other.Run(rest, w)
 }
 
+func (c *Collection) FindCollection(name string) (*Collection, error) {
+	name, rest, ok := strings.Cut(name, ".")
+
+	sub, err := c.GetCollection(name)
+	if err != nil {
+		return nil, err
+	}
+	if !ok {
+		return sub, nil
+	}
+	return sub.FindCollection(rest)
+}
+
 func (c *Collection) GetCollection(name string) (*Collection, error) {
 	ix := slices.IndexFunc(c.Collections, func(other *Collection) bool {
 		return other.Name == name
