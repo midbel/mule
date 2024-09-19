@@ -55,6 +55,7 @@ func animals() error {
 		http.Handle("/reigns/", handle(ds["reigns"]))
 		http.Handle("/animals/", handle(ds["animals"]))
 		http.Handle("/diets/", handle(ds["diets"]))
+		http.Handle("/types/", handle(ds["types"]))
 	} else {
 		return fmt.Errorf("animals: unexpected data")
 	}

@@ -49,8 +49,17 @@ func (p *Parser) parse(root *Collection) error {
 
 	var err error
 	switch {
-	case p.is(Macro):
-		err = p.parseMacro()
+	case p.is(Macro) && p.getCurrLiteral() == "include":
+		sub, err := p.parseIncludeMacro()
+		if err != nil {
+			return err
+		}
+		root.Collections = append(root.Collections, sub)
+	case p.is(Macro) && p.getCurrLiteral() == "searchpath":
+		err := p.parseSearchPathMacro()
+		if err != nil {
+			return err
+		}
 	case p.is(Ident):
 		child := Make(p.getCurrLiteral(), root)
 		p.next()
@@ -68,8 +77,12 @@ func (p *Parser) parse(root *Collection) error {
 }
 
 func (p *Parser) parseItem(root *Collection) error {
-	if p.is(Macro) {
-		return p.parseMacro()
+	if p.is(Macro) && p.getCurrLiteral() == "include" {
+		sub, err := p.parseIncludeMacro()
+		if err == nil {
+			root.Collections = append(root.Collections, sub)
+		}
+		return err
 	}
 	if !p.is(Keyword) {
 		return p.unexpected("collection")
@@ -145,8 +158,12 @@ func (p *Parser) parseScript() (string, error) {
 
 func (p *Parser) parseValue() (Value, error) {
 	switch {
-	case p.is(Macro):
-		return nil, p.parseMacro()
+	case p.is(Macro) && p.getCurrLiteral() == "readfile":
+		str, err := p.parseReadFileMacro()
+		return createLiteral(str), err
+	case p.is(Macro) && p.getCurrLiteral() == "env":
+		str, err := p.parseEnvMacro()
+		return createLiteral(str), err
 	case p.is(Ident) || p.is(String) || p.is(Number) || p.is(Keyword):
 		defer p.next()
 		return createLiteral(p.getCurrLiteral()), nil
@@ -428,10 +445,6 @@ func (p *Parser) parseBraces(ctx string, fn func() error) error {
 		return p.unexpected(ctx)
 	}
 	p.next()
-	return nil
-}
-
-func (p *Parser) parseMacro() error {
 	return nil
 }
 

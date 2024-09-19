@@ -3,6 +3,36 @@
 		{
 			"id": 1,
 			"name": "mammal"
+		},
+		{
+			"id": 2,
+			"name": "insect"
+		},
+		{
+			"id": 3,
+			"name": "fish"
+		},
+		{
+			"id": 4,
+			"name": "bird"
+		}
+	],
+	"types": [
+		{
+			"id": 1,
+			"name": "terrestrial"
+		},
+		{
+			"id": 2,
+			"name": "aquatic"
+		},
+		{
+			"id": 3,
+			"name": "undeground"
+		},
+		{
+			"id": 4,
+			"name": "flying"
 		}
 	],
 	"diets": [
@@ -40,7 +70,8 @@
 			"countries": [],
 			"length": 5000,
 			"weight": 3000,
-			"lifetime": 0
+			"lifetime": 0,
+			"types": [1]
 		},
 		{
 			"id": 2,
@@ -50,7 +81,8 @@
 			"countries": [],
 			"length": 0.5,
 			"weight": 0.5,
-			"lifetime": 0
+			"lifetime": 0,
+			"types": [1]
 		},
 		{
 			"id": 3,
@@ -60,7 +92,8 @@
 			"countries": [],
 			"length": 0.5,
 			"weight": 3,
-			"lifetime": 0
+			"lifetime": 0,
+			"types": [1]
 		}, 
 		{
 			"id": 4,
@@ -70,7 +103,19 @@
 			"countries": [],
 			"length": 3,
 			"weight": 0,
-			"lifetime": 0
-		}		
+			"lifetime": 0,
+			"types": [1],
+		},
+		{
+			"id": 5,
+			"name": "whale",
+			"reign": 1,
+			"diet": [],
+			"countries": [],
+			"length": 0,
+			"weight": 0,
+			"lifetime": 0,
+			"types": [2]
+		}
 	]
 }
