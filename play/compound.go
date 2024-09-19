@@ -1273,14 +1273,14 @@ func jsonParse(args []Value) (Value, error) {
 	if err := json.NewDecoder(buf).Decode(&obj); err != nil {
 		return Void{}, err
 	}
-	return nativeToValues(obj)
+	return NativeToValues(obj)
 }
 
 func jsonString(args []Value) (Value, error) {
 	if len(args) != 1 {
 		return Void{}, ErrArgument
 	}
-	v, err := valuesToNative(args[0])
+	v, err := ValuesToNative(args[0])
 	if err != nil {
 		return nil, err
 	}
@@ -1291,7 +1291,7 @@ func jsonString(args []Value) (Value, error) {
 	return getString(buf.String()), nil
 }
 
-func valuesToNative(arg Value) (interface{}, error) {
+func ValuesToNative(arg Value) (interface{}, error) {
 	switch a := arg.(type) {
 	case String:
 		return a.value, nil
@@ -1302,7 +1302,7 @@ func valuesToNative(arg Value) (interface{}, error) {
 	case *Array:
 		var arr []interface{}
 		for i := range a.Values {
-			v, err := valuesToNative(a.Values[i])
+			v, err := ValuesToNative(a.Values[i])
 			if err != nil {
 				return nil, err
 			}
@@ -1312,7 +1312,7 @@ func valuesToNative(arg Value) (interface{}, error) {
 	case *Object:
 		arr := make(map[string]interface{})
 		for k, v := range a.Fields {
-			vv, err := valuesToNative(v)
+			vv, err := ValuesToNative(v)
 			if err != nil {
 				return nil, err
 			}
@@ -1324,7 +1324,7 @@ func valuesToNative(arg Value) (interface{}, error) {
 	}
 }
 
-func nativeToValues(obj interface{}) (Value, error) {
+func NativeToValues(obj interface{}) (Value, error) {
 	switch v := obj.(type) {
 	case string:
 		return getString(v), nil
@@ -1335,7 +1335,7 @@ func nativeToValues(obj interface{}) (Value, error) {
 	case []interface{}:
 		arr := createArray()
 		for i := range v {
-			a, err := nativeToValues(v[i])
+			a, err := NativeToValues(v[i])
 			if err != nil {
 				return nil, err
 			}
@@ -1345,7 +1345,7 @@ func nativeToValues(obj interface{}) (Value, error) {
 	case map[string]interface{}:
 		obj := createObject()
 		for kv, vv := range v {
-			a, err := nativeToValues(vv)
+			a, err := NativeToValues(vv)
 			if err != nil {
 				return nil, err
 			}

@@ -309,6 +309,7 @@ func (s *Scanner) scanHeredoc(tok *Token) {
 			continue
 		}
 		body.WriteString(line)
+		body.WriteRune(nl)
 	}
 	tok.Type = String
 	if !valid {

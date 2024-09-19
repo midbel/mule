@@ -1,6 +1,8 @@
 package mule
 
 import (
+	"bytes"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"net/http"
@@ -143,6 +145,7 @@ func (m *muleRequest) Get(ident play.Value) (play.Value, error) {
 
 type muleResponse struct {
 	response *http.Response
+	body     []byte
 }
 
 func (_ *muleResponse) String() string {
@@ -161,7 +164,7 @@ func (m *muleResponse) Get(ident play.Value) (play.Value, error) {
 	}
 	switch ident := prop.String(); ident {
 	case "body":
-		return play.NewString(""), nil
+		return play.NewString(string(m.body)), nil
 	case "code":
 		return play.NewFloat(float64(m.response.StatusCode)), nil
 	case "header":
@@ -177,6 +180,14 @@ func (m *muleResponse) Get(ident play.Value) (play.Value, error) {
 func (m *muleResponse) Call(ident string, args []play.Value) (play.Value, error) {
 	switch ident {
 	case "json":
+		var (
+			obj interface{}
+			buf = bytes.NewReader(m.body)
+		)
+		if err := json.NewDecoder(buf).Decode(&obj); err != nil {
+			return play.Void{}, err
+		}
+		return play.NativeToValues(obj)
 		return play.Void{}, nil
 	case "success":
 		ok := m.response.StatusCode < http.StatusBadRequest

@@ -222,8 +222,8 @@ func (r *Request) Execute(ctx *Collection, out io.Writer) error {
 	req.Header = headers
 
 	var (
-		env = play.Enclosed(play.Default())
-		obj muleObject
+		root = play.Enclosed(play.Default())
+		obj  muleObject
 	)
 	obj.when = time.Now()
 	obj.req = &muleRequest{
@@ -235,9 +235,11 @@ func (r *Request) Execute(ctx *Collection, out io.Writer) error {
 	obj.vars = &muleVars{
 		env: play.Empty(),
 	}
-	env.Define(muleVarName, &obj)
+	root.Define(muleVarName, &obj)
 
-	if _, err := play.EvalWithEnv(strings.NewReader(r.Before), play.Freeze(env)); err != nil {
+	env := play.Enclosed(root)
+
+	if _, err := play.EvalWithEnv(strings.NewReader(r.Before), env); err != nil {
 		return err
 	}
 
@@ -247,12 +249,19 @@ func (r *Request) Execute(ctx *Collection, out io.Writer) error {
 	}
 	defer res.Body.Close()
 
+	buf, err := io.ReadAll(res.Body)
+	if err != nil {
+		return err
+	}
+	res.Body = io.NopCloser(bytes.NewReader(buf))
+
 	obj.res = &muleResponse{
 		response: res,
+		body:     buf,
 	}
-	env.Define(muleVarName, &obj)
+	root.Define(muleVarName, &obj)
 
-	if _, err := play.EvalWithEnv(strings.NewReader(r.After), play.Freeze(env)); err != nil {
+	if _, err := play.EvalWithEnv(strings.NewReader(r.After), env); err != nil {
 		return err
 	}
 	io.Copy(out, res.Body)

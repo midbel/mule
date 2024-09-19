@@ -16,8 +16,7 @@ geo {
 		url /countries/
 
 		after <<SCRIPT
-			const all = mule.response
-			console.log(all)
+		(mule.response.json() || []).forEach(c => console.log(c.id, c.code, c.name))
 		SCRIPT
 	}
 
