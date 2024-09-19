@@ -14,6 +14,11 @@ get animals {
 geo {
 	get countries {
 		url /countries/
+
+		after <<SCRIPT
+			const all = mule.response
+			console.log(all)
+		SCRIPT
 	}
 
 	get continents {
