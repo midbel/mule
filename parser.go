@@ -134,6 +134,9 @@ func (p *Parser) parseItem(root *Collection) error {
 			break
 		}
 		root.Requests = append(root.Requests, req)
+	case "description":
+		p.next()
+		root.Desc, err = p.parseString()
 	default:
 		err = p.unexpected("collection")
 	}
@@ -154,6 +157,17 @@ func (p *Parser) parseScript() (string, error) {
 	script := p.getCurrLiteral()
 	p.next()
 	return script, nil
+}
+
+func (p *Parser) parseString() (string, error) {
+	if p.is(Macro) && p.getCurrLiteral() == "readfile" {
+		return p.parseEnvMacro()
+	}
+	if !p.is(String) {
+		return "", p.unexpected("string")
+	}
+	defer p.next()
+	return p.getCurrLiteral(), nil
 }
 
 func (p *Parser) parseValue() (Value, error) {
@@ -374,6 +388,12 @@ func (p *Parser) parseRequest() (*Request, error) {
 		case "headers":
 			p.next()
 			req.Headers, err = p.parseSet("headers")
+		case "usage":
+			p.next()
+			req.Usage, err = p.parseString()
+		case "description":
+			p.next()
+			req.Desc, err = p.parseString()
 		default:
 			err = p.unexpected("request")
 		}

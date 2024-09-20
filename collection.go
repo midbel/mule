@@ -5,6 +5,7 @@ import (
 	"crypto/tls"
 	"encoding/json"
 	"encoding/xml"
+	"flag"
 	"fmt"
 	"io"
 	"net/http"
@@ -21,6 +22,7 @@ import (
 
 type Common struct {
 	Name string
+	Desc string
 
 	URL      Value
 	Auth     Authorization
@@ -112,7 +114,7 @@ func (c *Collection) Execute() error {
 	return nil
 }
 
-func (c *Collection) Run(name string, w io.Writer) error {
+func (c *Collection) Run(name string, args []string, w io.Writer) error {
 	var (
 		rest  string
 		found bool
@@ -127,13 +129,13 @@ func (c *Collection) Run(name string, w io.Writer) error {
 			}
 			return other.Execute()
 		}
-		return req.Execute(c, w)
+		return req.Execute(c, args, w)
 	}
 	other, err := c.GetCollection(name)
 	if err != nil {
 		return err
 	}
-	return other.Run(rest, w)
+	return other.Run(rest, args, w)
 }
 
 func (c *Collection) FindCollection(name string) (*Collection, error) {
@@ -187,6 +189,7 @@ func (c *Collection) GetRequest(name string) (*Request, error) {
 
 type Request struct {
 	Common
+	Usage      string
 	Compressed Value
 	Method     string
 	Depends    []Value
@@ -194,50 +197,25 @@ type Request struct {
 	After      string
 }
 
-func (r *Request) Execute(ctx *Collection, out io.Writer) error {
-	target, err := r.target(ctx)
+func (r *Request) Execute(ctx *Collection, args []string, out io.Writer) error {
+	if err := r.parseArgs(ctx, args); err != nil {
+		return err
+	}
+	req, err := r.createRequest(ctx)
 	if err != nil {
 		return err
 	}
-
-	headers, err := r.Headers.Headers(ctx)
-	if err != nil {
-		return err
-	}
-
-	var body io.Reader
-	if r.Body != nil {
-		b, err := r.Body.Expand(ctx)
-		if err != nil {
-			return err
-		}
-		body = strings.NewReader(b)
-		headers.Set("content-type", r.Body.ContentType())
-		headers.Set("content-length", strconv.Itoa(len(b)))
-	}
-	req, err := http.NewRequest(r.Method, target, body)
-	if err != nil {
-		return err
-	}
-	req.Header = headers
-
 	var (
 		root = play.Enclosed(play.Default())
-		obj  muleObject
+		obj  = muleObject{
+			when: time.Now(),
+			req:  getMuleRequest(req, nil),
+			ctx:  getMuleCollection(ctx),
+			vars: getMuleVars(),
+		}
+		env = play.Enclosed(root)
 	)
-	obj.when = time.Now()
-	obj.req = &muleRequest{
-		request: req,
-	}
-	obj.ctx = &muleCollection{
-		collection: ctx,
-	}
-	obj.vars = &muleVars{
-		env: play.Empty(),
-	}
 	root.Define(muleVarName, &obj)
-
-	env := play.Enclosed(root)
 
 	if _, err := play.EvalWithEnv(strings.NewReader(r.Before), env); err != nil {
 		return err
@@ -255,10 +233,7 @@ func (r *Request) Execute(ctx *Collection, out io.Writer) error {
 	}
 	res.Body = io.NopCloser(bytes.NewReader(buf))
 
-	obj.res = &muleResponse{
-		response: res,
-		body:     buf,
-	}
+	obj.res = getMuleResponse(res, buf)
 	root.Define(muleVarName, &obj)
 
 	if _, err := play.EvalWithEnv(strings.NewReader(r.After), env); err != nil {
@@ -269,6 +244,56 @@ func (r *Request) Execute(ctx *Collection, out io.Writer) error {
 		return fmt.Errorf(http.StatusText(res.StatusCode))
 	}
 	return nil
+}
+
+func (r *Request) parseArgs(ctx *Collection, args []string) error {
+	set := flag.NewFlagSet(r.Name, flag.ExitOnError)
+	if is, ok := ctx.Environment.(interface{ Identifiers() []string }); ok {
+		for _, i := range is.Identifiers() {
+			set.Func(i, "", func(str string) error {
+				return ctx.Define(i, createLiteral(str))
+			})
+		}
+	}
+	set.Func("method", "", func(str string) error {
+		r.Method = str
+		return nil
+	})
+	set.Func("header", "", func(str string) error {
+		return nil
+	})
+	set.Func("body", "", func(str string) error {
+		return nil
+	})
+	return set.Parse(args)
+}
+
+func (r *Request) createRequest(env environ.Environment[Value]) (*http.Request, error) {
+	target, err := r.target(env)
+	if err != nil {
+		return nil, err
+	}
+
+	headers, err := r.Headers.Headers(env)
+	if err != nil {
+		return nil, err
+	}
+
+	var body io.Reader
+	if r.Body != nil {
+		b, err := r.Body.Expand(env)
+		if err != nil {
+			return nil, err
+		}
+		body = strings.NewReader(b)
+		headers.Set("content-type", r.Body.ContentType())
+		headers.Set("content-length", strconv.Itoa(len(b)))
+	}
+	req, err := http.NewRequest(r.Method, target, body)
+	if err == nil {
+		req.Header = headers
+	}
+	return req, err
 }
 
 func (r *Request) target(env environ.Environment[Value]) (string, error) {

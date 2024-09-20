@@ -3,6 +3,7 @@ package environ
 import (
 	"errors"
 	"fmt"
+	"maps"
 )
 
 var (
@@ -29,6 +30,14 @@ func Enclosed[T any](parent Environment[T]) Environment[T] {
 		parent: parent,
 		values: make(map[string]T),
 	}
+}
+
+func (e *Env[T]) Identifiers() []string {
+	var all []string
+	for k := range maps.Keys(e.values) {
+		all = append(all, k)
+	}
+	return all
 }
 
 func (e *Env[T]) Resolve(ident string) (T, error) {

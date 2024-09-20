@@ -79,6 +79,12 @@ type muleCollection struct {
 	collection *Collection
 }
 
+func getMuleCollection(ctx *Collection) *muleCollection {
+	return &muleCollection{
+		collection: ctx,
+	}
+}
+
 func (m *muleCollection) String() string {
 	return m.collection.Name
 }
@@ -100,6 +106,14 @@ func (m *muleCollection) Call(ident string, args []play.Value) (play.Value, erro
 
 type muleRequest struct {
 	request *http.Request
+	body    []byte
+}
+
+func getMuleRequest(req *http.Request, body []byte) *muleRequest {
+	return &muleRequest{
+		request: req,
+		body:    body,
+	}
 }
 
 func (_ *muleRequest) String() string {
@@ -146,6 +160,13 @@ func (m *muleRequest) Get(ident play.Value) (play.Value, error) {
 type muleResponse struct {
 	response *http.Response
 	body     []byte
+}
+
+func getMuleResponse(res *http.Response, body []byte) *muleResponse {
+	return &muleResponse{
+		response: res,
+		body:     body,
+	}
 }
 
 func (_ *muleResponse) String() string {
@@ -284,6 +305,12 @@ func (_ *muleEnviron) Get(ident play.Value) (play.Value, error) {
 
 type muleVars struct {
 	env environ.Environment[play.Value]
+}
+
+func getMuleVars() *muleVars {
+	return &muleVars{
+		env: play.Empty(),
+	}
 }
 
 func (_ *muleVars) String() string {

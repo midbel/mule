@@ -44,7 +44,8 @@ func runExecute(c *mule.Collection, print bool) error {
 		err = executeHelp(c, args[1:])
 	case "all":
 	default:
-		err = c.Run(flag.Arg(0), out)
+		args := flag.Args()
+		err = c.Run(flag.Arg(0), args[1:], out)
 	}
 	return err
 }
