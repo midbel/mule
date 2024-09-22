@@ -197,6 +197,10 @@ type Request struct {
 	After      string
 }
 
+func (r *Request) Merge(other *Request) error {
+	return nil
+}
+
 func (r *Request) Execute(ctx *Collection, args []string, out io.Writer) error {
 	if err := r.parseArgs(ctx, args); err != nil {
 		return err
@@ -260,9 +264,22 @@ func (r *Request) parseArgs(ctx *Collection, args []string) error {
 		return nil
 	})
 	set.Func("header", "", func(str string) error {
+		name, value, ok := strings.Cut(str, ":")
+		if !ok {
+			return fmt.Errorf("%s: invalid header value", str)
+		}
+		name = strings.TrimSpace(name)
+		value = strings.TrimSpace(value)
+		r.Headers[name] = append(r.Headers[name], createLiteral(value))
 		return nil
 	})
 	set.Func("body", "", func(str string) error {
+		r, err := os.Open(str)
+		if err == nil {
+			defer r.Close()
+		} else {
+
+		}
 		return nil
 	})
 	return set.Parse(args)
@@ -383,13 +400,11 @@ func (b jsonBody) ContentType() string {
 }
 
 type octetstreamBody struct {
-	Set
+	stream string
 }
 
 func octetstream(set Set) Body {
-	return octetstreamBody{
-		Set: set,
-	}
+	return octetstreamBody{}
 }
 
 func (b octetstreamBody) Expand(env environ.Environment[Value]) (string, error) {
@@ -405,13 +420,11 @@ func (b octetstreamBody) ContentType() string {
 }
 
 type textBody struct {
-	Set
+	stream string
 }
 
 func textify(set Set) Body {
-	return textBody{
-		Set: set,
-	}
+	return textBody{}
 }
 
 func (b textBody) Expand(env environ.Environment[Value]) (string, error) {

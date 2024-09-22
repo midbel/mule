@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"slices"
 	"path/filepath"
 	"strings"
 )
@@ -128,12 +129,12 @@ func (p *Parser) parseItem(root *Collection) error {
 		p.next()
 		err = p.parseVariables(root)
 	case "get", "post", "put", "patch", "delete":
-		req, err1 := p.parseRequest()
+		list, err1 := p.parseRequest()
 		if err1 != nil {
 			err = err1
 			break
 		}
-		root.Requests = append(root.Requests, req)
+		root.Requests = slices.Concat(root.Requests, list)
 	case "description":
 		p.next()
 		root.Desc, err = p.parseString()
@@ -255,11 +256,15 @@ func (p *Parser) parseAuth() (Authorization, error) {
 	case "digest":
 		return nil, fmt.Errorf("digest: not yet implemented")
 	case "jwt":
-		return nil, fmt.Errorf("jwt: not yet implemented")
+		return p.parseJwtAuth()
 	default:
 		return nil, p.unexpected("auth")
 	}
 	return auth, err
+}
+
+func (p *Parser) parseJwtAuth() (Authorization, error) {
+	return nil, nil
 }
 
 func (p *Parser) parseBearerAuth() (Authorization, error) {
@@ -321,7 +326,7 @@ func (p *Parser) parseBasicAuth() (Authorization, error) {
 	return auth, err
 }
 
-func (p *Parser) parseRequest() (*Request, error) {
+func (p *Parser) parseRequest() ([]*Request, error) {
 	req := Request{
 		Method: strings.ToUpper(p.getCurrLiteral()),
 	}
@@ -333,6 +338,8 @@ func (p *Parser) parseRequest() (*Request, error) {
 		req.Name = p.getCurrLiteral()
 		p.next()
 	}
+	var all []*Request
+
 	err := p.parseBraces("request", func() error {
 		if !p.is(Keyword) {
 			return p.unexpected("request")
@@ -342,6 +349,17 @@ func (p *Parser) parseRequest() (*Request, error) {
 			eol bool
 		)
 		switch p.getCurrLiteral() {
+		case "get", "post", "put", "delete", "patch":
+			others, err := p.parseRequest()
+			if err != nil {
+				return err
+			}
+			for i := range others {
+				req.Merge(others[i])
+			}
+			all = slices.Concat(all, others)
+		case "variables":
+			return nil
 		case "depends":
 			p.next()
 			eol = true
@@ -403,7 +421,8 @@ func (p *Parser) parseRequest() (*Request, error) {
 		p.skip(EOL)
 		return err
 	})
-	return &req, err
+	all = append(all, &req)
+	return all, err
 }
 
 func (p *Parser) parseSet(ctx string) (Set, error) {

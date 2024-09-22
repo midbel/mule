@@ -9,9 +9,30 @@ variables {
 
 get animals {
 	url /animals/
+
+	query {
+		length 121
+	}
+
+	get animalsWithBasic {
+		aut basic {
+			username foobar
+			password tmp123!
+		}
+	}
+
+	get animalsWithJwt {
+		auth jwt {
+			iss   mule.org
+			user  foobar
+			roles adm dev
+		}
+	}
 }
 
+
 geo {
+
 	get countries {
 		url /countries/
 	}

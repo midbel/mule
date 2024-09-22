@@ -30,6 +30,7 @@ type Claims struct {
 
 type Config struct {
 	Claims
+	Alg    string
 	Secret string
 }
 
