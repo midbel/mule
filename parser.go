@@ -421,7 +421,9 @@ func (p *Parser) parseRequest() ([]*Request, error) {
 		p.skip(EOL)
 		return err
 	})
-	all = append(all, &req)
+	if !req.Abstract {
+		all = append(all, &req)
+	}
 	return all, err
 }
 

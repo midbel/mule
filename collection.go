@@ -179,6 +179,9 @@ func (c *Collection) GetRequest(name string) (*Request, error) {
 	}
 
 	req := *c.Requests[ix]
+	if req.Abstract {
+		return nil, fmt.Errorf("%s: request can not be executed", name)
+	}
 
 	req.URL = getUrl(c.URL, req.URL, c)
 	req.Headers = req.Headers.Merge(c.Headers)
@@ -189,6 +192,7 @@ func (c *Collection) GetRequest(name string) (*Request, error) {
 
 type Request struct {
 	Common
+	Abstract   bool
 	Usage      string
 	Compressed Value
 	Method     string
