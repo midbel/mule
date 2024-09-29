@@ -20,7 +20,7 @@ type Interpreter struct {
 
 func Default() environ.Environment[Value] {
 	top := Empty()
-	top.Define("env", Env{})
+	top.Define("env", &Environ{})
 	top.Define("console", makeConsole())
 	top.Define("Math", makeMath())
 	top.Define("JSON", makeJson())

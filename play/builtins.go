@@ -3,26 +3,26 @@ package play
 import (
 	"fmt"
 	"net/url"
+	"os"
 	"time"
 )
 
-type Env struct{}
+type Environ struct{}
 
-func (e *Env) True() Value {
+func (e *Environ) True() Value {
 	return getBool(true)
 }
 
-func (e *env) String() string {
+func (e *Environ) String() string {
 	return "env"
 }
 
-func (a *Array) Get(ident Value) (Value, error) {
+func (e *Environ) Get(ident Value) (Value, error) {
 	str, ok := ident.(fmt.Stringer)
 	if !ok {
 		return nil, ErrEval
 	}
-	str = os.Getenv(str)
-	return getString(str, nil)
+	return getString(os.Getenv(str.String())), nil
 }
 
 type Date struct {
