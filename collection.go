@@ -202,6 +202,38 @@ type Request struct {
 }
 
 func (r *Request) Merge(other *Request) error {
+	if other.URL == nil && r.URL != nil {
+		other.URL = r.URL.clone()
+	}
+	if other.Auth == nil && r.Auth != nil {
+		other.URL = r.Auth.clone()
+	}
+	if other.Retry == nil && r.Retry != nil {
+		other.URL = r.Retry.clone()
+	}
+	if other.Timeout == nil && r.Timeout != nil {
+		other.URL = r.Timeout.clone()
+	}
+	if other.Redirect == nil && r.Redirect != nil {
+		other.URL = r.Redirect.clone()
+	}
+	if other.Body == nil && r.Body != nil {
+		other.URL = r.Body.clone()
+	}
+	if other.Compressed == nil && r.Compressed != nil {
+		other.URL = r.Compressed.clone()
+	}
+	if other.Before == "" && r.Before != "" {
+		other.Before = r.Before
+	}
+	if other.After == "" && r.After != "" {
+		other.After = r.After
+	}
+	if len(other.Depends) == 0 {
+		for i := range r.Depends {
+			other.Depends = append(other.Depends, r.Depends[i].clone())
+		}
+	}
 	return nil
 }
 
@@ -365,6 +397,10 @@ func (b xmlBody) Expand(env environ.Environment[Value]) (string, error) {
 	return buf.String(), nil
 }
 
+func (b xmlBody) clone() Value {
+	return b
+}
+
 func (b xmlBody) Compressed() bool {
 	return false
 }
@@ -395,6 +431,10 @@ func (b jsonBody) Expand(env environ.Environment[Value]) (string, error) {
 	return buf.String(), nil
 }
 
+func (b jsonBody) clone() Value {
+	return b
+}
+
 func (b jsonBody) Compressed() bool {
 	return false
 }
@@ -415,6 +455,10 @@ func (b octetstreamBody) Expand(env environ.Environment[Value]) (string, error) 
 	return "", nil
 }
 
+func (b octetstreamBody) clone() Value {
+	return b
+}
+
 func (b octetstreamBody) Compressed() bool {
 	return false
 }
@@ -433,6 +477,10 @@ func textify(set Set) Body {
 
 func (b textBody) Expand(env environ.Environment[Value]) (string, error) {
 	return "", nil
+}
+
+func (b textBody) clone() Value {
+	return b
 }
 
 func (b textBody) Compressed() bool {
@@ -461,6 +509,10 @@ func (b urlencodedBody) Expand(env environ.Environment[Value]) (string, error) {
 	return qs.Encode(), nil
 }
 
+func (b urlencodedBody) clone() Value {
+	return b
+}
+
 func (b urlencodedBody) Compressed() bool {
 	return false
 }
@@ -471,6 +523,7 @@ func (b urlencodedBody) ContentType() string {
 
 type Value interface {
 	Expand(environ.Environment[Value]) (string, error)
+	clone() Value
 }
 
 type Authorization interface {
@@ -487,6 +540,13 @@ func (b basic) Method() string {
 	return "Basic"
 }
 
+func (b basic) clone() Value {
+	return basic{
+		User: b.User.clone(),
+		Pass: b.Pass.clone(),
+	}
+}
+
 func (b basic) Expand(env environ.Environment[Value]) (string, error) {
 	return "", nil
 }
@@ -497,6 +557,12 @@ type bearer struct {
 
 func (b bearer) Method() string {
 	return "Bearer"
+}
+
+func (b bearer) clone() Value {
+	return bearer{
+		Token: b.Token.clone(),
+	}
 }
 
 func (b bearer) Expand(env environ.Environment[Value]) (string, error) {
@@ -545,6 +611,10 @@ func createLiteral(str string) Value {
 	return literal(str)
 }
 
+func (i literal) clone() Value {
+	return i
+}
+
 func (i literal) Expand(_ environ.Environment[Value]) (string, error) {
 	return string(i), nil
 }
@@ -553,6 +623,10 @@ type variable string
 
 func createVariable(str string) Value {
 	return variable(str)
+}
+
+func (v variable) clone() Value {
+	return v
 }
 
 func (v variable) Expand(e environ.Environment[Value]) (string, error) {
@@ -564,6 +638,14 @@ func (v variable) Expand(e environ.Environment[Value]) (string, error) {
 }
 
 type compound []Value
+
+func (c compound) clone() Value {
+	var cs compound
+	for i := range c {
+		cs = append(cs, c[i].clone())
+	}
+	return cs
+}
 
 func (c compound) Expand(e environ.Environment[Value]) (string, error) {
 	var parts []string

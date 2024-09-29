@@ -106,6 +106,7 @@ func (m *muleCollection) Call(ident string, args []play.Value) (play.Value, erro
 
 type muleRequest struct {
 	request *http.Request
+	auth    Authorization
 	body    []byte
 }
 
@@ -152,6 +153,8 @@ func (m *muleRequest) Get(ident play.Value) (play.Value, error) {
 			headers:   m.request.Header,
 			immutable: false,
 		}, nil
+	case "auth":
+		return play.Void{}, nil
 	default:
 		return play.Void{}, nil
 	}
