@@ -569,6 +569,22 @@ func (b bearer) Expand(env environ.Environment[Value]) (string, error) {
 	return b.Token.Expand(env)
 }
 
+type jwt struct {
+
+}
+
+func (j jwt) Method() string {
+	return "jwt"
+}
+
+func (j jwt) clone() Value {
+	return nil
+}
+
+func (j jwt) Expand(env environ.Environment[Value]) (string, error) {
+	return "", nil
+}
+
 func getUrl(left, right Value, env environ.Environment[Value]) Value {
 	if left == nil {
 		return right

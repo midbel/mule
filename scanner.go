@@ -34,6 +34,7 @@ var keywords = []string{
 	"body",
 	"compress",
 	// HTTP methods
+	"do", // abstract request
 	"get",
 	"post",
 	"put",

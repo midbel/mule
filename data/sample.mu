@@ -15,7 +15,7 @@ get animals {
 	}
 
 	get animalsWithBasic {
-		aut basic {
+		auth basic {
 			username foobar
 			password tmp123!
 		}

@@ -128,7 +128,7 @@ func (p *Parser) parseItem(root *Collection) error {
 	case "variables":
 		p.next()
 		err = p.parseVariables(root)
-	case "get", "post", "put", "patch", "delete":
+	case "get", "post", "put", "patch", "delete", "do":
 		list, err1 := p.parseRequest()
 		if err1 != nil {
 			err = err1
@@ -149,8 +149,8 @@ func (p *Parser) parseItem(root *Collection) error {
 }
 
 func (p *Parser) parseScript() (string, error) {
-	if p.is(Macro) {
-
+	if p.is(Macro) && p.getCurrLiteral() == "readfile" {
+		return p.parseReadFileMacro()
 	}
 	if !p.is(String) {
 		return "", p.unexpected("script")
@@ -161,7 +161,7 @@ func (p *Parser) parseScript() (string, error) {
 }
 
 func (p *Parser) parseString() (string, error) {
-	if p.is(Macro) && p.getCurrLiteral() == "readfile" {
+	if p.is(Macro) && p.getCurrLiteral() == "env" {
 		return p.parseEnvMacro()
 	}
 	if !p.is(String) {
@@ -264,7 +264,21 @@ func (p *Parser) parseAuth() (Authorization, error) {
 }
 
 func (p *Parser) parseJwtAuth() (Authorization, error) {
-	return nil, nil
+	p.next()
+	var (
+		auth jwt
+		err error
+	)
+	err = p.parseBraces("jwt", func() error {
+		if !p.is(Keyword) {
+			return p.unexpected("jwt")
+		}
+		if p.getCurrLiteral() != "token" {
+			return p.unexpected("bearer")
+		}
+		return nil
+	})	
+	return auth, err
 }
 
 func (p *Parser) parseBearerAuth() (Authorization, error) {
@@ -329,6 +343,7 @@ func (p *Parser) parseBasicAuth() (Authorization, error) {
 func (p *Parser) parseRequest() ([]*Request, error) {
 	req := Request{
 		Method: strings.ToUpper(p.getCurrLiteral()),
+		Abstract: p.getCurrLiteral() == "do",
 	}
 	p.next()
 	if !p.is(Lbrace) {
@@ -359,6 +374,9 @@ func (p *Parser) parseRequest() ([]*Request, error) {
 			}
 			all = slices.Concat(all, others)
 		case "variables":
+			if !req.Abstract {
+				return fmt.Errorf("only abstract request can have variables inside")
+			}
 			return nil
 		case "depends":
 			p.next()
@@ -423,6 +441,9 @@ func (p *Parser) parseRequest() ([]*Request, error) {
 	})
 	if !req.Abstract {
 		all = append(all, &req)
+	}
+	if len(all) == 0 {
+		return nil, fmt.Errorf("no requests defined")
 	}
 	return all, err
 }
