@@ -267,7 +267,7 @@ func (p *Parser) parseJwtAuth() (Authorization, error) {
 	p.next()
 	var (
 		auth jwt
-		err error
+		err  error
 	)
 	err = p.parseBraces("jwt", func() error {
 		if !p.is(Keyword) {
@@ -277,7 +277,7 @@ func (p *Parser) parseJwtAuth() (Authorization, error) {
 			return p.unexpected("bearer")
 		}
 		return nil
-	})	
+	})
 	return auth, err
 }
 
@@ -342,7 +342,7 @@ func (p *Parser) parseBasicAuth() (Authorization, error) {
 
 func (p *Parser) parseRequest() ([]*Request, error) {
 	req := Request{
-		Method: strings.ToUpper(p.getCurrLiteral()),
+		Method:   strings.ToUpper(p.getCurrLiteral()),
 		Abstract: p.getCurrLiteral() == "do",
 	}
 	p.next()

@@ -570,7 +570,6 @@ func (b bearer) Expand(env environ.Environment[Value]) (string, error) {
 }
 
 type jwt struct {
-
 }
 
 func (j jwt) Method() string {

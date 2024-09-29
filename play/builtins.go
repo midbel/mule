@@ -6,6 +6,25 @@ import (
 	"time"
 )
 
+type Env struct{}
+
+func (e *Env) True() Value {
+	return getBool(true)
+}
+
+func (e *env) String() string {
+	return "env"
+}
+
+func (a *Array) Get(ident Value) (Value, error) {
+	str, ok := ident.(fmt.Stringer)
+	if !ok {
+		return nil, ErrEval
+	}
+	str = os.Getenv(str)
+	return getString(str, nil)
+}
+
 type Date struct {
 	value time.Time
 }
