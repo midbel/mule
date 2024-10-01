@@ -10,6 +10,7 @@ import (
 func main() {
 	var cfg jwt.Config
 	flag.StringVar(&cfg.Secret, "s", "supersecret11", "secret")
+	flag.StringVar(&cfg.Alg, "a", jwt.HS256, "")
 	flag.Parse()
 
 	dat := struct {
