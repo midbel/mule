@@ -219,25 +219,37 @@ func (p *Parser) parseBody() (Body, error) {
 	if !p.is(Ident) {
 		return nil, p.unexpected("body")
 	}
-	var create func(Set) Body
 	switch p.getCurrLiteral() {
 	case "urlencoded":
-		create = urlEncoded
+		set, err := p.parseSet("urlencoded")
+		if err != nil {
+			return nil, err
+		}
+		defer p.next()
+		return urlEncoded(set), nil
 	case "json":
-		create = jsonify
+		set, err := p.parseSet("json")
+		if err != nil {
+			return nil, err
+		}
+		defer p.next()
+		return jsonify(set), nil
 	case "xml":
-		create = xmlify
+		set, err := p.parseSet("json")
+		if err != nil {
+			return nil, err
+		}
+		defer p.next()
+		return xmlify(set), nil
 	case "text":
-		create = textify
+		return nil, nil
+	case "csv":
+		return nil, nil
+	case "raw", "octetstream":
+		return nil, nil
 	default:
 		return nil, p.unexpected("body")
 	}
-	p.next()
-	set, err := p.parseSet("body")
-	if err != nil {
-		return nil, err
-	}
-	return create(set), nil
 }
 
 func (p *Parser) parseAuth() (Authorization, error) {
@@ -253,10 +265,10 @@ func (p *Parser) parseAuth() (Authorization, error) {
 		auth, err = p.parseBasicAuth()
 	case "bearer":
 		auth, err = p.parseBearerAuth()
+	case "jwt":
+		auth, err = p.parseJwtAuth()
 	case "digest":
 		return nil, fmt.Errorf("digest: not yet implemented")
-	case "jwt":
-		return p.parseJwtAuth()
 	default:
 		return nil, p.unexpected("auth")
 	}
@@ -266,16 +278,36 @@ func (p *Parser) parseAuth() (Authorization, error) {
 func (p *Parser) parseJwtAuth() (Authorization, error) {
 	p.next()
 	var (
-		auth jwt
 		err  error
+		auth = jwt{
+			Claims: make(Set),
+		}
 	)
+	if !p.is(Lbrace) {
+		return auth, p.unexpected("jwt")
+	}
 	err = p.parseBraces("jwt", func() error {
-		if !p.is(Keyword) {
+		var (
+			key string
+			val Value
+			err error
+		)
+		if !p.is(Ident) && !p.is(String) {
 			return p.unexpected("jwt")
 		}
-		if p.getCurrLiteral() != "token" {
-			return p.unexpected("bearer")
+		key = p.getCurrLiteral()
+		p.next()
+		for !p.done() && !p.is(EOL) {
+			val, err = p.parseValue()
+			if err != nil {
+				return err
+			}
+			auth.Claims[key] = append(auth.Claims[key], val)
 		}
+		if !p.is(EOL) {
+			return p.unexpected("jwt")
+		}
+		p.next()
 		return nil
 	})
 	return auth, err

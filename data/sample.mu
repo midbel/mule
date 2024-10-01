@@ -14,6 +14,12 @@ get animals {
 		length 121
 	}
 
+	before <<SCRIPT
+	SCRIPT
+
+	after <<SCRIPT
+	SCRIPT
+
 	get animalsWithBasic {
 		auth basic {
 			username foobar

@@ -447,7 +447,7 @@ type octetstreamBody struct {
 	stream string
 }
 
-func octetstream(set Set) Body {
+func octetstream() Body {
 	return octetstreamBody{}
 }
 
@@ -471,7 +471,7 @@ type textBody struct {
 	stream string
 }
 
-func textify(set Set) Body {
+func textify() Body {
 	return textBody{}
 }
 
@@ -551,6 +551,22 @@ func (b basic) Expand(env environ.Environment[Value]) (string, error) {
 	return "", nil
 }
 
+type jwt struct {
+	Claims Set
+}
+
+func (j jwt) Method() string {
+	return "jwt"
+}
+
+func (j jwt) clone() Value {
+	return nil
+}
+
+func (j jwt) Expand(env environ.Environment[Value]) (string, error) {
+	return "", nil
+}
+
 type bearer struct {
 	Token Value
 }
@@ -567,21 +583,6 @@ func (b bearer) clone() Value {
 
 func (b bearer) Expand(env environ.Environment[Value]) (string, error) {
 	return b.Token.Expand(env)
-}
-
-type jwt struct {
-}
-
-func (j jwt) Method() string {
-	return "jwt"
-}
-
-func (j jwt) clone() Value {
-	return nil
-}
-
-func (j jwt) Expand(env environ.Environment[Value]) (string, error) {
-	return "", nil
 }
 
 func getUrl(left, right Value, env environ.Environment[Value]) Value {
