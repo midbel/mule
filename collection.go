@@ -3,6 +3,7 @@ package mule
 import (
 	"bytes"
 	"crypto/tls"
+	"encoding/base64"
 	"encoding/json"
 	"encoding/xml"
 	"flag"
@@ -17,6 +18,7 @@ import (
 	"time"
 
 	"github.com/midbel/mule/environ"
+	"github.com/midbel/mule/jwt"
 	"github.com/midbel/mule/play"
 )
 
@@ -114,6 +116,14 @@ func (c *Collection) Execute() error {
 	return nil
 }
 
+func (c *Collection) Get(name string) (*http.Request, error) {
+	req, err := c.FindRequest(name)
+	if err != nil {
+		return nil, err
+	}
+	return req.createRequest(c)
+}
+
 func (c *Collection) Run(name string, args []string, w io.Writer) error {
 	var (
 		rest  string
@@ -136,6 +146,22 @@ func (c *Collection) Run(name string, args []string, w io.Writer) error {
 		return err
 	}
 	return other.Run(rest, args, w)
+}
+
+func (c *Collection) FindRequest(name string) (*Request, error) {
+	var (
+		rest  string
+		found bool
+	)
+	name, rest, found = strings.Cut(name, ".")
+	if !found {
+		return c.GetRequest(name)
+	}
+	other, err := c.GetCollection(name)
+	if err != nil {
+		return nil, err
+	}
+	return other.FindRequest(rest)
 }
 
 func (c *Collection) FindCollection(name string) (*Collection, error) {
@@ -330,6 +356,14 @@ func (r *Request) createRequest(env environ.Environment[Value]) (*http.Request, 
 	headers, err := r.Headers.Headers(env)
 	if err != nil {
 		return nil, err
+	}
+	if r.Auth != nil {
+		val, err := r.Auth.Expand(env)
+		if err != nil {
+			return nil, err
+		}
+		val = fmt.Sprintf("%s %s", r.Auth.Method(), val)
+		headers.Set("Authorization", val)
 	}
 
 	var body io.Reader
@@ -548,23 +582,56 @@ func (b basic) clone() Value {
 }
 
 func (b basic) Expand(env environ.Environment[Value]) (string, error) {
-	return "", nil
+	user, err := b.User.Expand(env)
+	if err != nil {
+		return "", err
+	}
+	pass, err := b.Pass.Expand(env)
+	if err != nil {
+		return "", err
+	}
+	str := fmt.Sprintf("%s:%s", user, pass)
+	return base64.URLEncoding.EncodeToString([]byte(str)), nil
 }
 
-type jwt struct {
+type token struct {
 	Claims Set
+	Alg    string
+	Secret string
 }
 
-func (j jwt) Method() string {
-	return "jwt"
+func (_ token) Method() string {
+	return "Bearer"
 }
 
-func (j jwt) clone() Value {
+func (_ token) clone() Value {
 	return nil
 }
 
-func (j jwt) Expand(env environ.Environment[Value]) (string, error) {
-	return "", nil
+func (t token) Expand(env environ.Environment[Value]) (string, error) {
+	var (
+		res = make(map[string]any)
+		cfg = jwt.Config{
+			Alg:    t.Alg,
+			Secret: t.Secret,
+		}
+	)
+	for k, vs := range t.Claims {
+		var rs []string
+		for i := range vs {
+			str, err := vs[i].Expand(env)
+			if err != nil {
+				return "", err
+			}
+			rs = append(rs, str)
+		}
+		if len(rs) == 1 {
+			res[k] = rs[0]
+		} else {
+			res[k] = rs
+		}
+	}
+	return jwt.Encode(res, &cfg)
 }
 
 type bearer struct {
@@ -583,42 +650,6 @@ func (b bearer) clone() Value {
 
 func (b bearer) Expand(env environ.Environment[Value]) (string, error) {
 	return b.Token.Expand(env)
-}
-
-func getUrl(left, right Value, env environ.Environment[Value]) Value {
-	if left == nil {
-		return right
-	}
-	if right == nil {
-		return left
-	}
-
-	if str, err := right.Expand(env); err == nil {
-		u, err := url.Parse(str)
-		if err == nil && u.Host != "" {
-			return right
-		}
-	}
-
-	var cs compound
-	if c, ok := left.(compound); ok {
-		cs = append(cs, c...)
-	} else {
-		cs = append(cs, left)
-	}
-	if c, ok := right.(compound); ok {
-		cs = append(cs, c...)
-	} else {
-		cs = append(cs, right)
-	}
-	return cs
-}
-
-func getValue(left, right Value) Value {
-	if left != nil {
-		return left
-	}
-	return right
 }
 
 type literal string
@@ -734,4 +765,40 @@ func (s Set) Merge(other Set) Set {
 		ns[k] = slices.Concat(ns[k], slices.Clone(other[k]))
 	}
 	return ns
+}
+
+func getUrl(left, right Value, env environ.Environment[Value]) Value {
+	if left == nil {
+		return right
+	}
+	if right == nil {
+		return left
+	}
+
+	if str, err := right.Expand(env); err == nil {
+		u, err := url.Parse(str)
+		if err == nil && u.Host != "" {
+			return right
+		}
+	}
+
+	var cs compound
+	if c, ok := left.(compound); ok {
+		cs = append(cs, c...)
+	} else {
+		cs = append(cs, left)
+	}
+	if c, ok := right.(compound); ok {
+		cs = append(cs, c...)
+	} else {
+		cs = append(cs, right)
+	}
+	return cs
+}
+
+func getValue(left, right Value) Value {
+	if left != nil {
+		return left
+	}
+	return right
 }

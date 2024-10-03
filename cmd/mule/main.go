@@ -38,16 +38,55 @@ func runExecute(c *mule.Collection, print bool) error {
 	if print {
 		out = os.Stdout
 	}
-	switch flag.Arg(0) {
+	switch args := flag.Args(); flag.Arg(0) {
 	case "help":
-		args := flag.Args()
 		err = executeHelp(c, args[1:])
 	case "all":
+	case "debug":
+		err = executeDebug(c, args[1:])
 	default:
 		args := flag.Args()
 		err = c.Run(flag.Arg(0), args[1:], out)
 	}
 	return err
+}
+
+func executeDebug(c *mule.Collection, args []string) error {
+	var (
+		set   = flag.NewFlagSet("debug", flag.ExitOnError)
+		color = set.Bool("c", false, "colorize")
+	)
+	if err := set.Parse(args); err != nil {
+		return err
+	}
+	_ = color
+
+	req, err := c.Get(set.Arg(0))
+	if err != nil {
+		return err
+	}
+	if req.Body != nil {
+		defer req.Body.Close()
+	}
+
+	fmt.Println(req.Method, req.URL.String())
+	for h := range req.Header {
+		fmt.Printf("%s: ", h)
+		for i, v := range req.Header[h] {
+			if i > 0 {
+				fmt.Print(", ")
+			}
+			fmt.Print(v)
+		}
+		fmt.Println()
+	}
+	if req.Body != nil {
+		_, err := io.Copy(os.Stdout, req.Body)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 func executeHelp(c *mule.Collection, args []string) error {

@@ -1,6 +1,7 @@
 package jwt
 
 import (
+	"bytes"
 	"crypto/hmac"
 	"crypto/sha256"
 	"crypto/sha512"
@@ -71,7 +72,10 @@ func Decode(token string, config *Config) error {
 	if err != nil {
 		return err
 	}
-	check := signer.Sum(parts[0] + "." + parts[1])
+	var (
+		body  = parts[0] + "." + parts[1]
+		check = signer.Sum([]byte(body))
+	)
 	if sign, err := std.DecodeString(parts[2]); err != nil || !bytes.Equal(sign, check) {
 		return ErrSign
 	}

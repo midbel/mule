@@ -7,6 +7,26 @@ variables {
 	sample @readfile data/sample.mu
 }
 
+# flow name1 {
+# 	req1 {
+# 		when 200 {
+#			goto req2
+# 		}
+# 		when 400 {
+# 			goto req3
+# 		}
+# 		when 403, 401, 500 {
+# 			exit
+# 		}
+# 	}
+# 	req2 {
+# 
+# 	}
+# 	req3 {
+# 
+# 	}
+# }
+
 get animals {
 	url /animals/
 
@@ -25,6 +45,11 @@ get animals {
 			username foobar
 			password tmp123!
 		}
+		headers {
+			accept application/json
+			referer localhost:9000
+			accept-language fr nl en
+		}
 	}
 
 	get animalsWithJwt {
@@ -32,6 +57,11 @@ get animals {
 			iss   mule.org
 			user  foobar
 			roles adm dev
+		}
+		headers {
+			accept application/json
+			referer localhost:9000
+			Accept-Language fr nl en
 		}
 	}
 }

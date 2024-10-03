@@ -7,6 +7,8 @@ import (
 	"path/filepath"
 	"slices"
 	"strings"
+
+	"github.com/midbel/mule/jwt"
 )
 
 type Parser struct {
@@ -279,10 +281,15 @@ func (p *Parser) parseJwtAuth() (Authorization, error) {
 	p.next()
 	var (
 		err  error
-		auth = jwt{
+		auth = token{
 			Claims: make(Set),
+			Alg:    jwt.HS256,
 		}
 	)
+	if p.is(String) || p.is(Ident) {
+		auth.Alg = p.getCurrLiteral()
+		p.next()
+	}
 	if !p.is(Lbrace) {
 		return auth, p.unexpected("jwt")
 	}
