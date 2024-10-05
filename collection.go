@@ -38,6 +38,46 @@ type Common struct {
 	Tls     *tls.Config
 }
 
+type Flow struct {
+	Common
+	environ.Environment[Value]
+
+	BeforeAll  string
+	BeforeEach string
+	AfterAll   string
+	AfterEach  string
+
+	// collection of requests
+	Steps []*Step
+}
+
+type Step struct {
+	Request string
+	Next    []StepBody
+}
+
+type StepBody struct {
+	Predicate Value
+	Commands  []any
+}
+
+type gotog struct {
+	Ident Value
+}
+
+type exit struct {
+	Code Value
+}
+
+type set struct {
+	Source Value
+	Target Value
+}
+
+type unset struct {
+	Ident Value
+}
+
 type Collection struct {
 	Common
 	environ.Environment[Value]
@@ -50,6 +90,7 @@ type Collection struct {
 	// collection of requests
 	Requests    []*Request
 	Collections []*Collection
+	Flows       []*Flow
 }
 
 func Open(file string) (*Collection, error) {

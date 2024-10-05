@@ -33,6 +33,12 @@ var keywords = []string{
 	"description",
 	"body",
 	"compress",
+	"flow",
+	"when",
+	"exit",
+	"goto",
+	"set",
+	"unset",
 	// HTTP methods
 	"do", // abstract request
 	"get",

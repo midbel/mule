@@ -95,6 +95,9 @@ func (p *Parser) parseItem(root *Collection) error {
 		eol bool
 	)
 	switch p.getCurrLiteral() {
+	case "flow":
+		p.next()
+		err = p.parseFlow(root)
 	case "collection":
 		p.next()
 		err = p.parse(root)
@@ -148,6 +151,138 @@ func (p *Parser) parseItem(root *Collection) error {
 	}
 	p.skip(EOL)
 	return err
+}
+
+func (p *Parser) parseFlow(root *Collection) error {
+	var flow Flow
+	flow.Name = p.getCurrLiteral()
+	p.next()
+
+	err := p.parseBraces("flow", func() error {
+		if p.is(Keyword) {
+			var err error
+			switch p.getCurrLiteral() {
+			case "variables":
+				p.next()
+				err = p.parseVariables(new(Collection))
+			case "headers":
+				p.next()
+				flow.Headers, err = p.parseSet("headers")
+			case "query":
+				p.next()
+				flow.Query, err = p.parseSet("query")
+			case "auth":
+				p.next()
+				flow.Auth, err = p.parseAuth()
+			default:
+				err = p.unexpected("flow")
+			}
+			return err
+		} else if p.is(Ident) || p.is(String) {
+			step, err := p.parseStep()
+			if err == nil {
+				flow.Steps = append(flow.Steps, step)
+			}
+			return err
+		} else {
+			return p.unexpected("flow")
+		}
+	})
+	return err
+}
+
+func (p *Parser) parseStep() (*Step, error) {
+	var step Step
+	step.Request = p.getCurrLiteral()
+	p.next()
+
+	err := p.parseBraces("flow", func() error {
+		if !p.is(Keyword) && p.getCurrLiteral() != "when" {
+			return p.unexpected("flow")
+		}
+		p.next()
+		for !p.done() && !p.is(Lbrace) {
+			predicate, err := p.parseValue()
+			if err != nil {
+				return err
+			}
+			_ = predicate
+		}
+		var body StepBody
+		err := p.parseBraces("commands", func() error {
+			if !p.is(Keyword) {
+				return p.unexpected("commands")
+			}
+			cmd, err := p.parseCommand()
+			if err == nil {
+				body.Commands = append(body.Commands, cmd)
+			}
+			return err
+		})
+		if err == nil {
+			step.Next = append(step.Next, body)
+		}
+		return err
+	})
+	return &step, err
+}
+
+func (p *Parser) parseCommand() (any, error) {
+	var cmd any
+	switch p.getCurrLiteral() {
+	case "set":
+		p.next()
+		src, err := p.parseValue()
+		if err != nil {
+			return nil, err
+		}
+		tgt, err := p.parseValue()
+		if err != nil {
+			return nil, err
+		}
+		cmd = set{
+			Source: src,
+			Target: tgt,
+		}
+	case "unset":
+		p.next()
+		ident, err := p.parseValue()
+		if err != nil {
+			return nil, err
+		}
+		cmd = unset{
+			Ident: ident,
+		}
+	case "goto":
+		p.next()
+		ident, err := p.parseValue()
+		if err != nil {
+			return nil, err
+		}
+		cmd = gotog{
+			Ident: ident,
+		}
+	case "exit":
+		p.next()
+		var x exit
+		if !p.is(EOL) {
+			code, err := p.parseValue()
+			if err != nil {
+				return nil, err
+			}
+			x.Code = code
+		}
+		cmd = x
+	case "script":
+		p.next()
+	default:
+		return nil, p.unexpected("commands")
+	}
+	if !p.is(EOL) {
+		return nil, p.unexpected("commands")
+	}
+	p.next()
+	return cmd, nil
 }
 
 func (p *Parser) parseScript() (string, error) {

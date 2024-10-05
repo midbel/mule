@@ -7,25 +7,32 @@ variables {
 	sample @readfile data/sample.mu
 }
 
-# flow name1 {
-# 	req1 {
-# 		when 200 {
-#			goto req2
-# 		}
-# 		when 400 {
-# 			goto req3
-# 		}
-# 		when 403, 401, 500 {
-# 			exit
-# 		}
-# 	}
-# 	req2 {
-# 
-# 	}
-# 	req3 {
-# 
-# 	}
-# }
+flow name1 {
+	headers {
+		content-type application/json
+	}
+ 	req1 {
+ 		when 200 {
+			set    local_var1 req1.body.var1
+			set    local_var2 req1.body.var2
+			unset local_var2
+			set    req2.url req1.url
+			goto   req2
+ 		}
+ 		when 400 {
+ 			goto req3
+ 		}
+ 		when 403 401 500 {
+ 			exit
+ 		}
+ 	}
+ 	req2 {
+ 
+ 	}
+ 	req3 {
+ 
+ 	}
+ }
 
 get animals {
 	url /animals/
