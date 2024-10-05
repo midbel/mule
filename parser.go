@@ -201,26 +201,32 @@ func (p *Parser) parseStep() (*Step, error) {
 			return p.unexpected("flow")
 		}
 		p.next()
+
+		var bs []StepBody
 		for !p.done() && !p.is(Lbrace) {
-			predicate, err := p.parseValue()
+			ps, err := p.parseValue()
 			if err != nil {
 				return err
 			}
-			_ = predicate
+			body := StepBody{
+				Predicate: ps,
+			}
+			bs = append(bs, body)
 		}
-		var body StepBody
 		err := p.parseBraces("commands", func() error {
 			if !p.is(Keyword) {
 				return p.unexpected("commands")
 			}
 			cmd, err := p.parseCommand()
 			if err == nil {
-				body.Commands = append(body.Commands, cmd)
+				for i := range bs {
+					bs[i].Commands = append(bs[i].Commands, cmd)
+				}
 			}
 			return err
 		})
 		if err == nil {
-			step.Next = append(step.Next, body)
+			step.Next = append(step.Next, bs...)
 		}
 		return err
 	})
