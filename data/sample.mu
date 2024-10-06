@@ -15,7 +15,7 @@ flow name1 {
  		when 200 {
 			set    local_var1 req1.body.var1
 			set    local_var2 req1.body.var2
-			unset local_var2
+			unset  local_var2
 			set    req2.url req1.url
 			goto   req2
  		}

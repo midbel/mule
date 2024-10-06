@@ -51,6 +51,10 @@ type Flow struct {
 	Steps []*Step
 }
 
+func (f *Flow) Execute(args []string, out io.Writer) error {
+	return nil
+}
+
 type Step struct {
 	Request string
 	Next    []StepBody

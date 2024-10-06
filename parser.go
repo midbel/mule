@@ -214,9 +214,6 @@ func (p *Parser) parseStep() (*Step, error) {
 			bs = append(bs, body)
 		}
 		err := p.parseBraces("commands", func() error {
-			if !p.is(Keyword) {
-				return p.unexpected("commands")
-			}
 			cmd, err := p.parseCommand()
 			if err == nil {
 				for i := range bs {
@@ -234,6 +231,9 @@ func (p *Parser) parseStep() (*Step, error) {
 }
 
 func (p *Parser) parseCommand() (any, error) {
+	if !p.is(Keyword) {
+		return nil, p.unexpected("commands")
+	}
 	var cmd any
 	switch p.getCurrLiteral() {
 	case "set":
