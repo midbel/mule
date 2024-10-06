@@ -23,14 +23,14 @@ func main() {
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)
 	}
-	err = runExecute(c, *print)
+	err = runCommand(c, *print)
 	if err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)
 	}
 }
 
-func runExecute(c *mule.Collection, print bool) error {
+func runCommand(c *mule.Collection, print bool) error {
 	var (
 		out io.Writer = io.Discard
 		err error

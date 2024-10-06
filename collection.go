@@ -47,7 +47,6 @@ type Flow struct {
 	AfterAll   string
 	AfterEach  string
 
-	// collection of requests
 	Steps []*Step
 }
 
@@ -85,13 +84,12 @@ type unset struct {
 type Collection struct {
 	Common
 	environ.Environment[Value]
-	// scripts to be run
+
 	BeforeAll  string
 	BeforeEach string
 	AfterAll   string
 	AfterEach  string
 
-	// collection of requests
 	Requests    []*Request
 	Collections []*Collection
 	Flows       []*Flow
