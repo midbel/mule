@@ -16,10 +16,11 @@ import (
 	"slices"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/midbel/mule/environ"
 	"github.com/midbel/mule/jwt"
-	// "github.com/midbel/mule/play"
+	"github.com/midbel/mule/play"
 )
 
 var ErrNotFound = errors.New("not found")
@@ -50,10 +51,31 @@ type Flow struct {
 	AfterAll   string
 	AfterEach  string
 
-	Steps []*Step
+	Steps    []*Step
+	Requests []*Request
 }
 
 func (f *Flow) Execute(env environ.Environment[Value], args []string, stdout, stderr io.Writer) error {
+	if err := f.parseArgs(args); err != nil {
+		return err
+	}
+	tmp := play.Enclosed(play.Default())
+	if _, err := play.EvalWithEnv(strings.NewReader(f.BeforeAll), tmp); err != nil {
+		return err
+	}
+	for _, r := range f.Requests {
+		err := r.Execute(env, nil, stdout, stderr)
+		if err != nil {
+			return err
+		}
+	}
+	if _, err := play.EvalWithEnv(strings.NewReader(f.AfterAll), tmp); err != nil {
+		return err
+	}
+	return nil
+}
+
+func (f *Flow) parseArgs(args []string) error {
 	set := flag.NewFlagSet(f.Name, flag.ExitOnError)
 	if err := set.Parse(args); err != nil {
 		return err
@@ -159,18 +181,29 @@ func (c *Collection) Find(name string) (*Collection, error) {
 }
 
 func (c *Collection) Get(name string) (*http.Request, error) {
-	return nil, nil
+	name, rest, ok := strings.Cut(name, ".")
+	if !ok {
+		req, err := c.findRequestByName(name)
+		if err != nil {
+			return nil, err
+		}
+		return req.build(c)
+	}
+	other, err := c.findCollectionByName(name)
+	if err != nil {
+		return nil, err
+	}
+	return other.Get(rest)
 }
 
 func (c *Collection) Run(name string, args []string, stdout, stderr io.Writer) error {
 	name, rest, ok := strings.Cut(name, ".")
 	if !ok {
 		if ex, err := c.findFlowByName(name); err == nil {
-			return ex.Execute(c, args, stdout, stderr)
+			return c.runFlow(ex, args, stdout, stderr)
 		}
 		if ex, err := c.findRequestByName(name); err == nil {
-			ex.URL = mergeURL(c.URL, ex.URL, c)
-			return ex.Execute(c, args, stdout, stderr)
+			return c.runRequest(ex, args, stdout, stderr)
 		}
 		return fmt.Errorf("%w: %s", ErrNotFound, name)
 	}
@@ -179,6 +212,22 @@ func (c *Collection) Run(name string, args []string, stdout, stderr io.Writer) e
 		return err
 	}
 	return other.Run(rest, args, stdout, stderr)
+}
+
+func (c *Collection) runFlow(flow *Flow, args []string, stdout, stderr io.Writer) error {
+	for _, s := range flow.Steps {
+		req, err := c.findRequestByName(s.Request)
+		if err != nil {
+			return err
+		}
+		flow.Requests = append(flow.Requests, req)
+	}
+	return flow.Execute(c, args, stdout, stderr)
+}
+
+func (c *Collection) runRequest(req *Request, args []string, stdout, stderr io.Writer) error {
+	req.URL = mergeURL(c.URL, req.URL, c)
+	return req.Execute(c, args, stdout, stderr)
 }
 
 func (c *Collection) findCollectionByName(name string) (*Collection, error) {
@@ -263,11 +312,34 @@ func (r *Request) Execute(env environ.Environment[Value], args []string, stdout,
 	if err != nil {
 		return err
 	}
+
+	var (
+		root = play.Enclosed(play.Default())
+		obj  = muleObject{
+			when: time.Now(),
+			req:  getMuleRequest(req, nil),
+			// ctx:  getMuleCollection(ctx),
+			vars: getMuleVars(),
+		}
+		tmp = play.Enclosed(root)
+	)
+	root.Define(muleVarName, &obj)
+
+	if _, err := play.EvalWithEnv(strings.NewReader(r.Before), tmp); err != nil {
+		return err
+	}
+
 	res, err := http.DefaultClient.Do(req)
 	if err != nil {
 		return err
 	}
 	defer res.Body.Close()
+
+	obj.res = getMuleResponse(res, nil)
+	root.Define(muleVarName, &obj)
+	if _, err := play.EvalWithEnv(strings.NewReader(r.After), tmp); err != nil {
+		return err
+	}
 	return nil
 }
 
@@ -276,13 +348,13 @@ func (r *Request) parseArgs(args []string) error {
 	if err := set.Parse(args); err != nil {
 		return err
 	}
-	return nil	
+	return nil
 }
 
 func (r *Request) build(env environ.Environment[Value]) (*http.Request, error) {
 	target, err := r.target(env)
 	if err != nil {
-		return nil, err 
+		return nil, err
 	}
 
 	headers, err := r.Headers.Headers(env)
