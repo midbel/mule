@@ -40,6 +40,7 @@ type Common struct {
 
 type Flow struct {
 	Common
+	Usage string
 	environ.Environment[Value]
 
 	BeforeAll  string
@@ -48,10 +49,6 @@ type Flow struct {
 	AfterEach  string
 
 	Steps []*Step
-}
-
-func (f *Flow) Execute(args []string, out io.Writer) error {
-	return nil
 }
 
 type Step struct {
@@ -121,12 +118,12 @@ func Make(name string, parent environ.Environment[Value]) *Collection {
 	}
 }
 
-func (c Collection) GetCollections() []*Collection {
-	return c.Collections
+func (c Collection) Run(name string, args []string, out io.Writer) error {
+	return nil
 }
 
-func (c Collection) GetRequests() []*Request {
-	return c.Requests
+func (c Collection) Get(name string) (*http.Request, error) {
+	return nil, nil
 }
 
 func (c Collection) Resolve(ident string) (Value, error) {
@@ -155,110 +152,6 @@ func (c Collection) Resolve(ident string) (Value, error) {
 	return c.Environment.Resolve(ident)
 }
 
-func (c *Collection) Execute() error {
-	return nil
-}
-
-func (c *Collection) Get(name string) (*http.Request, error) {
-	req, err := c.FindRequest(name)
-	if err != nil {
-		return nil, err
-	}
-	return req.createRequest(c)
-}
-
-func (c *Collection) Run(name string, args []string, w io.Writer) error {
-	var (
-		rest  string
-		found bool
-	)
-	name, rest, found = strings.Cut(name, ".")
-	if !found {
-		req, err := c.GetRequest(name)
-		if err != nil {
-			other, err := c.GetCollection(name)
-			if err != nil {
-				return err
-			}
-			return other.Execute()
-		}
-		return req.Execute(c, args, w)
-	}
-	other, err := c.GetCollection(name)
-	if err != nil {
-		return err
-	}
-	return other.Run(rest, args, w)
-}
-
-func (c *Collection) FindRequest(name string) (*Request, error) {
-	var (
-		rest  string
-		found bool
-	)
-	name, rest, found = strings.Cut(name, ".")
-	if !found {
-		return c.GetRequest(name)
-	}
-	other, err := c.GetCollection(name)
-	if err != nil {
-		return nil, err
-	}
-	return other.FindRequest(rest)
-}
-
-func (c *Collection) FindCollection(name string) (*Collection, error) {
-	name, rest, ok := strings.Cut(name, ".")
-
-	sub, err := c.GetCollection(name)
-	if err != nil {
-		return nil, err
-	}
-	if !ok {
-		return sub, nil
-	}
-	return sub.FindCollection(rest)
-}
-
-func (c *Collection) GetCollection(name string) (*Collection, error) {
-	ix := slices.IndexFunc(c.Collections, func(other *Collection) bool {
-		return other.Name == name
-	})
-
-	if ix < 0 {
-		return nil, fmt.Errorf("%s: collection not found", name)
-	}
-
-	sub := *c.Collections[ix]
-
-	sub.URL = getUrl(c.URL, sub.URL, sub)
-	sub.Headers = sub.Headers.Merge(c.Headers)
-	sub.Query = sub.Query.Merge(c.Query)
-
-	return &sub, nil
-}
-
-func (c *Collection) GetRequest(name string) (*Request, error) {
-	ix := slices.IndexFunc(c.Requests, func(other *Request) bool {
-		return other.Name == name
-	})
-
-	if ix < 0 {
-		return nil, fmt.Errorf("%s: request not found", name)
-	}
-
-	req := *c.Requests[ix]
-	if req.Abstract {
-		return nil, fmt.Errorf("%s: request can not be executed", name)
-	}
-
-	req.URL = getUrl(c.URL, req.URL, c)
-	req.Headers = req.Headers.Merge(c.Headers)
-	req.Query = req.Query.Merge(c.Query)
-
-	return &req, nil
-}
-
 type Request struct {
 	Common
 	Abstract   bool
@@ -268,182 +161,6 @@ type Request struct {
 	Depends    []Value
 	Before     string
 	After      string
-}
-
-func (r *Request) Merge(other *Request) error {
-	if other.URL == nil && r.URL != nil {
-		other.URL = r.URL.clone()
-	}
-	if other.Auth == nil && r.Auth != nil {
-		other.URL = r.Auth.clone()
-	}
-	if other.Retry == nil && r.Retry != nil {
-		other.URL = r.Retry.clone()
-	}
-	if other.Timeout == nil && r.Timeout != nil {
-		other.URL = r.Timeout.clone()
-	}
-	if other.Redirect == nil && r.Redirect != nil {
-		other.URL = r.Redirect.clone()
-	}
-	if other.Body == nil && r.Body != nil {
-		other.URL = r.Body.clone()
-	}
-	if other.Compressed == nil && r.Compressed != nil {
-		other.URL = r.Compressed.clone()
-	}
-	if other.Before == "" && r.Before != "" {
-		other.Before = r.Before
-	}
-	if other.After == "" && r.After != "" {
-		other.After = r.After
-	}
-	if len(other.Depends) == 0 {
-		for i := range r.Depends {
-			other.Depends = append(other.Depends, r.Depends[i].clone())
-		}
-	}
-	return nil
-}
-
-func (r *Request) Execute(ctx *Collection, args []string, out io.Writer) error {
-	if err := r.parseArgs(ctx, args); err != nil {
-		return err
-	}
-	req, err := r.createRequest(ctx)
-	if err != nil {
-		return err
-	}
-	var (
-		root = play.Enclosed(play.Default())
-		obj  = muleObject{
-			when: time.Now(),
-			req:  getMuleRequest(req, nil),
-			ctx:  getMuleCollection(ctx),
-			vars: getMuleVars(),
-		}
-		env = play.Enclosed(root)
-	)
-	root.Define(muleVarName, &obj)
-
-	if _, err := play.EvalWithEnv(strings.NewReader(r.Before), env); err != nil {
-		return err
-	}
-
-	res, err := http.DefaultClient.Do(req)
-	if err != nil {
-		return err
-	}
-	defer res.Body.Close()
-
-	buf, err := io.ReadAll(res.Body)
-	if err != nil {
-		return err
-	}
-	res.Body = io.NopCloser(bytes.NewReader(buf))
-
-	obj.res = getMuleResponse(res, buf)
-	root.Define(muleVarName, &obj)
-
-	if _, err := play.EvalWithEnv(strings.NewReader(r.After), env); err != nil {
-		return err
-	}
-	io.Copy(out, res.Body)
-	if res.StatusCode >= http.StatusBadRequest {
-		return fmt.Errorf(http.StatusText(res.StatusCode))
-	}
-	return nil
-}
-
-func (r *Request) parseArgs(ctx *Collection, args []string) error {
-	set := flag.NewFlagSet(r.Name, flag.ExitOnError)
-	if is, ok := ctx.Environment.(interface{ Identifiers() []string }); ok {
-		for _, i := range is.Identifiers() {
-			set.Func(i, "", func(str string) error {
-				return ctx.Define(i, createLiteral(str))
-			})
-		}
-	}
-	set.Func("method", "", func(str string) error {
-		r.Method = str
-		return nil
-	})
-	set.Func("header", "", func(str string) error {
-		name, value, ok := strings.Cut(str, ":")
-		if !ok {
-			return fmt.Errorf("%s: invalid header value", str)
-		}
-		name = strings.TrimSpace(name)
-		value = strings.TrimSpace(value)
-		r.Headers[name] = append(r.Headers[name], createLiteral(value))
-		return nil
-	})
-	set.Func("body", "", func(str string) error {
-		r, err := os.Open(str)
-		if err == nil {
-			defer r.Close()
-		} else {
-
-		}
-		return nil
-	})
-	return set.Parse(args)
-}
-
-func (r *Request) createRequest(env environ.Environment[Value]) (*http.Request, error) {
-	target, err := r.target(env)
-	if err != nil {
-		return nil, err
-	}
-
-	headers, err := r.Headers.Headers(env)
-	if err != nil {
-		return nil, err
-	}
-	if r.Auth != nil {
-		val, err := r.Auth.Expand(env)
-		if err != nil {
-			return nil, err
-		}
-		val = fmt.Sprintf("%s %s", r.Auth.Method(), val)
-		headers.Set("Authorization", val)
-	}
-
-	var body io.Reader
-	if r.Body != nil {
-		b, err := r.Body.Expand(env)
-		if err != nil {
-			return nil, err
-		}
-		body = strings.NewReader(b)
-		headers.Set("content-type", r.Body.ContentType())
-		headers.Set("content-length", strconv.Itoa(len(b)))
-	}
-	req, err := http.NewRequest(r.Method, target, body)
-	if err == nil {
-		req.Header = headers
-	}
-	return req, err
-}
-
-func (r *Request) target(env environ.Environment[Value]) (string, error) {
-	target, err := r.URL.Expand(env)
-	if err != nil {
-		return "", err
-	}
-	u, err := url.Parse(target)
-	if err != nil {
-		return "", err
-	}
-
-	vs, err := r.Query.Query(env)
-	if err != nil {
-		return "", err
-	}
-	if u.RawQuery == "" {
-		u.RawQuery = vs.Encode()
-	}
-	return u.String(), nil
 }
 
 type Body interface {
@@ -808,40 +525,4 @@ func (s Set) Merge(other Set) Set {
 		ns[k] = slices.Concat(ns[k], slices.Clone(other[k]))
 	}
 	return ns
-}
-
-func getUrl(left, right Value, env environ.Environment[Value]) Value {
-	if left == nil {
-		return right
-	}
-	if right == nil {
-		return left
-	}
-
-	if str, err := right.Expand(env); err == nil {
-		u, err := url.Parse(str)
-		if err == nil && u.Host != "" {
-			return right
-		}
-	}
-
-	var cs compound
-	if c, ok := left.(compound); ok {
-		cs = append(cs, c...)
-	} else {
-		cs = append(cs, left)
-	}
-	if c, ok := right.(compound); ok {
-		cs = append(cs, c...)
-	} else {
-		cs = append(cs, right)
-	}
-	return cs
-}
-
-func getValue(left, right Value) Value {
-	if left != nil {
-		return left
-	}
-	return right
 }

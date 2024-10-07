@@ -91,7 +91,7 @@ func executeDebug(c *mule.Collection, args []string) error {
 
 func executeHelp(c *mule.Collection, args []string) error {
 	printRequests := func(c *mule.Collection) {
-		for _, r := range c.GetRequests() {
+		for _, r := range c.Requests {
 			fmt.Printf("* [%s] %s", r.Method, r.Name)
 			fmt.Println()
 		}
@@ -99,7 +99,7 @@ func executeHelp(c *mule.Collection, args []string) error {
 
 	printHelp := func(c *mule.Collection) {
 		printRequests(c)
-		for _, c := range c.GetCollections() {
+		for _, c := range c.Collections {
 			fmt.Println(c.Name)
 			fmt.Println(strings.Repeat("-", len(c.Name)))
 			printRequests(c)
@@ -113,13 +113,6 @@ func executeHelp(c *mule.Collection, args []string) error {
 	if set.NArg() == 0 {
 		printHelp(c)
 		return nil
-	}
-	for _, n := range set.Args() {
-		other, err := c.GetCollection(n)
-		if err != nil {
-			return err
-		}
-		printHelp(other)
 	}
 	return nil
 }
