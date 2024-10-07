@@ -769,7 +769,7 @@ func (p *Parser) parseIncludeMacro() (*Collection, error) {
 		alias = strings.TrimSuffix(alias, filepath.Ext(alias))
 	}
 	if path != "" {
-		el, err = el.FindCollection(path)
+		el, err = el.Find(path)
 		if err != nil {
 			return nil, err
 		}

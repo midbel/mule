@@ -6,20 +6,17 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"encoding/xml"
-	"flag"
 	"fmt"
 	"io"
 	"net/http"
 	"net/url"
 	"os"
 	"slices"
-	"strconv"
 	"strings"
-	"time"
 
 	"github.com/midbel/mule/environ"
 	"github.com/midbel/mule/jwt"
-	"github.com/midbel/mule/play"
+	// "github.com/midbel/mule/play"
 )
 
 type Common struct {
@@ -118,6 +115,10 @@ func Make(name string, parent environ.Environment[Value]) *Collection {
 	}
 }
 
+func (c Collection) Find(name string) (*Collection, error) {
+	return nil, nil
+}
+
 func (c Collection) Run(name string, args []string, out io.Writer) error {
 	return nil
 }
@@ -161,6 +162,10 @@ type Request struct {
 	Depends    []Value
 	Before     string
 	After      string
+}
+
+func (r *Request) Merge(other *Request) error {
+	return nil
 }
 
 type Body interface {
