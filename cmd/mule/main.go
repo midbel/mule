@@ -31,13 +31,7 @@ func main() {
 }
 
 func runCommand(c *mule.Collection, print bool) error {
-	var (
-		out io.Writer = io.Discard
-		err error
-	)
-	if print {
-		out = os.Stdout
-	}
+	var err error
 	switch args := flag.Args(); flag.Arg(0) {
 	case "help":
 		err = executeHelp(c, args[1:])
@@ -46,7 +40,7 @@ func runCommand(c *mule.Collection, print bool) error {
 		err = executeDebug(c, args[1:])
 	default:
 		args := flag.Args()
-		err = c.Run(flag.Arg(0), args[1:], out)
+		err = c.Run(flag.Arg(0), args[1:], os.Stdout, os.Stderr)
 	}
 	return err
 }

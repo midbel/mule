@@ -6,18 +6,23 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"encoding/xml"
+	"errors"
+	"flag"
 	"fmt"
 	"io"
 	"net/http"
 	"net/url"
 	"os"
 	"slices"
+	"strconv"
 	"strings"
 
 	"github.com/midbel/mule/environ"
 	"github.com/midbel/mule/jwt"
 	// "github.com/midbel/mule/play"
 )
+
+var ErrNotFound = errors.New("not found")
 
 type Common struct {
 	Name string
@@ -46,6 +51,14 @@ type Flow struct {
 	AfterEach  string
 
 	Steps []*Step
+}
+
+func (f *Flow) Execute(env environ.Environment[Value], args []string, stdout, stderr io.Writer) error {
+	set := flag.NewFlagSet(f.Name, flag.ExitOnError)
+	if err := set.Parse(args); err != nil {
+		return err
+	}
+	return nil
 }
 
 type Step struct {
@@ -115,19 +128,7 @@ func Make(name string, parent environ.Environment[Value]) *Collection {
 	}
 }
 
-func (c Collection) Find(name string) (*Collection, error) {
-	return nil, nil
-}
-
-func (c Collection) Run(name string, args []string, out io.Writer) error {
-	return nil
-}
-
-func (c Collection) Get(name string) (*http.Request, error) {
-	return nil, nil
-}
-
-func (c Collection) Resolve(ident string) (Value, error) {
+func (c *Collection) Resolve(ident string) (Value, error) {
 	switch {
 	case c.URL != nil && ident == "url":
 		return c.URL, nil
@@ -153,6 +154,92 @@ func (c Collection) Resolve(ident string) (Value, error) {
 	return c.Environment.Resolve(ident)
 }
 
+func (c *Collection) Find(name string) (*Collection, error) {
+	return nil, nil
+}
+
+func (c *Collection) Get(name string) (*http.Request, error) {
+	return nil, nil
+}
+
+func (c *Collection) Run(name string, args []string, stdout, stderr io.Writer) error {
+	name, rest, ok := strings.Cut(name, ".")
+	if !ok {
+		if ex, err := c.findFlowByName(name); err == nil {
+			return ex.Execute(c, args, stdout, stderr)
+		}
+		if ex, err := c.findRequestByName(name); err == nil {
+			ex.URL = mergeURL(c.URL, ex.URL, c)
+			return ex.Execute(c, args, stdout, stderr)
+		}
+		return fmt.Errorf("%w: %s", ErrNotFound, name)
+	}
+	other, err := c.findCollectionByName(name)
+	if err != nil {
+		return err
+	}
+	return other.Run(rest, args, stdout, stderr)
+}
+
+func (c *Collection) findCollectionByName(name string) (*Collection, error) {
+	x := slices.IndexFunc(c.Collections, func(curr *Collection) bool {
+		return curr.Name == name
+	})
+	if x < 0 {
+		return nil, fmt.Errorf("%w: collection %s", ErrNotFound, name)
+	}
+	return c.Collections[x], nil
+}
+
+func (c *Collection) findFlowByName(name string) (*Flow, error) {
+	x := slices.IndexFunc(c.Flows, func(curr *Flow) bool {
+		return curr.Name == name
+	})
+	if x < 0 {
+		return nil, fmt.Errorf("%w: flow %s", ErrNotFound, name)
+	}
+	return c.Flows[x], nil
+}
+
+func (c *Collection) findRequestByName(name string) (*Request, error) {
+	x := slices.IndexFunc(c.Requests, func(curr *Request) bool {
+		return curr.Name == name
+	})
+	if x < 0 {
+		return nil, fmt.Errorf("%w: request %s", ErrNotFound, name)
+	}
+	return c.Requests[x], nil
+}
+
+func mergeURL(left, right Value, env environ.Environment[Value]) Value {
+	if left == nil {
+		return right
+	}
+	if right == nil {
+		return left
+	}
+
+	if str, err := right.Expand(env); err == nil {
+		u, err := url.Parse(str)
+		if err == nil && u.IsAbs() {
+			return right
+		}
+	}
+
+	var cs compound
+	if c, ok := left.(compound); ok {
+		cs = append(cs, c...)
+	} else {
+		cs = append(cs, left)
+	}
+	if c, ok := right.(compound); ok {
+		cs = append(cs, c...)
+	} else {
+		cs = append(cs, right)
+	}
+	return cs
+}
+
 type Request struct {
 	Common
 	Abstract   bool
@@ -166,6 +253,92 @@ type Request struct {
 
 func (r *Request) Merge(other *Request) error {
 	return nil
+}
+
+func (r *Request) Execute(env environ.Environment[Value], args []string, stdout, stderr io.Writer) error {
+	if err := r.parseArgs(args); err != nil {
+		return err
+	}
+	req, err := r.build(env)
+	if err != nil {
+		return err
+	}
+	res, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return err
+	}
+	defer res.Body.Close()
+	return nil
+}
+
+func (r *Request) parseArgs(args []string) error {
+	set := flag.NewFlagSet(r.Name, flag.ExitOnError)
+	if err := set.Parse(args); err != nil {
+		return err
+	}
+	return nil	
+}
+
+func (r *Request) build(env environ.Environment[Value]) (*http.Request, error) {
+	target, err := r.target(env)
+	if err != nil {
+		return nil, err 
+	}
+
+	headers, err := r.Headers.Headers(env)
+	if err != nil {
+		return nil, err
+	}
+	if r.Auth != nil {
+		auth, err := r.Auth.Expand(env)
+		if err != nil {
+			return nil, err
+		}
+		auth = fmt.Sprintf("%s %s", r.Auth.Method(), auth)
+		headers.Set("Authorization", auth)
+	}
+
+	var body io.Reader
+	if r.Body != nil {
+		bs, err := r.Body.Expand(env)
+		if err != nil {
+			return nil, err
+		}
+		body = strings.NewReader(bs)
+		headers.Set("content-type", r.Body.ContentType())
+		headers.Set("content-length", strconv.Itoa(len(bs)))
+	}
+
+	req, err := http.NewRequest(r.Method, target, body)
+	if err == nil {
+		req.Header = headers
+	}
+	return req, err
+}
+
+func (r *Request) target(env environ.Environment[Value]) (string, error) {
+	str, err := r.URL.Expand(env)
+	if err != nil {
+		return "", err
+	}
+	target, err := url.Parse(str)
+	if err != nil {
+		return "", err
+	}
+
+	qs, err := r.Query.Query(env)
+	if err != nil {
+		return "", err
+	}
+	if target.RawQuery != "" {
+		qs2 := target.Query()
+		for k := range qs {
+			qs2[k] = append(qs2[k], qs[k]...)
+		}
+		qs = qs2
+	}
+	target.RawQuery = qs.Encode()
+	return target.String(), nil
 }
 
 type Body interface {
