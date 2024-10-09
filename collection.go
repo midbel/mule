@@ -46,9 +46,9 @@ type Flow struct {
 	Usage string
 	environ.Environment[Value]
 
-	BeforeAll  string
+	Before     string
 	BeforeEach string
-	AfterAll   string
+	After      string
 	AfterEach  string
 
 	Steps    []*Step
@@ -85,6 +85,8 @@ func (f *Flow) parseArgs(args []string) error {
 
 type Step struct {
 	Request string
+	Before  string
+	After   string
 	Next    []StepBody
 }
 
@@ -114,10 +116,8 @@ type Collection struct {
 	Common
 	environ.Environment[Value]
 
-	BeforeAll  string
-	BeforeEach string
-	AfterAll   string
-	AfterEach  string
+	Before string
+	After  string
 
 	Requests    []*Request
 	Collections []*Collection

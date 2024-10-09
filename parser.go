@@ -101,22 +101,14 @@ func (p *Parser) parseItem(root *Collection) error {
 	case "collection":
 		p.next()
 		err = p.parse(root)
-	case "before", "beforeAll":
+	case "before":
 		p.next()
 		eol = true
-		root.BeforeAll, err = p.parseScript()
-	case "beforeEach":
-		p.next()
-		eol = true
-		root.BeforeEach, err = p.parseScript()
-	case "after", "afterAll":
+		root.Before, err = p.parseScript()
+	case "after":
 		p.next()
 		eol = true
 		root.AfterAll, err = p.parseScript()
-	case "afterEach":
-		p.next()
-		eol = true
-		root.AfterEach, err = p.parseScript()
 	case "auth":
 		p.next()
 		root.Auth, err = p.parseAuth()

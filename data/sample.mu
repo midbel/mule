@@ -11,7 +11,25 @@ flow name1 {
 	headers {
 		content-type application/json
 	}
+
+	variables {
+
+	}
+
+	query {
+
+	}
+
+	url http://localhost:8080
+
+	before     ""
+	beforeEach ""
+	after      ""
+	afterEach  ""
+	
  	req1 {
+ 		before ""
+ 		after  ""
  		when 200 {
 			set    local_var1 req1.body.var1
 			set    local_var2 req1.body.var2
