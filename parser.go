@@ -108,7 +108,7 @@ func (p *Parser) parseItem(root *Collection) error {
 	case "after":
 		p.next()
 		eol = true
-		root.AfterAll, err = p.parseScript()
+		root.After, err = p.parseScript()
 	case "auth":
 		p.next()
 		root.Auth, err = p.parseAuth()
@@ -152,7 +152,10 @@ func (p *Parser) parseFlow(root *Collection) error {
 
 	err := p.parseBraces("flow", func() error {
 		if p.is(Keyword) {
-			var err error
+			var  (
+				err error
+				eol bool
+			)
 			switch p.getCurrLiteral() {
 			case "variables":
 				p.next()
@@ -166,9 +169,29 @@ func (p *Parser) parseFlow(root *Collection) error {
 			case "auth":
 				p.next()
 				flow.Auth, err = p.parseAuth()
+			case "after", "afterAll":
+				p.next()
+				eol = true
+				flow.After, err = p.parseScript()
+			case "before", "beforeAll":
+				p.next()
+				eol = true
+				flow.Before, err = p.parseScript()
+			case "afterEach":
+				p.next()
+				eol = true
+				flow.AfterEach, err = p.parseScript()
+			case "beforeEach":
+				p.next()
+				eol = true
+				flow.BeforeEach, err = p.parseScript()
 			default:
 				err = p.unexpected("flow")
 			}
+			if err == nil && eol && !p.is(EOL) {
+				err = p.unexpected("flow")
+			}
+			p.skip(EOL)
 			return err
 		} else if p.is(Ident) || p.is(String) {
 			step, err := p.parseStep()

@@ -55,21 +55,24 @@ type Flow struct {
 	Requests []*Request
 }
 
-func (f *Flow) Execute(env environ.Environment[Value], args []string, stdout, stderr io.Writer) error {
+func (f *Flow) Execute(ctx *Collection, args []string, stdout, stderr io.Writer) error {
 	if err := f.parseArgs(args); err != nil {
 		return err
 	}
 	tmp := play.Enclosed(play.Default())
-	if _, err := play.EvalWithEnv(strings.NewReader(f.BeforeAll), tmp); err != nil {
+	if _, err := play.EvalWithEnv(strings.NewReader(f.Before), tmp); err != nil {
 		return err
 	}
-	for _, r := range f.Requests {
-		err := r.Execute(env, nil, stdout, stderr)
-		if err != nil {
-			return err
-		}
+
+	req := f.Requests[0]
+	if _, err := play.EvalWithEnv(strings.NewReader(f.BeforeEach), tmp); err != nil {
+		return err
 	}
-	if _, err := play.EvalWithEnv(strings.NewReader(f.AfterAll), tmp); err != nil {
+	err := req.Execute(ctx, nil, stdout, stderr)
+	if err != nil {
+		return err
+	}
+	if _, err := play.EvalWithEnv(strings.NewReader(f.AfterEach), tmp); err != nil {
 		return err
 	}
 	return nil
@@ -304,11 +307,11 @@ func (r *Request) Merge(other *Request) error {
 	return nil
 }
 
-func (r *Request) Execute(env environ.Environment[Value], args []string, stdout, stderr io.Writer) error {
+func (r *Request) Execute(ctx *Collection, args []string, stdout, stderr io.Writer) error {
 	if err := r.parseArgs(args); err != nil {
 		return err
 	}
-	req, err := r.build(env)
+	req, err := r.build(ctx)
 	if err != nil {
 		return err
 	}
@@ -318,7 +321,7 @@ func (r *Request) Execute(env environ.Environment[Value], args []string, stdout,
 		obj  = muleObject{
 			when: time.Now(),
 			req:  getMuleRequest(req, nil),
-			// ctx:  getMuleCollection(ctx),
+			ctx:  getMuleCollection(ctx),
 			vars: getMuleVars(),
 		}
 		tmp = play.Enclosed(root)
