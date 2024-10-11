@@ -25,6 +25,14 @@ import (
 
 var ErrNotFound = errors.New("not found")
 
+type ErrorExit struct {
+	Code int
+}
+
+func (e ErrorExit) Error() string {
+	return "exit"
+}
+
 type Common struct {
 	Name string
 	Desc string
@@ -65,6 +73,12 @@ func (f *Flow) Execute(ctx *Collection, args []string, stdout, stderr io.Writer)
 	}
 
 	req := f.Requests[0]
+	if f.Steps[0].Before != "" {
+		req.Before = f.Steps[0].Before
+	}
+	if f.Steps[0].After != "" {
+		req.After = f.Steps[0].After
+	}
 	if _, err := play.EvalWithEnv(strings.NewReader(f.BeforeEach), tmp); err != nil {
 		return err
 	}
@@ -73,6 +87,37 @@ func (f *Flow) Execute(ctx *Collection, args []string, stdout, stderr io.Writer)
 		return err
 	}
 	if _, err := play.EvalWithEnv(strings.NewReader(f.AfterEach), tmp); err != nil {
+		return err
+	}
+
+	var (
+		code int
+		ix   int
+	)
+	for _, body := range f.Steps[0].Next {
+		if ok := slices.Contains(body.Codes, code); !ok {
+			continue
+		}
+		ix = slices.IndexFunc(f.Steps, func(s *Step) bool {
+			return s.Request == body.Target
+		})
+		for _, c := range body.Commands {
+			switch c.(type) {
+			case set:
+			case unset:
+			case exit:
+			default:
+				return nil
+			}
+		}
+		if ix >= 0 {
+			break
+		}
+	}
+	next := f.Requests[ix]
+	_ = next
+
+	if _, err := play.EvalWithEnv(strings.NewReader(f.After), tmp); err != nil {
 		return err
 	}
 	return nil
@@ -94,12 +139,9 @@ type Step struct {
 }
 
 type StepBody struct {
-	Predicate Value
-	Commands  []any
-}
-
-type gotog struct {
-	Ident Value
+	Codes    []int
+	Target   string
+	Commands []any
 }
 
 type exit struct {
@@ -340,6 +382,7 @@ func (r *Request) Execute(ctx *Collection, args []string, stdout, stderr io.Writ
 
 	obj.res = getMuleResponse(res, nil)
 	root.Define(muleVarName, &obj)
+
 	if _, err := play.EvalWithEnv(strings.NewReader(r.After), tmp); err != nil {
 		return err
 	}

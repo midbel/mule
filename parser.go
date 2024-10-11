@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 	"slices"
+	"strconv"
 	"strings"
 
 	"github.com/midbel/mule/jwt"
@@ -152,7 +153,7 @@ func (p *Parser) parseFlow(root *Collection) error {
 
 	err := p.parseBraces("flow", func() error {
 		if p.is(Keyword) {
-			var  (
+			var (
 				err error
 				eol bool
 			)
@@ -206,39 +207,61 @@ func (p *Parser) parseFlow(root *Collection) error {
 	return err
 }
 
+func (p *Parser) parsePredicate() ([]int, error) {
+	var list []int
+	for !p.done() && !p.is(Lbrace) && !p.is(Keyword) && !p.is(EOL) {
+		if !p.is(Number) {
+			return nil, p.unexpected("predicate")
+		}
+		n, err := strconv.Atoi(p.getCurrLiteral())
+		if err != nil {
+			return nil, err
+		}
+		list = append(list, n)
+		p.next()
+	}
+	return list, nil
+}
+
 func (p *Parser) parseStep() (*Step, error) {
 	var step Step
 	step.Request = p.getCurrLiteral()
 	p.next()
 
-	err := p.parseBraces("flow", func() error {
+	err := p.parseBraces("step", func() error {
 		if !p.is(Keyword) && p.getCurrLiteral() != "when" {
-			return p.unexpected("flow")
+			return p.unexpected("step")
 		}
 		p.next()
 
-		var bs []StepBody
-		for !p.done() && !p.is(Lbrace) {
-			ps, err := p.parseValue()
-			if err != nil {
-				return err
-			}
-			body := StepBody{
-				Predicate: ps,
-			}
-			bs = append(bs, body)
+		var (
+			body StepBody
+			err  error
+		)
+		if body.Codes, err = p.parsePredicate(); err != nil {
+			return err
 		}
-		err := p.parseBraces("commands", func() error {
+		if p.is(Keyword) && p.getCurrLiteral() == "goto" {
+			p.next()
+			if !p.is(Ident) {
+				return p.unexpected("step")
+			}
+			body.Target = p.getCurrLiteral()
+			p.next()
+		}
+		if p.is(EOL) {
+			step.Next = append(step.Next, body)
+			return nil
+		}
+		err = p.parseBraces("commands", func() error {
 			cmd, err := p.parseCommand()
 			if err == nil {
-				for i := range bs {
-					bs[i].Commands = append(bs[i].Commands, cmd)
-				}
+				body.Commands = append(body.Commands, cmd)
 			}
 			return err
 		})
 		if err == nil {
-			step.Next = append(step.Next, bs...)
+			step.Next = append(step.Next, body)
 		}
 		return err
 	})
@@ -272,15 +295,6 @@ func (p *Parser) parseCommand() (any, error) {
 			return nil, err
 		}
 		cmd = unset{
-			Ident: ident,
-		}
-	case "goto":
-		p.next()
-		ident, err := p.parseValue()
-		if err != nil {
-			return nil, err
-		}
-		cmd = gotog{
 			Ident: ident,
 		}
 	case "exit":
