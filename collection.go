@@ -71,22 +71,36 @@ func (f *Flow) Execute(ctx *Collection, args []string, stdout, stderr io.Writer)
 	if _, err := play.EvalWithEnv(strings.NewReader(f.Before), tmp); err != nil {
 		return err
 	}
+	if err := f.execute(ctx, f.Steps[0], f.Requests[0], stdout, stderr); err != nil {
+		return err
+	}
 
-	req := f.Requests[0]
-	if f.Steps[0].Before != "" {
-		req.Before = f.Steps[0].Before
+	if _, err := play.EvalWithEnv(strings.NewReader(f.After), tmp); err != nil {
+		return err
 	}
-	if f.Steps[0].After != "" {
-		req.After = f.Steps[0].After
+	return nil
+}
+
+func (f *Flow) execute(ctx *Collection, step *Step, req *Request, stdout, stderr io.Writer) error {
+	if step.Before != "" {
+		req.Before = step.Before
 	}
-	if _, err := play.EvalWithEnv(strings.NewReader(f.BeforeEach), tmp); err != nil {
+	if step.After != "" {
+		req.After = step.After
+	}
+	var (
+		tmp    = play.Enclosed(play.Default())
+		before = strings.NewReader(f.BeforeEach)
+	)
+	if _, err := play.EvalWithEnv(before, tmp); err != nil {
 		return err
 	}
 	err := req.Execute(ctx, nil, stdout, stderr)
 	if err != nil {
 		return err
 	}
-	if _, err := play.EvalWithEnv(strings.NewReader(f.AfterEach), tmp); err != nil {
+	after := strings.NewReader(f.AfterEach)
+	if _, err := play.EvalWithEnv(after, tmp); err != nil {
 		return err
 	}
 
@@ -94,7 +108,7 @@ func (f *Flow) Execute(ctx *Collection, args []string, stdout, stderr io.Writer)
 		code int
 		ix   int
 	)
-	for _, body := range f.Steps[0].Next {
+	for _, body := range step.Next {
 		if ok := slices.Contains(body.Codes, code); !ok {
 			continue
 		}
@@ -114,13 +128,10 @@ func (f *Flow) Execute(ctx *Collection, args []string, stdout, stderr io.Writer)
 			break
 		}
 	}
-	next := f.Requests[ix]
-	_ = next
-
-	if _, err := play.EvalWithEnv(strings.NewReader(f.After), tmp); err != nil {
-		return err
+	if ix < 0 {
+		return nil
 	}
-	return nil
+	return f.execute(ctx, f.Steps[ix], f.Requests[ix], stdout, stderr)
 }
 
 func (f *Flow) parseArgs(args []string) error {
