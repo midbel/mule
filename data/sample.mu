@@ -76,8 +76,28 @@ get animals {
 
 geo {
 
+	url http://localhost:8881
+
+	headers {
+		Content-Type application/json
+		Accept       application/json
+	}
+
 	get countries {
 		url /countries/
+
+		before <<SCRIPT
+			console.log("before", mule.request.url)
+		SCRIPT
+
+		after <<SCRIPT
+			console.log("after", mule.request.url)
+			console.log("after", mule.response.code)
+			console.log("after", mule.response.success())
+			console.log("after", mule.response.fail())
+			console.log("after", mule.response.json())
+			console.log("after", mule.response.body)
+		SCRIPT
 	}
 
 	get continents {

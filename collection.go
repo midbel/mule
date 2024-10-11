@@ -68,14 +68,14 @@ func (f *Flow) Execute(ctx *Collection, args []string, stdout, stderr io.Writer)
 		return err
 	}
 	tmp := play.Enclosed(play.Default())
-	if _, err := play.EvalWithEnv(strings.NewReader(f.Before), tmp); err != nil {
+	if err := runScript(tmp, f.Before); err != nil {
 		return err
 	}
 	if err := f.execute(ctx, f.Steps[0], f.Requests[0], stdout, stderr); err != nil {
 		return err
 	}
 
-	if _, err := play.EvalWithEnv(strings.NewReader(f.After), tmp); err != nil {
+	if err := runScript(tmp, f.After); err != nil {
 		return err
 	}
 	return nil
@@ -88,28 +88,21 @@ func (f *Flow) execute(ctx *Collection, step *Step, req *Request, stdout, stderr
 	if step.After != "" {
 		req.After = step.After
 	}
-	var (
-		tmp    = play.Enclosed(play.Default())
-		before = strings.NewReader(f.BeforeEach)
-	)
-	if _, err := play.EvalWithEnv(before, tmp); err != nil {
+	tmp := play.Enclosed(play.Default())
+	if err := runScript(tmp, f.BeforeEach); err != nil {
 		return err
 	}
-	err := req.Execute(ctx, nil, stdout, stderr)
+	res, err := req.Execute(ctx, nil, stdout, stderr)
 	if err != nil {
 		return err
 	}
-	after := strings.NewReader(f.AfterEach)
-	if _, err := play.EvalWithEnv(after, tmp); err != nil {
+	if err := runScript(tmp, f.AfterEach); err != nil {
 		return err
 	}
 
-	var (
-		code int
-		ix   int
-	)
+	var ix int
 	for _, body := range step.Next {
-		if ok := slices.Contains(body.Codes, code); !ok {
+		if ok := slices.Contains(body.Codes, res.StatusCode); !ok {
 			continue
 		}
 		ix = slices.IndexFunc(f.Steps, func(s *Step) bool {
@@ -283,7 +276,8 @@ func (c *Collection) runFlow(flow *Flow, args []string, stdout, stderr io.Writer
 
 func (c *Collection) runRequest(req *Request, args []string, stdout, stderr io.Writer) error {
 	req.URL = mergeURL(c.URL, req.URL, c)
-	return req.Execute(c, args, stdout, stderr)
+	_, err := req.Execute(c, args, stdout, stderr)
+	return err
 }
 
 func (c *Collection) findCollectionByName(name string) (*Collection, error) {
@@ -293,7 +287,10 @@ func (c *Collection) findCollectionByName(name string) (*Collection, error) {
 	if x < 0 {
 		return nil, fmt.Errorf("%w: collection %s", ErrNotFound, name)
 	}
-	return c.Collections[x], nil
+	curr := c.Collections[x]
+	curr.Query = curr.Query.Merge(c.Query)
+	curr.Headers = curr.Headers.Merge(c.Headers)
+	return curr, nil
 }
 
 func (c *Collection) findFlowByName(name string) (*Flow, error) {
@@ -313,36 +310,10 @@ func (c *Collection) findRequestByName(name string) (*Request, error) {
 	if x < 0 {
 		return nil, fmt.Errorf("%w: request %s", ErrNotFound, name)
 	}
-	return c.Requests[x], nil
-}
-
-func mergeURL(left, right Value, env environ.Environment[Value]) Value {
-	if left == nil {
-		return right
-	}
-	if right == nil {
-		return left
-	}
-
-	if str, err := right.Expand(env); err == nil {
-		u, err := url.Parse(str)
-		if err == nil && u.IsAbs() {
-			return right
-		}
-	}
-
-	var cs compound
-	if c, ok := left.(compound); ok {
-		cs = append(cs, c...)
-	} else {
-		cs = append(cs, left)
-	}
-	if c, ok := right.(compound); ok {
-		cs = append(cs, c...)
-	} else {
-		cs = append(cs, right)
-	}
-	return cs
+	req := c.Requests[x]
+	req.Headers = req.Headers.Merge(c.Headers)
+	req.Query = req.Query.Merge(c.Query)
+	return req, nil
 }
 
 type Request struct {
@@ -360,13 +331,13 @@ func (r *Request) Merge(other *Request) error {
 	return nil
 }
 
-func (r *Request) Execute(ctx *Collection, args []string, stdout, stderr io.Writer) error {
+func (r *Request) Execute(ctx *Collection, args []string, stdout, stderr io.Writer) (*http.Response, error) {
 	if err := r.parseArgs(args); err != nil {
-		return err
+		return nil, err
 	}
 	req, err := r.build(ctx)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	var (
@@ -381,23 +352,27 @@ func (r *Request) Execute(ctx *Collection, args []string, stdout, stderr io.Writ
 	)
 	root.Define(muleVarName, &obj)
 
-	if _, err := play.EvalWithEnv(strings.NewReader(r.Before), tmp); err != nil {
-		return err
+	if err := runScript(tmp, r.Before); err != nil {
+		return nil, err
 	}
 
 	res, err := http.DefaultClient.Do(req)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	defer res.Body.Close()
 
-	obj.res = getMuleResponse(res, nil)
+	buf, _ := io.ReadAll(res.Body)
+
+	res.Body = io.NopCloser(bytes.NewReader(buf))
+
+	obj.res = getMuleResponse(res, buf)
 	root.Define(muleVarName, &obj)
 
-	if _, err := play.EvalWithEnv(strings.NewReader(r.After), tmp); err != nil {
-		return err
+	if err := runScript(tmp, r.After); err != nil {
+		return nil, err
 	}
-	return nil
+	return res, nil
 }
 
 func (r *Request) parseArgs(args []string) error {
@@ -468,6 +443,40 @@ func (r *Request) target(env environ.Environment[Value]) (string, error) {
 	}
 	target.RawQuery = qs.Encode()
 	return target.String(), nil
+}
+
+func runScript(env environ.Environment[play.Value], script string) error {
+	_, err := play.EvalWithEnv(strings.NewReader(script), env)
+	return err
+}
+
+func mergeURL(left, right Value, env environ.Environment[Value]) Value {
+	if left == nil {
+		return right
+	}
+	if right == nil {
+		return left
+	}
+
+	if str, err := right.Expand(env); err == nil {
+		u, err := url.Parse(str)
+		if err == nil && u.IsAbs() {
+			return right
+		}
+	}
+
+	var cs compound
+	if c, ok := left.(compound); ok {
+		cs = append(cs, c...)
+	} else {
+		cs = append(cs, left)
+	}
+	if c, ok := right.(compound); ok {
+		cs = append(cs, c...)
+	} else {
+		cs = append(cs, right)
+	}
+	return cs
 }
 
 type Body interface {
