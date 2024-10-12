@@ -16,7 +16,6 @@ import (
 	"slices"
 	"strconv"
 	"strings"
-	"time"
 
 	"github.com/midbel/mule/environ"
 	"github.com/midbel/mule/jwt"
@@ -27,6 +26,12 @@ var ErrNotFound = errors.New("not found")
 
 type ErrorExit struct {
 	Code int
+}
+
+func exit(code int) error {
+	return ErrorExit{
+		Code: code,
+	}
 }
 
 func (e ErrorExit) Error() string {
@@ -67,20 +72,17 @@ func (f *Flow) Execute(ctx *Collection, args []string, stdout, stderr io.Writer)
 	if err := f.parseArgs(args); err != nil {
 		return err
 	}
-	obj := muleObject{
-		when: time.Now(),
-		ctx:  getMuleCollection(ctx),
-		vars: getMuleVars(),
-	}
+	var (
+		obj  = getMuleObject(ctx)
+		root = play.Enclosed(play.Default())
+		tmp  = play.Enclosed(root)
+	)
+	root.Define(muleVarName, obj)
 
-	root := play.Enclosed(play.Default())
-	root.Define(muleVarName, &obj)
-
-	tmp := play.Enclosed(root)
 	if err := runScript(tmp, f.Before); err != nil {
 		return err
 	}
-	if err := f.execute(ctx, f.Steps[0], f.Requests[0], stdout, stderr); err != nil {
+	if err := f.execute(obj, tmp, ctx, f.Steps[0], f.Requests[0], stdout, stderr); err != nil {
 		return err
 	}
 	if err := runScript(tmp, f.After); err != nil {
@@ -89,22 +91,49 @@ func (f *Flow) Execute(ctx *Collection, args []string, stdout, stderr io.Writer)
 	return nil
 }
 
-func (f *Flow) execute(ctx *Collection, step *Step, req *Request, stdout, stderr io.Writer) error {
+func (f *Flow) execute(obj *muleObject, env environ.Environment[play.Value], ctx *Collection, step *Step, req *Request, stdout, stderr io.Writer) error {
 	if step.Before != "" {
 		req.Before = step.Before
 	}
 	if step.After != "" {
 		req.After = step.After
 	}
-	tmp := play.Enclosed(play.Default())
-	if err := runScript(tmp, f.BeforeEach); err != nil {
+
+	obj.req = nil
+	obj.res = nil
+
+	if err := runScript(env, f.BeforeEach); err != nil {
 		return err
 	}
-	res, err := req.Execute(ctx, nil, stdout, stderr)
+
+	my, err := req.build(ctx)
 	if err != nil {
 		return err
 	}
-	if err := runScript(tmp, f.AfterEach); err != nil {
+	obj.req = getMuleRequest(my, req.Name, nil)
+
+	if err := runScript(env, req.Before); err != nil {
+		return err
+	}
+
+	res, err := http.DefaultClient.Do(my)
+	if err != nil {
+		return err
+	}
+	defer res.Body.Close()
+
+	if err := req.Expect(res); err != nil {
+		return err
+	}
+
+	buf, _ := io.ReadAll(res.Body)
+
+	obj.res = getMuleResponse(res, buf)
+	if err := runScript(env, req.After); err != nil {
+		return err
+	}
+
+	if err := runScript(env, f.AfterEach); err != nil {
 		return err
 	}
 
@@ -117,10 +146,16 @@ func (f *Flow) execute(ctx *Collection, step *Step, req *Request, stdout, stderr
 			return s.Request == body.Target
 		})
 		for _, c := range body.Commands {
-			switch c.(type) {
-			case set:
-			case unset:
-			case exit:
+			switch c := c.(type) {
+			case cmdSet:
+			case cmdUnset:
+			case cmdExit:
+				v, err := c.Code.Expand(ctx)
+				if err != nil {
+					return err
+				}
+				x, _ := strconv.Atoi(v)
+				return exit(x)
 			default:
 				return nil
 			}
@@ -132,7 +167,7 @@ func (f *Flow) execute(ctx *Collection, step *Step, req *Request, stdout, stderr
 	if ix < 0 {
 		return nil
 	}
-	return f.execute(ctx, f.Steps[ix], f.Requests[ix], stdout, stderr)
+	return f.execute(obj, env, ctx, f.Steps[ix], f.Requests[ix], stdout, stderr)
 }
 
 func (f *Flow) parseArgs(args []string) error {
@@ -156,16 +191,20 @@ type StepBody struct {
 	Commands []any
 }
 
-type exit struct {
+type cmdGoto struct {
+	Target string
+}
+
+type cmdExit struct {
 	Code Value
 }
 
-type set struct {
+type cmdSet struct {
 	Source Value
 	Target Value
 }
 
-type unset struct {
+type cmdUnset struct {
 	Ident Value
 }
 
@@ -283,7 +322,6 @@ func (c *Collection) runFlow(flow *Flow, args []string, stdout, stderr io.Writer
 }
 
 func (c *Collection) runRequest(req *Request, args []string, stdout, stderr io.Writer) error {
-	req.URL = mergeURL(c.URL, req.URL, c)
 	_, err := req.Execute(c, args, stdout, stderr)
 	return err
 }
@@ -335,6 +373,7 @@ func (c *Collection) findRequestByName(name string) (*Request, error) {
 		return nil, fmt.Errorf("%w: request %s", ErrNotFound, name)
 	}
 	req := c.Requests[x]
+	req.URL = mergeURL(c.URL, req.URL, c)
 	req.Headers = req.Headers.Merge(c.Headers)
 	req.Query = req.Query.Merge(c.Query)
 	return req, nil
@@ -398,15 +437,11 @@ func (r *Request) Execute(ctx *Collection, args []string, stdout, stderr io.Writ
 
 	var (
 		root = play.Enclosed(play.Default())
-		obj  = muleObject{
-			when: time.Now(),
-			req:  getMuleRequest(req, nil),
-			ctx:  getMuleCollection(ctx),
-			vars: getMuleVars(),
-		}
-		tmp = play.Enclosed(root)
+		tmp  = play.Enclosed(root)
+		obj  = getMuleObject(ctx)
 	)
-	root.Define(muleVarName, &obj)
+	obj.req = getMuleRequest(req, r.Name, nil)
+	root.Define(muleVarName, obj)
 
 	if err := runScript(tmp, r.Before); err != nil {
 		return nil, err
@@ -424,7 +459,7 @@ func (r *Request) Execute(ctx *Collection, args []string, stdout, stderr io.Writ
 	buf, _ := io.ReadAll(res.Body)
 
 	obj.res = getMuleResponse(res, buf)
-	root.Define(muleVarName, &obj)
+	root.Define(muleVarName, obj)
 
 	if err := runScript(tmp, r.After); err != nil {
 		return nil, err

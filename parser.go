@@ -288,7 +288,7 @@ func (p *Parser) parseCommand() (any, error) {
 		if err != nil {
 			return nil, err
 		}
-		cmd = set{
+		cmd = cmdSet{
 			Source: src,
 			Target: tgt,
 		}
@@ -298,12 +298,12 @@ func (p *Parser) parseCommand() (any, error) {
 		if err != nil {
 			return nil, err
 		}
-		cmd = unset{
+		cmd = cmdUnset{
 			Ident: ident,
 		}
 	case "exit":
 		p.next()
-		var x exit
+		var x cmdExit
 		if !p.is(EOL) {
 			code, err := p.parseValue()
 			if err != nil {

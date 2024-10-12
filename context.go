@@ -32,6 +32,14 @@ type muleObject struct {
 	play.EventHandler
 }
 
+func getMuleObject(ctx *Collection) *muleObject {
+	return &muleObject{
+		when: time.Now(),
+		ctx:  getMuleCollection(ctx),
+		vars: getMuleVars(),
+	}
+}
+
 func (_ *muleObject) String() string {
 	return muleVarName
 }
@@ -106,13 +114,15 @@ func (m *muleCollection) Call(ident string, args []play.Value) (play.Value, erro
 
 type muleRequest struct {
 	request *http.Request
+	name    string
 	auth    Authorization
 	body    []byte
 }
 
-func getMuleRequest(req *http.Request, body []byte) *muleRequest {
+func getMuleRequest(req *http.Request, name string, body []byte) *muleRequest {
 	return &muleRequest{
 		request: req,
+		name:    name,
 		body:    body,
 	}
 }
@@ -134,6 +144,8 @@ func (m *muleRequest) Get(ident play.Value) (play.Value, error) {
 	switch ident := prop.String(); ident {
 	case "body":
 		return play.NewString(""), nil
+	case "name":
+		return play.NewString(m.name), nil
 	case "url":
 		return play.NewURL(m.request.URL), nil
 	case "method":

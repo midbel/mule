@@ -11,9 +11,25 @@ flow geogeo {
 	headers {
 		content-type application/json
 	}
+
+	before <<BEFORE
+		console.log(">>> geo: before")
+	BEFORE
+
+	after <<AFTER
+		console.log(">>> geo: after")
+	AFTER
+
+	beforeEach <<EACH
+		console.log("* start request")
+	EACH
+
+	afterEach <<EACH
+		console.log("* end request")
+	EACH
 	
  	geo.countries {
- 		when 200 goto req2
+ 		when 200 goto geo.continents
  		when 400
  		when 403 401 500
  	}
@@ -86,12 +102,23 @@ geo {
 			console.log("after", mule.response.success())
 			console.log("after", mule.response.fail())
 			console.log("after", mule.response.json())
-			console.log("after", mule.response.body)
 		SCRIPT
 	}
 
 	get continents {
 		url /continents/
+
+		before <<SCRIPT
+			console.log("before", mule.request.url)
+		SCRIPT
+
+		after <<SCRIPT
+			console.log("after", mule.request.url)
+			console.log("after", mule.response.code)
+			console.log("after", mule.response.success())
+			console.log("after", mule.response.fail())
+			console.log("after", mule.response.json())
+		SCRIPT
 	}
 
 }
