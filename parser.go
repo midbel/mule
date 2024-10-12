@@ -549,10 +549,39 @@ func (p *Parser) parseBasicAuth() (Authorization, error) {
 	return auth, err
 }
 
+func (p *Parser) parseExpect() (ExpectFunc, error) {
+	if p.is(String) || p.is(Ident) {
+		var fn ExpectFunc
+		switch p.getCurrLiteral() {
+		case "success", "succeed":
+			fn = expectRequestSucceed
+		case "fail", "failure":
+			fn = expectRequestFail
+		default:
+			return nil, p.unexpected("expect")
+		}
+		return fn, nil
+	}
+	var codes []int
+	for !p.done() && !p.is(EOL) {
+		if !p.is(Number) {
+			return nil, p.unexpected("expected")
+		}
+		c, err := strconv.Atoi(p.getCurrLiteral())
+		if err != nil {
+			return nil, err
+		}
+		codes = append(codes, c)
+		p.next()
+	}
+	return checkResponseCode(codes), nil
+}
+
 func (p *Parser) parseRequest() ([]*Request, error) {
 	req := Request{
 		Method:   strings.ToUpper(p.getCurrLiteral()),
 		Abstract: p.getCurrLiteral() == "do",
+		Expect:   expectRequestNoop,
 	}
 	p.next()
 	if !p.is(Lbrace) {
@@ -597,6 +626,10 @@ func (p *Parser) parseRequest() ([]*Request, error) {
 				}
 				req.Depends = append(req.Depends, d)
 			}
+		case "expect":
+			p.next()
+			eol = true
+			req.Expect, err = p.parseExpect()
 		case "body":
 			p.next()
 			req.Body, err = p.parseBody()

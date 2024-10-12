@@ -67,7 +67,16 @@ func (f *Flow) Execute(ctx *Collection, args []string, stdout, stderr io.Writer)
 	if err := f.parseArgs(args); err != nil {
 		return err
 	}
-	tmp := play.Enclosed(play.Default())
+	obj := muleObject{
+		when: time.Now(),
+		ctx:  getMuleCollection(ctx),
+		vars: getMuleVars(),
+	}
+
+	root := play.Enclosed(play.Default())
+	root.Define(muleVarName, &obj)
+
+	tmp := play.Enclosed(root)
 	if err := runScript(tmp, f.Before); err != nil {
 		return err
 	}
@@ -315,6 +324,36 @@ func (c *Collection) findRequestByName(name string) (*Request, error) {
 	return req, nil
 }
 
+type ExpectFunc func(*http.Response) error
+
+func checkResponseCode(codes []int) ExpectFunc {
+	return func(res *http.Response) error {
+		ok := slices.Contains(codes, res.StatusCode)
+		if ok {
+			return nil
+		}
+		return fmt.Errorf("request ends with unexpected code %d", res.StatusCode)
+	}
+}
+
+func expectRequestNoop(_ *http.Response) error {
+	return nil
+}
+
+func expectRequestSucceed(res *http.Response) error {
+	if err := expectRequestFail(res); err == nil {
+		return fmt.Errorf("request fail")
+	}
+	return nil
+}
+
+func expectRequestFail(res *http.Response) error {
+	if res.StatusCode >= http.StatusBadRequest {
+		return nil
+	}
+	return fmt.Errorf("request succeed")
+}
+
 type Request struct {
 	Common
 	Abstract   bool
@@ -324,6 +363,8 @@ type Request struct {
 	Depends    []Value
 	Before     string
 	After      string
+
+	Expect ExpectFunc
 }
 
 func (r *Request) Merge(other *Request) error {
@@ -360,8 +401,11 @@ func (r *Request) Execute(ctx *Collection, args []string, stdout, stderr io.Writ
 		return nil, err
 	}
 	defer res.Body.Close()
+
+	if err := r.Expect(res); err != nil {
+		return nil, err
+	}
 	buf, _ := io.ReadAll(res.Body)
-	res.Body = io.NopCloser(bytes.NewReader(buf))
 
 	obj.res = getMuleResponse(res, buf)
 	root.Define(muleVarName, &obj)
@@ -369,6 +413,7 @@ func (r *Request) Execute(ctx *Collection, args []string, stdout, stderr io.Writ
 	if err := runScript(tmp, r.After); err != nil {
 		return nil, err
 	}
+	res.Body = io.NopCloser(bytes.NewReader(buf))
 	return res, nil
 }
 
