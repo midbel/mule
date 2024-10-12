@@ -74,7 +74,6 @@ func (f *Flow) Execute(ctx *Collection, args []string, stdout, stderr io.Writer)
 	if err := f.execute(ctx, f.Steps[0], f.Requests[0], stdout, stderr); err != nil {
 		return err
 	}
-
 	if err := runScript(tmp, f.After); err != nil {
 		return err
 	}
@@ -361,9 +360,7 @@ func (r *Request) Execute(ctx *Collection, args []string, stdout, stderr io.Writ
 		return nil, err
 	}
 	defer res.Body.Close()
-
 	buf, _ := io.ReadAll(res.Body)
-
 	res.Body = io.NopCloser(bytes.NewReader(buf))
 
 	obj.res = getMuleResponse(res, buf)
