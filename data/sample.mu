@@ -7,30 +7,20 @@ variables {
 	sample @readfile data/sample.mu
 }
 
-flow name1 {
+flow geogeo {
 	headers {
 		content-type application/json
 	}
 	
- 	req1 {
- 		when 200 goto req2 {
-			set    local_var1 req1.body.var1
-			set    local_var2 req1.body.var2
-			unset  local_var2
-			set    req2.url req1.url
- 		}
- 		when 400 goto req3 {
- 			exit
- 		}
- 		when 403 401 500 {
- 			exit
- 		}
+ 	geo.countries {
+ 		when 200 goto req2
+ 		when 400
+ 		when 403 401 500
  	}
- 	req2 {
- 
- 	}
- 	req3 {
- 
+ 	geo.continents {
+ 		when 200
+ 		when 400
+ 		when 403 401 500
  	}
  }
 

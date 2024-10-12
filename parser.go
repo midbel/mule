@@ -204,6 +204,9 @@ func (p *Parser) parseFlow(root *Collection) error {
 			return p.unexpected("flow")
 		}
 	})
+	if err == nil {
+		root.Flows = append(root.Flows, &flow)
+	}
 	return err
 }
 
@@ -250,6 +253,7 @@ func (p *Parser) parseStep() (*Step, error) {
 			p.next()
 		}
 		if p.is(EOL) {
+			p.next()
 			step.Next = append(step.Next, body)
 			return nil
 		}

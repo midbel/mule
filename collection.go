@@ -289,6 +289,14 @@ func (c *Collection) runRequest(req *Request, args []string, stdout, stderr io.W
 }
 
 func (c *Collection) findCollectionByName(name string) (*Collection, error) {
+	name, rest, ok := strings.Cut(name, ".")
+	if ok {
+		other, err := c.findCollectionByName(name)
+		if err != nil {
+			return nil, err
+		}
+		return other.findCollectionByName(rest)
+	}
 	x := slices.IndexFunc(c.Collections, func(curr *Collection) bool {
 		return curr.Name == name
 	})
@@ -312,6 +320,14 @@ func (c *Collection) findFlowByName(name string) (*Flow, error) {
 }
 
 func (c *Collection) findRequestByName(name string) (*Request, error) {
+	name, rest, ok := strings.Cut(name, ".")
+	if ok {
+		other, err := c.findCollectionByName(name)
+		if err != nil {
+			return nil, err
+		}
+		return other.findRequestByName(rest)
+	}
 	x := slices.IndexFunc(c.Requests, func(curr *Request) bool {
 		return curr.Name == name
 	})
