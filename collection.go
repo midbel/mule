@@ -75,17 +75,17 @@ func (f *Flow) Execute(ctx *Collection, args []string, stdout, stderr io.Writer)
 	var (
 		obj  = getMuleObject(ctx)
 		root = play.Enclosed(play.Default())
-		tmp  = play.Enclosed(root)
+		env  = play.Enclosed(root)
 	)
 	root.Define(muleVarName, obj)
 
-	if err := runScript(tmp, f.Before); err != nil {
+	if err := runScript(env, f.Before); err != nil {
 		return err
 	}
-	if err := f.execute(obj, tmp, ctx, f.Steps[0], f.Requests[0], stdout, stderr); err != nil {
+	if err := f.execute(obj, env, ctx, f.Steps[0], f.Requests[0], stdout, stderr); err != nil {
 		return err
 	}
-	if err := runScript(tmp, f.After); err != nil {
+	if err := runScript(env, f.After); err != nil {
 		return err
 	}
 	return nil
@@ -111,7 +111,6 @@ func (f *Flow) execute(obj *muleObject, env environ.Environment[play.Value], ctx
 		return err
 	}
 	obj.req = getMuleRequest(my, req.Name, nil)
-
 	if err := runScript(env, req.Before); err != nil {
 		return err
 	}
@@ -121,48 +120,21 @@ func (f *Flow) execute(obj *muleObject, env environ.Environment[play.Value], ctx
 		return err
 	}
 	defer res.Body.Close()
-
 	if err := req.Expect(res); err != nil {
 		return err
 	}
-
 	buf, _ := io.ReadAll(res.Body)
 
 	obj.res = getMuleResponse(res, buf)
 	if err := runScript(env, req.After); err != nil {
 		return err
 	}
-
 	if err := runScript(env, f.AfterEach); err != nil {
 		return err
 	}
-
-	var ix int
-	for _, body := range step.Next {
-		if ok := slices.Contains(body.Codes, res.StatusCode); !ok {
-			continue
-		}
-		ix = slices.IndexFunc(f.Steps, func(s *Step) bool {
-			return s.Request == body.Target
-		})
-		for _, c := range body.Commands {
-			switch c := c.(type) {
-			case cmdSet:
-			case cmdUnset:
-			case cmdExit:
-				v, err := c.Code.Expand(ctx)
-				if err != nil {
-					return err
-				}
-				x, _ := strconv.Atoi(v)
-				return exit(x)
-			default:
-				return nil
-			}
-		}
-		if ix >= 0 {
-			break
-		}
+	ix, err := step.WhichNext(ctx, res.StatusCode, f.Steps)
+	if err != nil {
+		return err
 	}
 	if ix < 0 {
 		return nil
@@ -183,6 +155,38 @@ type Step struct {
 	Before  string
 	After   string
 	Next    []StepBody
+}
+
+func (s *Step) WhichNext(ctx *Collection, code int, others []*Step) (int, error) {
+	var ix int
+	for _, body := range s.Next {
+		if ok := slices.Contains(body.Codes, code); !ok {
+			continue
+		}
+		ix = slices.IndexFunc(others, func(s *Step) bool {
+			return s.Request == body.Target
+		})
+		if ix < 0 {
+			continue
+		}
+		for _, c := range body.Commands {
+			switch c := c.(type) {
+			case cmdSet:
+			case cmdUnset:
+			case cmdExit:
+				v, err := c.Code.Expand(ctx)
+				if err != nil {
+					return ix, err
+				}
+				x, _ := strconv.Atoi(v)
+				return ix, exit(x)
+			default:
+				return ix, nil
+			}
+		}
+		break
+	}
+	return ix, nil
 }
 
 type StepBody struct {
@@ -459,7 +463,6 @@ func (r *Request) Execute(ctx *Collection, args []string, stdout, stderr io.Writ
 	buf, _ := io.ReadAll(res.Body)
 
 	obj.res = getMuleResponse(res, buf)
-	root.Define(muleVarName, obj)
 
 	if err := runScript(tmp, r.After); err != nil {
 		return nil, err

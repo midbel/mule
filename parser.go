@@ -232,7 +232,28 @@ func (p *Parser) parseStep() (*Step, error) {
 	p.next()
 
 	err := p.parseBraces("step", func() error {
-		if !p.is(Keyword) && p.getCurrLiteral() != "when" {
+		if !p.is(Keyword) {
+			return p.unexpected("step")
+		}
+		switch p.getCurrLiteral() {
+		case "after":
+			p.next()
+			step.After, _ = p.parseString()
+			if !p.is(EOL) {
+				return p.unexpected("step")
+			}
+			p.next()
+			return nil
+		case "before":
+			p.next()
+			step.Before, _ = p.parseString()
+			if !p.is(EOL) {
+				return p.unexpected("step")
+			}
+			p.next()
+			return nil
+		case "when":
+		default:
 			return p.unexpected("step")
 		}
 		p.next()

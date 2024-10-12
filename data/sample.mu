@@ -19,21 +19,23 @@ flow geogeo {
 	after <<AFTER
 		console.log(">>> geo: after")
 	AFTER
-
-	beforeEach <<EACH
-		console.log("* start request")
-	EACH
-
-	afterEach <<EACH
-		console.log("* end request")
-	EACH
 	
  	geo.countries {
+
+ 		after <<SCRIPT
+ 			console.log("[flow] done geo.countries")
+ 		SCRIPT
+
  		when 200 goto geo.continents
  		when 400
  		when 403 401 500
  	}
  	geo.continents {
+
+ 		after <<SCRIPT
+ 			console.log("[flow] done geo.continents")
+ 		SCRIPT
+
  		when 200
  		when 400
  		when 403 401 500
