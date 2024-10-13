@@ -64,8 +64,7 @@ type Flow struct {
 	After      string
 	AfterEach  string
 
-	Steps    []*Step
-	Requests []*Request
+	Steps []*Step
 }
 
 func (f *Flow) Execute(ctx *Collection, args []string, stdout, stderr io.Writer) error {
@@ -82,7 +81,10 @@ func (f *Flow) Execute(ctx *Collection, args []string, stdout, stderr io.Writer)
 	if err := runScript(env, f.Before); err != nil {
 		return err
 	}
-	if err := f.execute(obj, env, ctx, f.Steps[0], f.Requests[0], stdout, stderr); err != nil {
+	step := f.Steps[0]
+	step.ctx = ctx
+	step.env = env
+	if err := f.execute(obj, step, stdout, stderr); err != nil {
 		return err
 	}
 	if err := runScript(env, f.After); err != nil {
@@ -91,55 +93,46 @@ func (f *Flow) Execute(ctx *Collection, args []string, stdout, stderr io.Writer)
 	return nil
 }
 
-func (f *Flow) execute(obj *muleObject, env environ.Environment[play.Value], ctx *Collection, step *Step, req *Request, stdout, stderr io.Writer) error {
-	if step.Before != "" {
-		req.Before = step.Before
-	}
-	if step.After != "" {
-		req.After = step.After
-	}
-
+func (f *Flow) execute(obj *muleObject, step *Step, stdout, stderr io.Writer) error {
 	obj.req = nil
 	obj.res = nil
 
-	if err := runScript(env, f.BeforeEach); err != nil {
+	if err := runScript(step.env, f.BeforeEach); err != nil {
 		return err
 	}
 
-	my, err := req.build(ctx)
+	req, err := step.Build()
 	if err != nil {
 		return err
 	}
-	obj.req = getMuleRequest(my, req.Name, nil)
-	if err := runScript(env, req.Before); err != nil {
+
+	obj.req = getMuleRequest(req, step.Name(), nil)
+	if err := step.RunBefore(); err != nil {
 		return err
 	}
 
-	res, err := http.DefaultClient.Do(my)
+	res, err := http.DefaultClient.Do(req)
 	if err != nil {
 		return err
 	}
 	defer res.Body.Close()
-	if err := req.Expect(res); err != nil {
+	if err := step.Expect(res); err != nil {
 		return err
 	}
 	buf, _ := io.ReadAll(res.Body)
 
 	obj.res = getMuleResponse(res, buf)
-	if err := runScript(env, req.After); err != nil {
+	if err := step.RunAfter(); err != nil {
 		return err
 	}
-	if err := runScript(env, f.AfterEach); err != nil {
+	if err := runScript(step.env, f.AfterEach); err != nil {
 		return err
 	}
-	ix, err := step.WhichNext(ctx, res.StatusCode, f.Steps)
-	if err != nil {
+	next, err := step.WhichNext(res.StatusCode, f.Steps)
+	if err != nil || next == nil {
 		return err
 	}
-	if ix < 0 {
-		return nil
-	}
-	return f.execute(obj, env, ctx, f.Steps[ix], f.Requests[ix], stdout, stderr)
+	return f.execute(obj, next, stdout, stderr)
 }
 
 func (f *Flow) parseArgs(args []string) error {
@@ -155,15 +148,47 @@ type Step struct {
 	Before  string
 	After   string
 	Next    []StepBody
+
+	req *Request
+	ctx *Collection
+	env environ.Environment[play.Value]
 }
 
-func (s *Step) WhichNext(ctx *Collection, code int, others []*Step) (int, error) {
-	var ix int
+func (s *Step) Build() (*http.Request, error) {
+	return s.req.build(s.ctx)
+}
+
+func (s *Step) Name() string {
+	return s.req.Name
+}
+
+func (s *Step) RunBefore() error {
+	script := s.req.Before
+	if s.Before != "" {
+		script = s.Before
+	}
+	return runScript(s.env, script)
+}
+
+func (s *Step) RunAfter() error {
+	script := s.req.After
+	if s.After != "" {
+		script = s.After
+	}
+	return runScript(s.env, script)
+}
+
+func (s *Step) Expect(res *http.Response) error {
+	return s.req.Expect(res)
+}
+
+func (s *Step) WhichNext(code int, others []*Step) (*Step, error) {
+	var next *Step
 	for _, body := range s.Next {
 		if ok := slices.Contains(body.Codes, code); !ok {
 			continue
 		}
-		ix = slices.IndexFunc(others, func(s *Step) bool {
+		ix := slices.IndexFunc(others, func(s *Step) bool {
 			return s.Request == body.Target
 		})
 		if ix < 0 {
@@ -174,19 +199,24 @@ func (s *Step) WhichNext(ctx *Collection, code int, others []*Step) (int, error)
 			case cmdSet:
 			case cmdUnset:
 			case cmdExit:
-				v, err := c.Code.Expand(ctx)
+				v, err := c.Code.Expand(s.ctx)
 				if err != nil {
-					return ix, err
+					return nil, err
 				}
 				x, _ := strconv.Atoi(v)
-				return ix, exit(x)
+				return nil, exit(x)
 			default:
-				return ix, nil
+				return nil, nil
 			}
 		}
+		next = others[ix]
 		break
 	}
-	return ix, nil
+	if next != nil {
+		next.ctx = s.ctx
+		next.env = s.env
+	}
+	return next, nil
 }
 
 type StepBody struct {
@@ -320,7 +350,7 @@ func (c *Collection) runFlow(flow *Flow, args []string, stdout, stderr io.Writer
 		if err != nil {
 			return err
 		}
-		flow.Requests = append(flow.Requests, req)
+		s.req = req
 	}
 	return flow.Execute(c, args, stdout, stderr)
 }
@@ -456,7 +486,6 @@ func (r *Request) Execute(ctx *Collection, args []string, stdout, stderr io.Writ
 		return nil, err
 	}
 	defer res.Body.Close()
-
 	if err := r.Expect(res); err != nil {
 		return nil, err
 	}
