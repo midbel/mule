@@ -104,12 +104,52 @@ func (_ *muleCollection) True() play.Value {
 func (m *muleCollection) Call(ident string, args []play.Value) (play.Value, error) {
 	switch ident {
 	case "get":
+		if len(args) != 1 {
+			return play.Void{}, play.ErrArgument
+		}
+		str, ok := args[0].(fmt.Stringer)
+		if !ok {
+			return play.Void{}, play.ErrEval
+		}
+		v, err := m.collection.Resolve(str.String())
+		if err != nil {
+			return play.Void{}, nil
+		}
+		res, err := v.Expand(m.collection)
+		if err != nil {
+			return play.Void{}, err
+		}
+		return play.NewString(res), nil
 	case "set":
+		if len(args) != 2 {
+			return play.Void{}, play.ErrArgument
+		}
+		str, ok := args[0].(fmt.Stringer)
+		if !ok {
+			return play.Void{}, play.ErrEval
+		}
+		val, ok := args[1].(fmt.Stringer)
+		if !ok {
+			return play.Void{}, play.ErrEval
+		}
+		res := createLiteral(val.String())
+		return play.Void{}, m.collection.Define(str.String(), res)
 	case "has":
+		if len(args) != 1 {
+			return play.Void{}, play.ErrArgument
+		}
+		str, ok := args[0].(fmt.Stringer)
+		if !ok {
+			return play.Void{}, play.ErrEval
+		}
+		_, err := m.collection.Resolve(str.String())
+		if err != nil {
+			return play.NewBool(false), nil
+		}
+		return play.NewBool(true), nil
 	default:
-		return nil, fmt.Errorf("%s: unknown function", ident)
+		return play.Void{}, fmt.Errorf("%s: unknown function", ident)
 	}
-	return nil, play.ErrImpl
 }
 
 type muleRequest struct {
@@ -340,29 +380,29 @@ func (v *muleVars) Call(ident string, args []play.Value) (play.Value, error) {
 	switch ident {
 	case "get":
 		if len(args) != 1 {
-			return nil, play.ErrArgument
+			return play.Void{}, play.ErrArgument
 		}
 		str, ok := args[0].(fmt.Stringer)
 		if !ok {
-			return nil, play.ErrEval
+			return play.Void{}, play.ErrEval
 		}
 		return v.env.Resolve(str.String())
 	case "set":
 		if len(args) != 2 {
-			return nil, play.ErrArgument
+			return play.Void{}, play.ErrArgument
 		}
 		str, ok := args[0].(fmt.Stringer)
 		if !ok {
-			return nil, play.ErrEval
+			return play.Void{}, play.ErrEval
 		}
 		return play.Void{}, v.env.Define(str.String(), args[1])
 	case "has":
 		if len(args) != 1 {
-			return nil, play.ErrArgument
+			return play.Void{}, play.ErrArgument
 		}
 		str, ok := args[0].(fmt.Stringer)
 		if !ok {
-			return nil, play.ErrEval
+			return play.Void{}, play.ErrEval
 		}
 		_, err := v.env.Resolve(str.String())
 		if err == nil {
@@ -370,6 +410,6 @@ func (v *muleVars) Call(ident string, args []play.Value) (play.Value, error) {
 		}
 		return play.NewBool(false), nil
 	default:
-		return nil, fmt.Errorf("%s: unknown function", ident)
+		return play.Void{}, fmt.Errorf("%s: unknown function", ident)
 	}
 }

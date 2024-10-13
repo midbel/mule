@@ -345,6 +345,8 @@ func (c *Collection) runFlow(flow *Flow, args []string, stdout, stderr io.Writer
 		if err != nil {
 			return err
 		}
+		// s.req.Headers = s.req.Headers.Merge(flow.Headers)
+		// s.req.Query = s.req.Query.Merge(flow.Query)
 		s.req = req
 	}
 	return flow.Execute(c, args, stdout, stderr)
