@@ -1,7 +1,7 @@
 # this is a comment
 # this is another comment
 
-url http://localhost:8001
+url http://localhost:8881
 
 variables {
 	sample @readfile data/sample.mu
@@ -53,6 +53,7 @@ get animals {
 	SCRIPT
 
 	after <<SCRIPT
+	console.log(mule.response.body)
 	SCRIPT
 
 	get animalsWithBasic {

@@ -275,6 +275,18 @@ func Make(name string, parent environ.Environment[Value]) *Collection {
 	}
 }
 
+func (c *Collection) Define(ident string, value Value) error {
+	switch ident {
+	case "url":
+	case "token":
+	case "username":
+	case "password":
+	default:
+		return c.Environment.Define(ident, value)
+	}
+	return nil
+}
+
 func (c *Collection) Resolve(ident string) (Value, error) {
 	switch {
 	case c.URL != nil && ident == "url":
@@ -345,8 +357,6 @@ func (c *Collection) runFlow(flow *Flow, args []string, stdout, stderr io.Writer
 		if err != nil {
 			return err
 		}
-		// s.req.Headers = s.req.Headers.Merge(flow.Headers)
-		// s.req.Query = s.req.Query.Merge(flow.Query)
 		s.req = req
 	}
 	return flow.Execute(c, args, stdout, stderr)

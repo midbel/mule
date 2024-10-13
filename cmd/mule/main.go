@@ -3,7 +3,7 @@ package main
 import (
 	"flag"
 	"fmt"
-	"io"
+	"net/http/httputil"
 	"os"
 	"strings"
 
@@ -62,24 +62,11 @@ func executeDebug(c *mule.Collection, args []string) error {
 	if req.Body != nil {
 		defer req.Body.Close()
 	}
-
-	fmt.Println(req.Method, req.URL.String())
-	for h := range req.Header {
-		fmt.Printf("%s: ", h)
-		for i, v := range req.Header[h] {
-			if i > 0 {
-				fmt.Print(", ")
-			}
-			fmt.Print(v)
-		}
-		fmt.Println()
+	buf, err := httputil.DumpRequestOut(req, true)
+	if err != nil {
+		return err
 	}
-	if req.Body != nil {
-		_, err := io.Copy(os.Stdout, req.Body)
-		if err != nil {
-			return err
-		}
-	}
+	fmt.Fprintln(os.Stdout, string(buf))
 	return nil
 }
 
