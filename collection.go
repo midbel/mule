@@ -101,35 +101,16 @@ func (f *Flow) execute(obj *muleObject, step *Step, stdout, stderr io.Writer) er
 		return err
 	}
 
-	req, err := step.Build()
+	res, err := step.Execute(obj)
 	if err != nil {
 		return err
 	}
 
-	obj.req = getMuleRequest(req, step.Name(), nil)
-	if err := step.RunBefore(); err != nil {
-		return err
-	}
-
-	res, err := http.DefaultClient.Do(req)
-	if err != nil {
-		return err
-	}
-	defer res.Body.Close()
-	if err := step.Expect(res); err != nil {
-		return err
-	}
-	buf, _ := io.ReadAll(res.Body)
-
-	obj.res = getMuleResponse(res, buf)
-	if err := step.RunAfter(); err != nil {
+	next, err := step.whichNext(res.StatusCode, f.Steps)
+	if err != nil || next == nil {
 		return err
 	}
 	if err := runScript(step.env, f.AfterEach); err != nil {
-		return err
-	}
-	next, err := step.WhichNext(res.StatusCode, f.Steps)
-	if err != nil || next == nil {
 		return err
 	}
 	return f.execute(obj, next, stdout, stderr)
@@ -154,15 +135,33 @@ type Step struct {
 	env environ.Environment[play.Value]
 }
 
-func (s *Step) Build() (*http.Request, error) {
-	return s.req.build(s.ctx)
+func (s *Step) Execute(obj *muleObject) (*http.Response, error) {
+	req, err := s.req.build(s.ctx)
+	if err != nil {
+		return nil, err
+	}
+	obj.req = getMuleRequest(req, s.req.Name, nil)
+	if err := s.runBefore(); err != nil {
+		return nil, err
+	}
+	res, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer res.Body.Close()
+	if err := s.req.Expect(res); err != nil {
+		return nil, err
+	}
+	buf, _ := io.ReadAll(res.Body)
+
+	obj.res = getMuleResponse(res, buf)
+	if err := s.runAfter(); err != nil {
+		return nil, err
+	}
+	return res, nil
 }
 
-func (s *Step) Name() string {
-	return s.req.Name
-}
-
-func (s *Step) RunBefore() error {
+func (s *Step) runBefore() error {
 	script := s.req.Before
 	if s.Before != "" {
 		script = s.Before
@@ -170,7 +169,7 @@ func (s *Step) RunBefore() error {
 	return runScript(s.env, script)
 }
 
-func (s *Step) RunAfter() error {
+func (s *Step) runAfter() error {
 	script := s.req.After
 	if s.After != "" {
 		script = s.After
@@ -178,11 +177,7 @@ func (s *Step) RunAfter() error {
 	return runScript(s.env, script)
 }
 
-func (s *Step) Expect(res *http.Response) error {
-	return s.req.Expect(res)
-}
-
-func (s *Step) WhichNext(code int, others []*Step) (*Step, error) {
+func (s *Step) whichNext(code int, others []*Step) (*Step, error) {
 	var next *Step
 	for _, body := range s.Next {
 		if ok := slices.Contains(body.Codes, code); !ok {
