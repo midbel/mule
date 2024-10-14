@@ -40,6 +40,11 @@ func getMuleObject(ctx *Collection) *muleObject {
 	}
 }
 
+func (m *muleObject) reset() {
+	m.req = nil
+	m.res = nil
+}
+
 func (_ *muleObject) String() string {
 	return muleVarName
 }

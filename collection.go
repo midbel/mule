@@ -22,6 +22,8 @@ import (
 	"github.com/midbel/mule/play"
 )
 
+const MaxFlowDepth = 100
+
 var ErrNotFound = errors.New("not found")
 
 type ErrorExit struct {
@@ -65,9 +67,11 @@ type Flow struct {
 	AfterEach  string
 
 	Steps []*Step
+	depth int
 }
 
 func (f *Flow) Execute(ctx *Collection, args []string, stdout, stderr io.Writer) error {
+	f.reset()
 	if err := f.parseArgs(args); err != nil {
 		return err
 	}
@@ -94,8 +98,13 @@ func (f *Flow) Execute(ctx *Collection, args []string, stdout, stderr io.Writer)
 }
 
 func (f *Flow) execute(obj *muleObject, step *Step, stdout, stderr io.Writer) error {
-	obj.req = nil
-	obj.res = nil
+	f.enter()
+	defer f.leave()
+
+	if f.depth >= MaxFlowDepth {
+		return fmt.Errorf("max flow depth reached")
+	}
+	obj.reset()
 
 	if err := runScript(step.env, f.BeforeEach); err != nil {
 		return err
@@ -106,7 +115,7 @@ func (f *Flow) execute(obj *muleObject, step *Step, stdout, stderr io.Writer) er
 		return err
 	}
 
-	next, err := step.whichNext(res.StatusCode, f.Steps)
+	next, err := step.guessNext(res.StatusCode, f.Steps)
 	if err != nil || next == nil {
 		return err
 	}
@@ -122,6 +131,18 @@ func (f *Flow) parseArgs(args []string) error {
 		return err
 	}
 	return nil
+}
+
+func (f *Flow) enter() {
+	f.depth++
+}
+
+func (f *Flow) leave() {
+	f.depth--
+}
+
+func (f *Flow) reset() {
+	f.depth = 0
 }
 
 type Step struct {
@@ -177,7 +198,7 @@ func (s *Step) runAfter() error {
 	return runScript(s.env, script)
 }
 
-func (s *Step) whichNext(code int, others []*Step) (*Step, error) {
+func (s *Step) guessNext(code int, others []*Step) (*Step, error) {
 	var next *Step
 	for _, body := range s.Next {
 		if ok := slices.Contains(body.Codes, code); !ok {
@@ -215,8 +236,8 @@ func (s *Step) whichNext(code int, others []*Step) (*Step, error) {
 }
 
 type StepBody struct {
-	Codes    []int
 	Target   string
+	Codes    []int
 	Commands []any
 }
 
@@ -386,6 +407,10 @@ func (c *Collection) findCollectionByName(name string) (*Collection, error) {
 	curr.URL = mergeURL(c.URL, curr.URL, c)
 	curr.Query = curr.Query.Merge(c.Query)
 	curr.Headers = curr.Headers.Merge(c.Headers)
+
+	if curr.Auth == nil && c.Auth != nil {
+		curr.Auth = c.Auth
+	}
 	return curr, nil
 }
 
@@ -418,6 +443,9 @@ func (c *Collection) findRequestByName(name string) (*Request, error) {
 	req.URL = mergeURL(c.URL, req.URL, c)
 	req.Headers = req.Headers.Merge(c.Headers)
 	req.Query = req.Query.Merge(c.Query)
+	if req.Auth == nil && c.Auth != nil {
+		req.Auth = c.Auth
+	}
 	return req, nil
 }
 
