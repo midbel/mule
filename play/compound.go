@@ -9,6 +9,9 @@ import (
 	"os"
 	"slices"
 	"strings"
+	"time"
+
+	"github.com/midbel/mule/jwt"
 )
 
 const (
@@ -1049,7 +1052,7 @@ func (g global) String() string {
 func (g global) Call(ident string, args []Value) (Value, error) {
 	call, ok := g.fnset[ident]
 	if !ok {
-		return nil, fmt.Errorf("%s: undefined function", ident)
+		return nil, fmt.Errorf("%s.%s: undefined function", g.name, ident)
 	}
 	return call.Call(args)
 }
@@ -1369,23 +1372,40 @@ func NativeToValues(obj interface{}) (Value, error) {
 	}
 }
 
+var jwtConfig = &jwt.Config{
+	Secret: "supersecretapikey11!",
+	Alg:    jwt.HS256,
+	Ttl:    time.Hour * 24,
+}
+
 func makeJWT() Value {
 	g := global{
 		name:  "JWT",
 		fnset: make(map[string]Callable),
 	}
-	g.fnset["parse"] = asCallable(jwtParse)
-	g.fnset["stringify"] = asCallable(jwtStringify)
+	g.fnset["decode"] = asCallable(jwtDecode)
+	g.fnset["encode"] = asCallable(jwtEncode)
 
 	return g
 }
 
-func jwtParse(args []Value) (Value, error) {
-	return nil, nil
+func jwtDecode(args []Value) (Value, error) {
+	if len(args) != 1 {
+		return nil, ErrArgument
+	}
+	str, ok := args[0].(String)
+	if !ok {
+		return Void{}, ErrEval
+	}
+	return Void{}, jwt.Decode(str.String(), jwtConfig)
 }
 
-func jwtStringify(args []Value) (Value, error) {
-	return nil, nil
+func jwtEncode(args []Value) (Value, error) {
+	if len(args) != 1 {
+		return Void{}, ErrArgument
+	}
+	str, err := jwt.Encode(args[0], jwtConfig)
+	return getString(str), err
 }
 
 func makeMath() Value {

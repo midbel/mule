@@ -19,6 +19,7 @@ post "token" {
 	after <<SCRIPT
 	const res = mule.response.json()
 	mule.collection.set("accessToken", res.token)
+	console.log(JWT.decode(res.token))
 	SCRIPT
 }
 
