@@ -137,8 +137,11 @@ func (m *muleCollection) Call(ident string, args []play.Value) (play.Value, erro
 		if !ok {
 			return play.Void{}, play.ErrEval
 		}
-		res := createLiteral(val.String())
-		return play.Void{}, m.collection.Define(str.String(), res)
+		var (
+			res = createLiteral(val.String())
+			err = m.collection.Define(str.String(), res)
+		)
+		return play.Void{}, err
 	case "has":
 		if len(args) != 1 {
 			return play.Void{}, play.ErrArgument

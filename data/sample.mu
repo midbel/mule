@@ -4,10 +4,10 @@
 url http://localhost:8881
 
 variables {
-	sample @readfile data/sample.mu
+	accessToken "supersecrettoken11!"
 }
 
-flow geogeo {
+flow earth {
 	headers {
 		content-type application/json
 	}
@@ -34,6 +34,43 @@ flow geogeo {
  	}
  }
 
+post "token" {
+	url /token/new
+
+	body json {
+		user "foobar"
+		pass "tmp123!"
+		grant read
+		grant write
+	}
+
+	expect 200
+
+	after <<SCRIPT
+	const res = mule.response.json()
+	mule.collection.set("accessToken", res.token)
+	SCRIPT
+}
+
+get verify {
+	url /token
+
+	body json {
+		token ${accessToken}
+	}
+
+	expect 204
+}
+
+flow checktoken {
+	"token" {
+		when 200 goto verify
+	}
+	verify {
+		when 204
+	}
+}
+
 errors {
 	url /codes
 	
@@ -53,38 +90,6 @@ get animals {
 
 	query {
 		length 121
-	}
-
-	before <<SCRIPT
-	SCRIPT
-
-	after <<SCRIPT
-	console.log(mule.response.body)
-	SCRIPT
-
-	get animalsWithBasic {
-		auth basic {
-			username foobar
-			password tmp123!
-		}
-		headers {
-			accept application/json
-			referer localhost:9000
-			accept-language fr nl en
-		}
-	}
-
-	get animalsWithJwt {
-		auth jwt {
-			iss   mule.org
-			user  foobar
-			roles adm dev
-		}
-		headers {
-			accept application/json
-			referer localhost:9000
-			Accept-Language fr nl en
-		}
 	}
 }
 
@@ -131,5 +136,3 @@ geo {
 	}
 
 }
-
-@include data/auth.mu

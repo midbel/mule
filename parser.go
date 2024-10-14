@@ -425,18 +425,17 @@ func (p *Parser) parseBody() (Body, error) {
 		defer p.next()
 		return urlEncoded(set), nil
 	case "json":
+		p.next()
 		set, err := p.parseSet("json")
 		if err != nil {
 			return nil, err
 		}
-		defer p.next()
 		return jsonify(set), nil
 	case "xml":
 		set, err := p.parseSet("json")
 		if err != nil {
 			return nil, err
 		}
-		defer p.next()
 		return xmlify(set), nil
 	case "text":
 		return nil, nil

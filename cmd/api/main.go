@@ -8,6 +8,8 @@ import (
 	"io/fs"
 	"net/http"
 	"os"
+
+	"github.com/midbel/mule/jwt"
 )
 
 //go:embed resources/*
@@ -27,14 +29,87 @@ func main() {
 		}
 	}
 
+	http.Handle("/token/new", createToken())
+	http.Handle("/token", readToken())
 	http.Handle("/codes/400", handleCode(http.StatusBadRequest))
 	http.Handle("/codes/401", handleCode(http.StatusUnauthorized))
 	http.Handle("/codes/403", handleCode(http.StatusForbidden))
 	http.Handle("/codes/404", handleCode(http.StatusNotFound))
 	http.Handle("/codes/500", handleCode(http.StatusInternalServerError))
+	http.Handle("/codes/200", handleCode(http.StatusOK))
+	http.Handle("/codes/201", handleCode(http.StatusCreated))
+	http.Handle("/codes/204", handleCode(http.StatusNoContent))
 	if err := http.ListenAndServe(flag.Arg(0), nil); err != nil {
 		fmt.Fprintln(os.Stderr, err)
 	}
+}
+
+const (
+	secret   = "supersecretapikey11!"
+	issuer   = "http://fakeapi.org"
+	audience = "client"
+)
+
+func readToken() http.Handler {
+	cfg := jwt.Config{
+		Alg:    jwt.HS256,
+		Secret: secret,
+	}
+	fn := func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet {
+			w.WriteHeader(http.StatusMethodNotAllowed)
+			return
+		}
+		tok := struct {
+			Token string `json:"token"`
+		}{}
+		if err := json.NewDecoder(r.Body).Decode(&tok); err != nil {
+			w.WriteHeader(http.StatusBadRequest)
+			return
+		}
+		if err := jwt.Decode(tok.Token, &cfg); err != nil {
+			w.WriteHeader(http.StatusUnauthorized)
+			return
+		}
+		w.WriteHeader(http.StatusNoContent)
+	}
+	return http.HandlerFunc(fn)
+}
+
+func createToken() http.Handler {
+	cfg := jwt.Config{
+		Alg:    jwt.HS256,
+		Secret: secret,
+	}
+	fn := func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost {
+			w.WriteHeader(http.StatusMethodNotAllowed)
+			return
+		}
+		var (
+			dat = make(map[string]any)
+			err error
+		)
+		if err = json.NewDecoder(r.Body).Decode(&dat); err != nil {
+			w.WriteHeader(http.StatusBadRequest)
+			return
+		}
+		dat["iss"] = issuer
+		dat["aud"] = audience
+
+		token, err := jwt.Encode(dat, &cfg)
+		if err != nil {
+			w.WriteHeader(http.StatusInternalServerError)
+			return
+		}
+		res := struct {
+			Token string `json:"token"`
+		}{
+			Token: token,
+		}
+		json.NewEncoder(w).Encode(res)
+	}
+	return http.HandlerFunc(fn)
 }
 
 func handleCode(code int) http.Handler {

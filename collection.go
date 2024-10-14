@@ -296,17 +296,17 @@ func Make(name string, parent environ.Environment[Value]) *Collection {
 	}
 }
 
-func (c *Collection) Define(ident string, value Value) error {
-	switch ident {
-	case "url":
-	case "token":
-	case "username":
-	case "password":
-	default:
-		return c.Environment.Define(ident, value)
-	}
-	return nil
-}
+// func (c *Collection) Define(ident string, value Value) error {
+// 	switch ident {
+// 	case "url":
+// 	case "token":
+// 	case "username":
+// 	case "password":
+// 	default:
+// 		return c.Environment.Define(ident, value)
+// 	}
+// 	return nil
+// }
 
 func (c *Collection) Resolve(ident string) (Value, error) {
 	switch {
