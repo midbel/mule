@@ -27,9 +27,21 @@ func main() {
 		}
 	}
 
+	http.Handle("/codes/400", handleCode(http.StatusBadRequest))
+	http.Handle("/codes/401", handleCode(http.StatusUnauthorized))
+	http.Handle("/codes/403", handleCode(http.StatusForbidden))
+	http.Handle("/codes/404", handleCode(http.StatusNotFound))
+	http.Handle("/codes/500", handleCode(http.StatusInternalServerError))
 	if err := http.ListenAndServe(flag.Arg(0), nil); err != nil {
 		fmt.Fprintln(os.Stderr, err)
 	}
+}
+
+func handleCode(code int) http.Handler {
+	fn := func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(code)
+	}
+	return http.HandlerFunc(fn)
 }
 
 func geo() error {

@@ -22,25 +22,31 @@ flow geogeo {
 	
  	geo.countries {
 
- 		after <<SCRIPT
- 			console.log("[flow] done geo.countries")
- 		SCRIPT
-
  		when 200 goto geo.continents
  		when 400
  		when 403 401 500
  	}
  	geo.continents {
 
- 		after <<SCRIPT
- 			console.log("[flow] done geo.continents")
- 		SCRIPT
-
  		when 200
  		when 400
  		when 403 401 500
  	}
  }
+
+errors {
+	url /codes
+	
+	get badrequest {
+		url    /400
+		expect 400
+	}
+
+	get servererror {
+		url /500
+		expect 500
+	}
+}
 
 get animals {
 	url /animals/

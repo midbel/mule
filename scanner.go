@@ -39,6 +39,7 @@ var keywords = []string{
 	"goto",
 	"set",
 	"unset",
+	"expect",
 	// HTTP methods
 	"do", // abstract request
 	"get",

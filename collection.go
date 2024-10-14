@@ -383,6 +383,7 @@ func (c *Collection) findCollectionByName(name string) (*Collection, error) {
 		return nil, fmt.Errorf("%w: collection %s", ErrNotFound, name)
 	}
 	curr := c.Collections[x]
+	curr.URL = mergeURL(c.URL, curr.URL, c)
 	curr.Query = curr.Query.Merge(c.Query)
 	curr.Headers = curr.Headers.Merge(c.Headers)
 	return curr, nil
