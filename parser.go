@@ -368,6 +368,175 @@ func (p *Parser) parseString() (string, error) {
 	return p.getCurrLiteral(), nil
 }
 
+func (p *Parser) parseSubstitution() (Value, error) {
+	p.next()
+	if !p.is(Ident) {
+		return nil, p.unexpected("substitution")
+	}
+	var (
+		ident = p.getCurrLiteral()
+		ret   = createVariable(ident)
+		err   error
+	)
+	p.next()
+	switch {
+	case p.is(Rsub):
+	case p.is(Substring):
+		ret, err = p.parseSubstring(ret)
+	case p.is(Replace) || p.is(ReplaceAll) || p.is(ReplaceSuffix) || p.is(ReplacePrefix):
+		ret, err = p.parseReplace(ret)
+	case p.is(TrimPrefix) || p.is(TrimLongPrefix) || p.is(TrimSuffix) || p.is(TrimLongSuffix):
+		ret, err = p.parseTrim(ret)
+	case p.is(LowerFirst) || p.is(LowerAll) || p.is(UpperFirst) || p.is(UpperAll):
+		ret, err = p.parseCase(ret)
+	default:
+		return nil, p.unexpected("substitution")
+	}
+	if err != nil {
+		return nil, err
+	}
+	if !p.is(Rsub) {
+		return nil, p.unexpected("substitution")
+	}
+	p.next()
+	return ret, nil
+}
+
+func (p *Parser) parseSubstring(ident Value) (Value, error) {
+	op := substr{
+		value: ident,
+	}
+	p.next()
+	switch {
+	case p.is(Number) || p.is(Ident):
+		op.start = createLiteral(p.getCurrLiteral())
+		p.next()
+	case p.is(Substring):
+		op.start = createLiteral("0")
+	default:
+		return nil, p.unexpected("substring")
+	}
+	if !p.is(Substring) {
+		return nil, p.unexpected("substring")
+	}
+	p.next()
+	switch {
+	case p.is(Number) || p.is(Ident):
+		op.end = createLiteral(p.getCurrLiteral())
+		p.next()
+	case p.is(Rsub):
+		op.end = createLiteral("0")
+	default:
+		return nil, p.unexpected("substring")
+	}
+	return op, nil
+}
+
+func (p *Parser) parseTrim(ident Value) (Value, error) {
+	op := trim{
+		value: ident,
+	}
+	switch {
+	case p.is(TrimPrefix):
+		op.op = prefixTrim
+	case p.is(TrimLongPrefix):
+		op.op = prefixLongTrim
+	case p.is(TrimSuffix):
+		op.op = suffixTrim
+	case p.is(TrimLongSuffix):
+		op.op = suffixLongTrim
+	default:
+		return nil, p.unexpected("trim")
+	}
+	p.next()
+	switch {
+	case p.is(Ident) || p.is(String) || p.is(Number):
+		op.word = createLiteral(p.getCurrLiteral())
+	default:
+		return nil, p.unexpected("trim")
+	}
+	p.next()
+	return op, nil
+}
+
+func (p *Parser) parseReplace(ident Value) (Value, error) {
+	op := replace{
+		value: ident,
+	}
+	switch {
+	case p.is(Replace):
+		op.op = replaceFirst
+	case p.is(ReplaceAll):
+		op.op = replaceAll
+	case p.is(ReplaceSuffix):
+		op.op = replaceSuffix
+	case p.is(ReplacePrefix):
+		op.op = replacePrefix
+	default:
+		return nil, p.unexpected("replace")
+	}
+	p.next()
+	switch {
+	case p.is(Ident) || p.is(String) || p.is(Number):
+		op.before = createLiteral(p.getCurrLiteral())
+	default:
+		return nil, p.unexpected("replace")
+	}
+	p.next()
+	if !p.is(Replace) {
+		return nil, p.unexpected("replace")
+	}
+	p.next()
+	switch {
+	case p.is(Ident) || p.is(String) || p.is(Number):
+		op.after = createLiteral(p.getCurrLiteral())
+	default:
+		return nil, p.unexpected("replace")
+	}
+	p.next()
+	return op, nil
+}
+
+func (p *Parser) parseCase(ident Value) (Value, error) {
+	op := changecase{
+		value: ident,
+	}
+	switch {
+	case p.is(LowerFirst):
+		op.op = lowerFirstCase
+	case p.is(LowerAll):
+		op.op = lowerAllCase
+	case p.is(UpperFirst):
+		op.op = upperFirstCase
+	case p.is(UpperAll):
+		op.op = upperAllCase
+	default:
+		return nil, p.unexpected("case")
+	}
+	p.next()
+	return op, nil
+}
+
+func (p *Parser) parseCompound() (Value, error) {
+	p.next()
+	var cs compound
+	for !p.done() && !p.is(Quote) {
+		v, err := p.parseValue()
+		if err != nil {
+			return nil, err
+		}
+		cs = append(cs, v)
+	}
+	if !p.is(Quote) {
+		return nil, p.unexpected("value")
+	}
+	p.next()
+	if len(cs) == 1 {
+		return cs[0], nil
+	}
+	return cs, nil
+}
+
 func (p *Parser) parseValue() (Value, error) {
 	switch {
 	case p.is(Macro) && p.getCurrLiteral() == "readfile":
@@ -383,25 +552,9 @@ func (p *Parser) parseValue() (Value, error) {
 		defer p.next()
 		return createVariable(p.getCurrLiteral()), nil
 	case p.is(Lsub):
-		return nil, nil
+		return p.parseSubstitution()
 	case p.is(Quote):
-		p.next()
-		var cs compound
-		for !p.done() && !p.is(Quote) {
-			v, err := p.parseValue()
-			if err != nil {
-				return nil, err
-			}
-			cs = append(cs, v)
-		}
-		if !p.is(Quote) {
-			return nil, p.unexpected("value")
-		}
-		p.next()
-		if len(cs) == 1 {
-			return cs[0], nil
-		}
-		return cs, nil
+		return p.parseCompound()
 	default:
 		return nil, p.unexpected("value")
 	}

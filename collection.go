@@ -929,10 +929,10 @@ const (
 )
 
 type replace struct {
-	value Value
-	from  Value
-	to    Value
-	op    int8
+	value  Value
+	before Value
+	after  Value
+	op     int8
 }
 
 func (r replace) clone() Value {
@@ -966,7 +966,7 @@ const (
 
 type trim struct {
 	value Value
-	which Value
+	word  Value
 	op    int8
 }
 
@@ -979,10 +979,10 @@ func (t trim) Expand(e environ.Environment[Value]) (string, error) {
 }
 
 const (
-	lowerFirstTransform = 1 << iota
-	upperFirstTransform
-	lowerAllTransform
-	upperAllTransform
+	lowerFirstCase = 1 << iota
+	upperFirstCase
+	lowerAllCase
+	upperAllCase
 )
 
 type changecase struct {

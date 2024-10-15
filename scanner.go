@@ -74,6 +74,10 @@ const (
 	ReplaceAll
 	ReplaceSuffix
 	ReplacePrefix
+	UpperFirst
+	UpperAll
+	LowerFirst
+	LowerAll
 	Invalid
 )
 
@@ -118,6 +122,14 @@ func (t Token) String() string {
 		return "<replace-suffix>"
 	case ReplacePrefix:
 		return "<replace-prefix>"
+	case UpperAll:
+		return "<upper-all>"
+	case UpperFirst:
+		return "<upper-first>"
+	case LowerAll:
+		return "<lower-all>"
+	case LowerFirst:
+		return "<lower-first>"
 	case Keyword:
 		prefix = "keyword"
 	case Macro:
@@ -260,6 +272,18 @@ func (s *Scanner) scanModifier(tok *Token) {
 	switch s.char {
 	case colon:
 		tok.Type = Substring
+	case comma:
+		tok.Type = LowerFirst
+		if s.peek() == s.char {
+			s.read()
+			tok.Type = LowerAll
+		}
+	case caret:
+		tok.Type = UpperFirst
+		if s.peek() == s.char {
+			s.read()
+			tok.Type = UpperAll
+		}
 	case pound:
 		tok.Type = TrimPrefix
 		if s.peek() == s.char {
@@ -278,7 +302,7 @@ func (s *Scanner) scanModifier(tok *Token) {
 			tok.Type = ReplaceAll
 		} else if k == percent {
 			tok.Type = ReplaceSuffix
-		}  else if k == pound {
+		} else if k == pound {
 			tok.Type = ReplacePrefix
 		}
 		if tok.Type != Replace {
@@ -301,7 +325,7 @@ func (s *Scanner) scanQuote(tok *Token) {
 	default:
 		s.scanVerbatim(tok)
 	}
-} 
+}
 
 func (s *Scanner) scanMacro(tok *Token) {
 	s.read()
@@ -558,10 +582,12 @@ const (
 	colon      = ':'
 	percent    = '%'
 	slash      = '/'
+	comma      = ','
+	caret      = '^'
 )
 
 func isTransform(r rune) bool {
-	return r == colon || r == percent || r == slash
+	return r == colon || r == percent || r == slash || r == comma || r == caret
 }
 
 func isMacro(r rune) bool {

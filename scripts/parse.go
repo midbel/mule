@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/midbel/mule/play"
+	"github.com/midbel/mule"
 )
 
 func main() {
@@ -18,7 +18,7 @@ func main() {
 	}
 	defer r.Close()
 
-	root, err := play.ParseReader(r)
+	root, err := mule.ParseReader(r)
 	if err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)
