@@ -58,6 +58,7 @@ const (
 	Keyword
 	Macro
 	Variable
+	Substitute
 	String
 	Number
 	Lbrace

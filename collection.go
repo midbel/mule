@@ -921,6 +921,69 @@ func (v variable) Expand(e environ.Environment[Value]) (string, error) {
 	return val.Expand(e)
 }
 
+const (
+	replaceFirst = 1 << iota
+	replaceAll
+	replaceSuffix
+	replacePrefix
+)
+
+type replace struct {
+	value Value
+	from  Value
+	to    Value
+	op    int8
+}
+
+func (r replace) clone() Value {
+	return r
+}
+
+func (r replace) Expand(e environ.Environment[Value]) (string, error) {
+	return "", nil
+}
+
+const (
+	suffixTrim = 1 << iota
+	prefixTrim
+	suffixLongTrim
+	prefixLongTrim
+)
+
+type trim struct {
+	value Value
+	which Value
+	op    int8
+}
+
+func (t trim) clone() Value {
+	return t
+}
+
+func (t trim) Expand(e environ.Environment[Value]) (string, error) {
+	return "", nil
+}
+
+const (
+	lowerFirstTransform = 1 << iota
+	upperFirstTransform
+	lowerAllTransform
+	upperAllTransform
+)
+
+type transform struct {
+	value Value
+	op    int8
+}
+
+func (t transform) clone() Value {
+	return t
+}
+
+func (t transform) Expand(e environ.Environment[Value]) (string, error) {
+	return "", nil
+}
+
 type compound []Value
 
 func (c compound) clone() Value {

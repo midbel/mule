@@ -382,6 +382,7 @@ func (p *Parser) parseValue() (Value, error) {
 	case p.is(Variable):
 		defer p.next()
 		return createVariable(p.getCurrLiteral()), nil
+	case p.is(Substitute):
 	case p.is(Quote):
 		p.next()
 		var cs compound
