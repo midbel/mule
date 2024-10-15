@@ -58,11 +58,22 @@ const (
 	Keyword
 	Macro
 	Variable
-	Substitute
+	Lsub
+	Rsub
+	EndSubstitute
 	String
 	Number
 	Lbrace
 	Rbrace
+	Substring
+	TrimPrefix
+	TrimLongPrefix
+	TrimSuffix
+	TrimLongSuffix
+	Replace
+	ReplaceAll
+	ReplaceSuffix
+	ReplacePrefix
 	Invalid
 )
 
@@ -85,6 +96,28 @@ func (t Token) String() string {
 		return "<lbrace>"
 	case Rbrace:
 		return "<rbrace>"
+	case Lsub:
+		return "<beg-substitute>"
+	case Rsub:
+		return "<end-substitute>"
+	case Substring:
+		return "<substring>"
+	case TrimPrefix:
+		return "<trim-prefix>"
+	case TrimLongPrefix:
+		return "<trim-long-prefix>"
+	case TrimSuffix:
+		return "<trim-suffix>"
+	case TrimLongSuffix:
+		return "<trim-long-suffix>"
+	case Replace:
+		return "<replace-first>"
+	case ReplaceAll:
+		return "<replace-all>"
+	case ReplaceSuffix:
+		return "<replace-suffix>"
+	case ReplacePrefix:
+		return "<replace-prefix>"
 	case Keyword:
 		prefix = "keyword"
 	case Macro:
@@ -119,13 +152,28 @@ type cursor struct {
 	Position
 }
 
+type state int8
+
+const (
+	stateQuoted state = 1 << iota
+	stateSubstitute
+)
+
+func (s state) quoted() bool {
+	return s&stateQuoted == stateQuoted
+}
+
+func (s state) substitute() bool {
+	return s&stateSubstitute == stateSubstitute
+}
+
 type Scanner struct {
 	input []byte
 	cursor
 	old cursor
 
-	quoted bool
-	str    bytes.Buffer
+	state
+	str bytes.Buffer
 }
 
 func Scan(r io.Reader) *Scanner {
@@ -150,14 +198,11 @@ func (s *Scanner) Scan() Token {
 		return tok
 	}
 
-	if s.quoted {
-		if isVariable(s.char) {
-			s.scanVariable(&tok)
-		} else if isTemplate(s.char) {
-			s.scanTemplate(&tok)
-		} else {
-			s.scanVerbatim(&tok)
-		}
+	if s.quoted() {
+		s.scanQuote(&tok)
+		return tok
+	} else if s.substitute() {
+		s.scanSubstitute(&tok)
 		return tok
 	}
 
@@ -189,6 +234,74 @@ func (s *Scanner) Scan() Token {
 
 	return tok
 }
+
+func (s *Scanner) scanSubstitute(tok *Token) {
+	if s.char == rbrace {
+		s.read()
+		s.state = 0
+		tok.Type = Rsub
+		return
+	}
+	switch {
+	case isTransform(s.char):
+		s.scanModifier(tok)
+	case isLetter(s.char):
+		s.scanIdent(tok)
+	case isQuote(s.char):
+		s.scanString(tok)
+	case isDigit(s.char):
+		s.scanNumber(tok)
+	default:
+		tok.Type = Invalid
+	}
+}
+
+func (s *Scanner) scanModifier(tok *Token) {
+	switch s.char {
+	case colon:
+		tok.Type = Substring
+	case pound:
+		tok.Type = TrimPrefix
+		if s.peek() == s.char {
+			s.read()
+			tok.Type = TrimLongPrefix
+		}
+	case percent:
+		tok.Type = TrimSuffix
+		if s.peek() == s.char {
+			s.read()
+			tok.Type = TrimLongSuffix
+		}
+	case slash:
+		tok.Type = Replace
+		if k := s.peek(); k == s.char {
+			tok.Type = ReplaceAll
+		} else if k == percent {
+			tok.Type = ReplaceSuffix
+		}  else if k == pound {
+			tok.Type = ReplacePrefix
+		}
+		if tok.Type != Replace {
+			s.read()
+		}
+	default:
+		tok.Type = Invalid
+	}
+	if tok.Type != Invalid {
+		s.read()
+	}
+}
+
+func (s *Scanner) scanQuote(tok *Token) {
+	switch {
+	case isVariable(s.char):
+		s.scanVariable(tok)
+	case isTemplate(s.char):
+		s.scanTemplate(tok)
+	default:
+		s.scanVerbatim(tok)
+	}
+} 
 
 func (s *Scanner) scanMacro(tok *Token) {
 	s.read()
@@ -278,7 +391,11 @@ func (s *Scanner) scanNumber(tok *Token) {
 
 func (s *Scanner) scanTemplate(tok *Token) {
 	s.read()
-	s.quoted = !s.quoted
+	if s.quoted() {
+		s.state = 0
+	} else {
+		s.state = stateQuoted
+	}
 	tok.Type = Quote
 }
 
@@ -329,9 +446,11 @@ func (s *Scanner) scanHeredoc(tok *Token) {
 
 func (s *Scanner) scanVariable(tok *Token) {
 	s.read()
-	var brace bool
-	if brace = s.char == lbrace; brace {
+	if s.char == lbrace {
 		s.read()
+		s.state = stateSubstitute
+		tok.Type = Lsub
+		return
 	}
 	s.scanIdent(tok)
 	if tok.Type != Ident && tok.Type != Keyword {
@@ -339,11 +458,6 @@ func (s *Scanner) scanVariable(tok *Token) {
 		return
 	}
 	tok.Type = Variable
-	if brace && s.char != rbrace {
-		tok.Type = Invalid
-	} else if brace {
-		s.read()
-	}
 }
 
 func (s *Scanner) scanNL(tok *Token) {
@@ -441,7 +555,14 @@ const (
 	arobase    = '@'
 	star       = '*'
 	backquote  = '`'
+	colon      = ':'
+	percent    = '%'
+	slash      = '/'
 )
+
+func isTransform(r rune) bool {
+	return r == colon || r == percent || r == slash
+}
 
 func isMacro(r rune) bool {
 	return r == arobase
@@ -452,7 +573,7 @@ func isHeredoc(r, k rune) bool {
 }
 
 func isDelim(r rune) bool {
-	return isBlank(r) || isPunct(r) || isTemplate(r)
+	return isBlank(r) || isPunct(r) || isTemplate(r) || isTransform(r)
 }
 
 func isPunct(r rune) bool {

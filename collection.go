@@ -943,6 +943,20 @@ func (r replace) Expand(e environ.Environment[Value]) (string, error) {
 	return "", nil
 }
 
+type substr struct {
+	value Value
+	start Value
+	end   Value
+}
+
+func (s substr) clone() Value {
+	return s
+}
+
+func (s substr) Expand(e environ.Environment[Value]) (string, error) {
+	return "", nil
+}
+
 const (
 	suffixTrim = 1 << iota
 	prefixTrim
@@ -971,16 +985,16 @@ const (
 	upperAllTransform
 )
 
-type transform struct {
+type changecase struct {
 	value Value
 	op    int8
 }
 
-func (t transform) clone() Value {
-	return t
+func (c changecase) clone() Value {
+	return c
 }
 
-func (t transform) Expand(e environ.Environment[Value]) (string, error) {
+func (c changecase) Expand(e environ.Environment[Value]) (string, error) {
 	return "", nil
 }
 
