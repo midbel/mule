@@ -78,6 +78,9 @@ const (
 	UpperAll
 	LowerFirst
 	LowerAll
+	ValueUnset
+	ValueSet
+	ValueAssign
 	Invalid
 )
 
@@ -130,6 +133,12 @@ func (t Token) String() string {
 		return "<lower-all>"
 	case LowerFirst:
 		return "<lower-first>"
+	case ValueUnset:
+		return "<value-unset>"
+	case ValueSet:
+		return "<value-set>"
+	case ValueAssign:
+		return "<value-assign>"
 	case Keyword:
 		prefix = "keyword"
 	case Macro:
@@ -272,6 +281,16 @@ func (s *Scanner) scanModifier(tok *Token) {
 	switch s.char {
 	case colon:
 		tok.Type = Substring
+		if k := s.peek(); k == plus {
+			tok.Type = ValueUnset
+		} else if k == minus {
+			tok.Type = ValueSet
+		} else if k == equal {
+			tok.Type = ValueAssign
+		}
+		if tok.Type != Substring {
+			s.read()
+		}
 	case comma:
 		tok.Type = LowerFirst
 		if s.peek() == s.char {
@@ -584,6 +603,9 @@ const (
 	slash      = '/'
 	comma      = ','
 	caret      = '^'
+	plus       = '+'
+	minus      = '-'
+	equal      = '='
 )
 
 func isTransform(r rune) bool {

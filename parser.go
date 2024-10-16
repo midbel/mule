@@ -409,10 +409,10 @@ func (p *Parser) parseSubstring(ident Value) (Value, error) {
 	p.next()
 	switch {
 	case p.is(Number) || p.is(Ident):
-		op.start = createLiteral(p.getCurrLiteral())
+		op.offset = createLiteral(p.getCurrLiteral())
 		p.next()
 	case p.is(Substring):
-		op.start = createLiteral("0")
+		op.offset = createLiteral("0")
 	default:
 		return nil, p.unexpected("substring")
 	}
@@ -422,10 +422,10 @@ func (p *Parser) parseSubstring(ident Value) (Value, error) {
 	p.next()
 	switch {
 	case p.is(Number) || p.is(Ident):
-		op.end = createLiteral(p.getCurrLiteral())
+		op.length = createLiteral(p.getCurrLiteral())
 		p.next()
 	case p.is(Rsub):
-		op.end = createLiteral("0")
+		op.length = createLiteral("0")
 	default:
 		return nil, p.unexpected("substring")
 	}

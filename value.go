@@ -5,6 +5,8 @@ import (
 	"net/url"
 	"slices"
 	"strings"
+	"strconv"
+	"unicode"
 
 	"github.com/midbel/mule/environ"
 )
@@ -97,9 +99,9 @@ func (r replace) Expand(e environ.Environment[Value]) (string, error) {
 }
 
 type substr struct {
-	value Value
-	start Value
-	end   Value
+	value  Value
+	offset Value
+	length Value
 }
 
 func (s substr) clone() Value {
@@ -107,7 +109,25 @@ func (s substr) clone() Value {
 }
 
 func (s substr) Expand(e environ.Environment[Value]) (string, error) {
-	return "", nil
+	value, err := s.value.Expand(e)
+	if err != nil {
+		return "", err
+	}
+	offset, err := valueToInt(s.offset, e)
+	if err != nil {
+		return "", err
+	}
+	length, err := valueToInt(s.length, e)
+	if err != nil {
+		return "", err
+	}
+	if offset >= len(value) {
+		return "", nil
+	}
+	if total := offset+length; total >= len(value) {
+		length = len(value) - offset
+	}
+	return value[offset:length], nil
 }
 
 const (
@@ -177,13 +197,62 @@ func (c changecase) Expand(e environ.Environment[Value]) (string, error) {
 	}
 	switch c.op {
 	case lowerFirstCase:
+		upd := true
+		value = strings.Map(func(r rune) rune {
+			if upd {
+				r = unicode.ToLower(r)
+			}
+			upd = unicode.IsSpace(r) || unicode.IsPunct(r)
+			return r
+		}, value)
 	case upperFirstCase:
+		upd := true
+		value = strings.Map(func(r rune) rune {
+			if upd {
+				r = unicode.ToUpper(r)
+			}
+			upd = unicode.IsSpace(r) || unicode.IsPunct(r)
+			return r
+		}, value)
 	case lowerAllCase:
 		value = strings.ToLower(value)
 	case upperAllCase:
 		value = strings.ToUpper(value)
 	}
 	return "", nil
+}
+
+const (
+	unsetValue = 1 << iota
+	setValue
+)
+
+type defaultValue struct {
+	value Value
+	other Value
+	op int8
+}
+
+func (v defaultValue) clone() Value {
+	return v
+}
+
+func (v defaultValue) Expand(e environ.Environment[Value]) (string, error) {
+	value, err := v.value.Expand(e)
+	switch op {
+	case unsetValue:
+		if err == nil {
+			return value, nil
+		}
+		return v.other.Expand(e)
+	case setValue:
+		if err == nil {
+			return v.other.Expand(e)
+		}
+		return "", err
+	default:
+		return "", nil
+	}
 }
 
 type compound []Value
@@ -267,4 +336,12 @@ func (s Set) Merge(other Set) Set {
 		ns[k] = slices.Concat(ns[k], slices.Clone(other[k]))
 	}
 	return ns
+}
+
+func valueToInt(v Value, env environ.Environment[Value]) (int, error) {
+	str, err := v.Expand(env)
+	if err != nil {
+		return 0, err
+	}
+	return strconv.Atoi(str)
 }
