@@ -3,7 +3,6 @@ package mule
 import (
 	"bytes"
 	"crypto/tls"
-	"encoding/base64"
 	"encoding/json"
 	"encoding/xml"
 	"errors"
@@ -18,7 +17,6 @@ import (
 	"strings"
 
 	"github.com/midbel/mule/environ"
-	"github.com/midbel/mule/jwt"
 	"github.com/midbel/mule/play"
 )
 
@@ -161,10 +159,15 @@ func (s *Step) Execute(obj *muleObject) (*http.Response, error) {
 	if err != nil {
 		return nil, err
 	}
-	obj.req = getMuleRequest(req, s.req.Name, nil)
+	body, err := io.ReadAll(req.Body)
+	if err != nil {
+		return nil, err
+	}
+	obj.req = getMuleRequest(req, s.req.Name, body)
 	if err := s.runBefore(); err != nil {
 		return nil, err
 	}
+	req.Body = io.NopCloser(bytes.NewReader(body))
 	res, err := http.DefaultClient.Do(req)
 	if err != nil {
 		return nil, err
@@ -173,7 +176,10 @@ func (s *Step) Execute(obj *muleObject) (*http.Response, error) {
 	if err := s.req.Expect(res); err != nil {
 		return nil, err
 	}
-	buf, _ := io.ReadAll(res.Body)
+	buf, err := io.ReadAll(res.Body)
+	if err != nil {
+		return nil, err
+	}
 
 	obj.res = getMuleResponse(res, buf)
 	if err := s.runAfter(); err != nil {
@@ -295,18 +301,6 @@ func Make(name string, parent environ.Environment[Value]) *Collection {
 		Environment: environ.Enclosed[Value](nil),
 	}
 }
-
-// func (c *Collection) Define(ident string, value Value) error {
-// 	switch ident {
-// 	case "url":
-// 	case "token":
-// 	case "username":
-// 	case "password":
-// 	default:
-// 		return c.Environment.Define(ident, value)
-// 	}
-// 	return nil
-// }
 
 func (c *Collection) Resolve(ident string) (Value, error) {
 	switch {
@@ -510,13 +504,19 @@ func (r *Request) Execute(ctx *Collection, args []string, stdout, stderr io.Writ
 		tmp  = play.Enclosed(root)
 		obj  = getMuleObject(ctx)
 	)
-	obj.req = getMuleRequest(req, r.Name, nil)
+
+	body, err := io.ReadAll(req.Body)
+	if err != nil {
+		return nil, err
+	}
+	obj.req = getMuleRequest(req, r.Name, body)
 	root.Define(muleVarName, obj)
 
 	if err := runScript(tmp, r.Before); err != nil {
 		return nil, err
 	}
 
+	req.Body = io.NopCloser(bytes.NewReader(body))
 	res, err := http.DefaultClient.Do(req)
 	if err != nil {
 		return nil, err
@@ -609,35 +609,6 @@ func (r *Request) target(env environ.Environment[Value]) (string, error) {
 func runScript(env environ.Environment[play.Value], script string) error {
 	_, err := play.EvalWithEnv(strings.NewReader(script), env)
 	return err
-}
-
-func mergeURL(left, right Value, env environ.Environment[Value]) Value {
-	if left == nil {
-		return right
-	}
-	if right == nil {
-		return left
-	}
-
-	if str, err := right.Expand(env); err == nil {
-		u, err := url.Parse(str)
-		if err == nil && u.IsAbs() {
-			return right
-		}
-	}
-
-	var cs compound
-	if c, ok := left.(compound); ok {
-		cs = append(cs, c...)
-	} else {
-		cs = append(cs, left)
-	}
-	if c, ok := right.(compound); ok {
-		cs = append(cs, c...)
-	} else {
-		cs = append(cs, right)
-	}
-	return cs
 }
 
 type Body interface {
@@ -790,96 +761,4 @@ func (b urlencodedBody) Compressed() bool {
 
 func (b urlencodedBody) ContentType() string {
 	return "application/x-www-form-urlencoded"
-}
-
-type Authorization interface {
-	Value
-	Method() string
-}
-
-type basic struct {
-	User Value
-	Pass Value
-}
-
-func (b basic) Method() string {
-	return "Basic"
-}
-
-func (b basic) clone() Value {
-	return basic{
-		User: b.User.clone(),
-		Pass: b.Pass.clone(),
-	}
-}
-
-func (b basic) Expand(env environ.Environment[Value]) (string, error) {
-	user, err := b.User.Expand(env)
-	if err != nil {
-		return "", err
-	}
-	pass, err := b.Pass.Expand(env)
-	if err != nil {
-		return "", err
-	}
-	str := fmt.Sprintf("%s:%s", user, pass)
-	return base64.URLEncoding.EncodeToString([]byte(str)), nil
-}
-
-type token struct {
-	Claims Set
-	Alg    string
-	Secret string
-}
-
-func (_ token) Method() string {
-	return "Bearer"
-}
-
-func (_ token) clone() Value {
-	return nil
-}
-
-func (t token) Expand(env environ.Environment[Value]) (string, error) {
-	var (
-		res = make(map[string]any)
-		cfg = jwt.Config{
-			Alg:    t.Alg,
-			Secret: t.Secret,
-		}
-	)
-	for k, vs := range t.Claims {
-		var rs []string
-		for i := range vs {
-			str, err := vs[i].Expand(env)
-			if err != nil {
-				return "", err
-			}
-			rs = append(rs, str)
-		}
-		if len(rs) == 1 {
-			res[k] = rs[0]
-		} else {
-			res[k] = rs
-		}
-	}
-	return jwt.Encode(res, &cfg)
-}
-
-type bearer struct {
-	Token Value
-}
-
-func (b bearer) Method() string {
-	return "Bearer"
-}
-
-func (b bearer) clone() Value {
-	return bearer{
-		Token: b.Token.clone(),
-	}
-}
-
-func (b bearer) Expand(env environ.Environment[Value]) (string, error) {
-	return b.Token.Expand(env)
 }

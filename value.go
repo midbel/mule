@@ -4,8 +4,8 @@ import (
 	"net/http"
 	"net/url"
 	"slices"
-	"strings"
 	"strconv"
+	"strings"
 	"unicode"
 
 	"github.com/midbel/mule/environ"
@@ -124,7 +124,7 @@ func (s substr) Expand(e environ.Environment[Value]) (string, error) {
 	if offset >= len(value) {
 		return "", nil
 	}
-	if total := offset+length; total >= len(value) {
+	if total := offset + length; total >= len(value) {
 		length = len(value) - offset
 	}
 	return value[offset:length], nil
@@ -230,7 +230,7 @@ const (
 type defaultValue struct {
 	value Value
 	other Value
-	op int8
+	op    int8
 }
 
 func (v defaultValue) clone() Value {
@@ -239,7 +239,7 @@ func (v defaultValue) clone() Value {
 
 func (v defaultValue) Expand(e environ.Environment[Value]) (string, error) {
 	value, err := v.value.Expand(e)
-	switch op {
+	switch v.op {
 	case unsetValue:
 		if err == nil {
 			return value, nil
@@ -344,4 +344,33 @@ func valueToInt(v Value, env environ.Environment[Value]) (int, error) {
 		return 0, err
 	}
 	return strconv.Atoi(str)
+}
+
+func mergeURL(left, right Value, env environ.Environment[Value]) Value {
+	if left == nil {
+		return right
+	}
+	if right == nil {
+		return left
+	}
+
+	if str, err := right.Expand(env); err == nil {
+		u, err := url.Parse(str)
+		if err == nil && u.IsAbs() {
+			return right
+		}
+	}
+
+	var cs compound
+	if c, ok := left.(compound); ok {
+		cs = append(cs, c...)
+	} else {
+		cs = append(cs, left)
+	}
+	if c, ok := right.(compound); ok {
+		cs = append(cs, c...)
+	} else {
+		cs = append(cs, right)
+	}
+	return cs
 }
