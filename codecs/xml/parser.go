@@ -85,7 +85,6 @@ func (p *Parser) parseNode() (Node, error) {
 	case Literal:
 		node, _ = p.parseLiteral()
 	default:
-		fmt.Println(p.curr, p.peek)
 		return nil, fmt.Errorf("unexpected element type")
 	}
 	if err != nil {
@@ -122,13 +121,17 @@ func (p *Parser) parseElement() (Node, error) {
 		return &elem, nil
 	case EndTag:
 		p.next()
+		var pos int
 		for !p.done() && !p.is(CloseTag) {
 			child, err := p.parseNode()
 			if err != nil {
 				return nil, err
 			}
 			if child != nil {
+				child.setPosition(pos)
+				child.setParent(&elem)
 				elem.Nodes = append(elem.Nodes, child)
+				pos++
 			}
 		}
 		if !p.is(CloseTag) {
@@ -280,6 +283,7 @@ const (
 	Namespace // name:
 	Attr      // name=
 	Literal
+	Digit
 	Cdata
 	CommentTag   // <!--
 	OpenTag      // <
@@ -339,6 +343,8 @@ const (
 	rangle     = '>'
 	lsquare    = '['
 	rsquare    = ']'
+	lparen     = '('
+	rparen     = ')'
 	colon      = ':'
 	quote      = '"'
 	apos       = '\''
@@ -351,6 +357,12 @@ const (
 	dash       = '-'
 	underscore = '_'
 	dot        = '.'
+	arobase    = '@'
+	comma      = ','
+	plus       = '+'
+	star       = '*'
+	percent    = '%'
+	pipe       = '|'
 )
 
 type state int8
