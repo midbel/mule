@@ -26,18 +26,45 @@ const (
 	NONE  = "none"
 )
 
-type Claims struct {
-	Id        string    `json:"jti,omitempty"`
-	Issuer    string    `json:"iss,omitempty"`
-	Audience  string    `json:"aud,omitempty"`
-	Subject   string    `json:"sub,omitempty"`
-	Expires   time.Time `json:"exp,omitempty"`
-	NotBefore time.Time `json:"nbf,omitempty"`
-	IssueAt   time.Time `json:"iat,omitempty"`
+type StdClaims struct {
+	Id        string   
+	Issuer    string   
+	Audience  string   
+	Subject   string   
+	Expires   time.Time
+	NotBefore time.Time
+	IssueAt   time.Time
+}
+
+func (c StdClaims) MarshalJSON() ([]byte, error) {
+	claims := make(map[string]any)
+
+	addStrClaim := func(id, value string) {
+		if value == "" {
+			return
+		}
+		claims[id] = value
+	}
+
+	addTimeClaim := func(id string, value time.Time) {
+		if value.IsZero() {
+			return 
+		}
+		claims[id] = value.Unix()
+	}
+	addStrClaim("id", c.Id)
+	addStrClaim("iss", c.Issuer)
+	addStrClaim("aud", c.Audience)
+	addStrClaim("sub", c.Subject)
+	addTimeClaim("exp", c.Expires)
+	addTimeClaim("nbf", c.NotBefore)
+	addTimeClaim("iat", c.IssueAt)
+
+	return json.Marshal(claims)
 }
 
 type Config struct {
-	Claims
+	Claims 	StdClaims
 	Alg    string
 	Secret string
 	Ttl    time.Duration
