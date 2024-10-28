@@ -9,13 +9,14 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"reflect"
 	"strings"
 	"time"
 )
 
 var (
-	ErrSign   = errors.New("invalid signature")
-	ErrFormed = errors.New("malformed")
+	ErrSign      = errors.New("invalid signature")
+	ErrMalformed = errors.New("malformed")
 )
 
 const (
@@ -27,10 +28,10 @@ const (
 )
 
 type StdClaims struct {
-	Id        string   
-	Issuer    string   
-	Audience  string   
-	Subject   string   
+	Id        string
+	Issuer    string
+	Audience  []string
+	Subject   string
 	Expires   time.Time
 	NotBefore time.Time
 	IssueAt   time.Time
@@ -39,7 +40,7 @@ type StdClaims struct {
 func (c StdClaims) MarshalJSON() ([]byte, error) {
 	claims := make(map[string]any)
 
-	addStrClaim := func(id, value string) {
+	addStrClaim := func(id string, value any) {
 		if value == "" {
 			return
 		}
@@ -48,7 +49,7 @@ func (c StdClaims) MarshalJSON() ([]byte, error) {
 
 	addTimeClaim := func(id string, value time.Time) {
 		if value.IsZero() {
-			return 
+			return
 		}
 		claims[id] = value.Unix()
 	}
@@ -64,54 +65,59 @@ func (c StdClaims) MarshalJSON() ([]byte, error) {
 }
 
 type Config struct {
-	Claims 	StdClaims
+	Claims StdClaims
 	Alg    string
 	Secret string
 	Ttl    time.Duration
 }
 
 func (c Config) getSigner() (Signer, error) {
-	var (
-		sign   Signer
-		secret = []byte(c.Secret)
-	)
-	switch c.Alg {
+	return getSigner(c.Alg, c.Secret)
+}
+
+func getSigner(alg, secret string) (Signer, error) {
+	var sign Signer
+	switch alg {
 	default:
-		return nil, fmt.Errorf("%s: unsupported algorithm", c.Alg)
+		return nil, fmt.Errorf("%s: unsupported algorithm", alg)
 	case HS256:
-		sign = hmac.New(sha256.New, secret)
+		sign = hmac.New(sha256.New, []byte(secret))
 	case HS384:
-		sign = hmac.New(sha512.New384, secret)
+		sign = hmac.New(sha512.New384, []byte(secret))
 	case HS512:
-		sign = hmac.New(sha512.New, secret)
+		sign = hmac.New(sha512.New, []byte(secret))
 	case NONE:
 		sign = none{}
 	}
 	return sign, nil
 }
 
-func Decode(token string, config *Config) error {
+func Decode(token string, config *Config) (map[string]any, error) {
 	parts := strings.Split(token, ".")
 	if len(parts) != 3 {
-		return ErrFormed
+		return nil, ErrMalformed
 	}
-	signer, err := config.getSigner()
+	signer, err := getSignerFromHeader(parts[0], config.Secret)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	var (
 		body  = parts[0] + "." + parts[1]
 		check = signer.Sum([]byte(body))
 	)
 	if sign, err := std.DecodeString(parts[2]); err != nil || !bytes.Equal(sign, check) {
-		return ErrSign
+		return nil, ErrSign
 	}
-	return nil
+	payload := make(map[string]any)
+	return payload, unmarshalPart(parts[1], &payload)
 }
 
 func Encode(payload any, config *Config) (string, error) {
 	signer, err := config.getSigner()
 	if err != nil {
+		return "", err
+	}
+	if payload, err = prepare(config.Claims, payload); err != nil {
 		return "", err
 	}
 	var (
@@ -128,9 +134,23 @@ type jwtHeader struct {
 	Typ string `json:"typ"`
 }
 
+func getSignerFromHeader(hdr, secret string) (Signer, error) {
+	jose, err := decodeHeader(hdr)
+	if err != nil {
+		return nil, err
+	}
+	return getSigner(jose.Alg, secret)
+}
+
 func decodeHeader(str string) (jwtHeader, error) {
 	var hdr jwtHeader
-	return hdr, unmarshalPart(str, &hdr)
+	if err := unmarshalPart(str, &hdr); err != nil {
+		return hdr, err
+	}
+	if hdr.Typ != JWT {
+		return hdr, ErrMalformed
+	}
+	return hdr, nil
 }
 
 func encodeHeader(alg string) (string, error) {
@@ -168,4 +188,59 @@ func (n none) Sum(_ []byte) []byte {
 
 type mac struct {
 	Signer
+}
+
+func prepare(claims StdClaims, payload any) (map[string]any, error) {
+	body := make(map[string]any)
+
+	addStrClaim := func(id string, value any) {
+		if value == "" {
+			return
+		}
+		body[id] = value
+	}
+
+	addTimeClaim := func(id string, value time.Time) {
+		if value.IsZero() {
+			return
+		}
+		body[id] = value.Unix()
+	}
+	addStrClaim("id", claims.Id)
+	addStrClaim("iss", claims.Issuer)
+	addStrClaim("aud", claims.Audience)
+	addStrClaim("sub", claims.Subject)
+	addTimeClaim("exp", claims.Expires)
+	addTimeClaim("nbf", claims.NotBefore)
+	addTimeClaim("iat", claims.IssueAt)
+
+	v := reflect.ValueOf(payload)
+	if v.Kind() == reflect.Ptr {
+		v = v.Elem()
+	}
+	switch v.Kind() {
+	case reflect.Struct:
+		t := v.Type()
+		for i := 0; i < v.NumField(); i++ {
+			var (
+				f = v.Field(i)
+				d = t.Field(i)
+				n = d.Name
+			)
+			if tag, ok := d.Tag.Lookup("jwt"); ok {
+				n = tag
+			} else if tag, ok := d.Tag.Lookup("json"); ok {
+				n = tag
+			}
+			body[n] = f.Interface()
+		}
+	case reflect.Map:
+		it := v.MapRange()
+		for it.Next() {
+			body[it.Key().String()] = it.Value().Interface()
+		}
+	default:
+		return nil, fmt.Errorf("invalid payload given")
+	}
+	return body, nil
 }
