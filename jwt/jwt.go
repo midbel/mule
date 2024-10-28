@@ -9,6 +9,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"hash"
 	"reflect"
 	"strings"
 	"time"
@@ -24,6 +25,9 @@ const (
 	HS256 = "HS256"
 	HS384 = "HS384"
 	HS512 = "HS512"
+	RS256 = "RS256"
+	RS384 = "RS384"
+	RS512 = "RS512"
 	NONE  = "none"
 )
 
@@ -40,7 +44,7 @@ type StdClaims struct {
 func (c StdClaims) MarshalJSON() ([]byte, error) {
 	claims := make(map[string]any)
 
-	addStrClaim := func(id string, value any) {
+	addStrClaim := func(id, value string) {
 		if value == "" {
 			return
 		}
@@ -55,7 +59,9 @@ func (c StdClaims) MarshalJSON() ([]byte, error) {
 	}
 	addStrClaim("id", c.Id)
 	addStrClaim("iss", c.Issuer)
-	addStrClaim("aud", c.Audience)
+	if len(c.Audience) > 0 {
+		claims["aud"] = c.Audience
+	}
 	addStrClaim("sub", c.Subject)
 	addTimeClaim("exp", c.Expires)
 	addTimeClaim("nbf", c.NotBefore)
@@ -76,7 +82,7 @@ func (c Config) getSigner() (Signer, error) {
 }
 
 func getSigner(alg, secret string) (Signer, error) {
-	var sign Signer
+	var sign hash.Hash
 	switch alg {
 	default:
 		return nil, fmt.Errorf("%s: unsupported algorithm", alg)
@@ -87,9 +93,12 @@ func getSigner(alg, secret string) (Signer, error) {
 	case HS512:
 		sign = hmac.New(sha512.New, []byte(secret))
 	case NONE:
-		sign = none{}
+		return none{}, nil
 	}
-	return sign, nil
+	mc := mac{
+		Signer: sign,
+	}
+	return mc, nil
 }
 
 func Decode(token string, config *Config) (map[string]any, error) {
@@ -187,13 +196,19 @@ func (n none) Sum(_ []byte) []byte {
 }
 
 type mac struct {
-	Signer
+	Signer hash.Hash
+}
+
+func (m mac) Sum(msg []byte) []byte {
+	defer m.Signer.Reset()
+	m.Signer.Write(msg)
+	return m.Signer.Sum(nil)
 }
 
 func prepare(claims StdClaims, payload any) (map[string]any, error) {
 	body := make(map[string]any)
 
-	addStrClaim := func(id string, value any) {
+	addStrClaim := func(id, value string) {
 		if value == "" {
 			return
 		}
@@ -208,7 +223,9 @@ func prepare(claims StdClaims, payload any) (map[string]any, error) {
 	}
 	addStrClaim("id", claims.Id)
 	addStrClaim("iss", claims.Issuer)
-	addStrClaim("aud", claims.Audience)
+	if len(claims.Audience) > 0 {
+		body["aud"] = claims.Audience
+	}
 	addStrClaim("sub", claims.Subject)
 	addTimeClaim("exp", claims.Expires)
 	addTimeClaim("nbf", claims.NotBefore)

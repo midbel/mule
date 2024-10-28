@@ -65,6 +65,10 @@ func (o *Object) String() string {
 	)
 	buf.WriteRune(lcurly)
 	for k, v := range o.Fields {
+		f, ok := v.(Field)
+		if !ok {
+			continue
+		}
 		if ix > 0 {
 			buf.WriteRune(comma)
 			buf.WriteRune(space)
@@ -73,11 +77,11 @@ func (o *Object) String() string {
 		buf.WriteRune(colon)
 		buf.WriteRune(space)
 
-		_, quoted := v.(String)
+		_, quoted := f.Value.(String)
 		if quoted {
 			buf.WriteRune(dquote)
 		}
-		fmt.Fprint(&buf, v)
+		fmt.Fprint(&buf, f.Value)
 		if quoted {
 			buf.WriteRune(dquote)
 		}
@@ -1327,19 +1331,28 @@ func ValuesToNative(arg Value) (interface{}, error) {
 	case *Object:
 		arr := make(map[string]interface{})
 		for k, v := range a.Fields {
-			vv, err := ValuesToNative(v)
+			f, ok := v.(Field)
+			if !ok {
+				return nil, fmt.Errorf("unexpected value type")
+			}
+			vv, err := ValuesToNative(f.Value)
 			if err != nil {
 				return nil, err
 			}
 			arr[fmt.Sprintf("%s", k)] = vv
 		}
 		return arr, nil
+	case Nil:
+		return nil, nil
 	default:
 		return nil, fmt.Errorf("type can not be converted to json")
 	}
 }
 
 func NativeToValues(obj interface{}) (Value, error) {
+	if obj == nil {
+		return Nil{}, nil
+	}
 	switch v := obj.(type) {
 	case string:
 		return getString(v), nil
@@ -1372,39 +1385,153 @@ func NativeToValues(obj interface{}) (Value, error) {
 	}
 }
 
-var jwtConfig = &jwt.Config{
-	Secret: "supersecretapikey11!",
-	Alg:    jwt.HS256,
-	Ttl:    time.Hour * 24,
+type jwtGlobal struct {
+	config *jwt.Config
 }
 
 func makeJWT() Value {
-	g := global{
-		name:  "JWT",
-		fnset: make(map[string]Callable),
+	config := jwt.Config{
+		Secret: "",
+		Alg:    jwt.HS256,
+		Ttl:    time.Hour * 24,
 	}
-	g.fnset["decode"] = asCallable(jwtDecode)
-	g.fnset["encode"] = asCallable(jwtEncode)
-
+	g := jwtGlobal{
+		config: &config,
+	}
 	return g
 }
 
-func jwtDecode(args []Value) (Value, error) {
-	if len(args) != 1 {
-		return nil, ErrArgument
+func (g jwtGlobal) Type() string {
+	return "object"
+}
+
+func (g jwtGlobal) True() Value {
+	return getBool(true)
+}
+
+func (g jwtGlobal) String() string {
+	return jwt.JWT
+}
+
+func (g jwtGlobal) Get(prop Value) (Value, error) {
+	str, ok := prop.(fmt.Stringer)
+	if !ok {
+		return nil, ErrEval
 	}
-	str, ok := args[0].(String)
+	switch name := str.String(); name {
+	case "secret":
+		return getString(g.config.Secret), nil
+	case "alg":
+		return getString(g.config.Alg), nil
+	case jwt.HS256, jwt.HS384, jwt.HS512:
+		return getString(name), nil
+	default:
+		return Void{}, fmt.Errorf("%s: undefined property", name)
+	}
+}
+
+func (g jwtGlobal) Set(prop, value Value) error {
+	str, ok := prop.(fmt.Stringer)
+	if !ok {
+		return ErrEval
+	}
+	switch name := str.String(); name {
+	case "secret":
+		str, ok := value.(String)
+		if !ok {
+			return ErrEval
+		}
+		g.config.Secret = str.String()
+	case "alg":
+		str, ok := value.(String)
+		if !ok {
+			return ErrEval
+		}
+		g.config.Alg = str.String()
+	default:
+		return fmt.Errorf("%s: undefined property", name)
+	}
+	return nil
+}
+
+func (g jwtGlobal) Call(ident string, args []Value) (Value, error) {
+	if len(args) == 0 || len(args) > 2 {
+		return Void{}, ErrArgument
+	}
+	cfg := g.config
+	if len(args) == 2 {
+		c, err := jwtConfigure(args[1])
+		if err != nil {
+			return Void{}, err
+		}
+		cfg = c
+	}
+	switch ident {
+	case "encode":
+		return jwtEncode(args[0], cfg)
+	case "decode":
+		return jwtDecode(args[0], cfg)
+	default:
+		return nil, fmt.Errorf("%s.%s: undefined function", jwt.JWT, ident)
+	}
+}
+
+func jwtConfigure(arg Value) (*jwt.Config, error) {
+	getter, ok := arg.(interface{ Get(Value) (Value, error) })
+	if !ok {
+		return nil, ErrEval
+	}
+
+	strFromGet := func(ident string) (string, error) {
+		v, err := getter.Get(getString(ident))
+		if err != nil {
+			return "", err
+		}
+		str, ok := v.(fmt.Stringer)
+		if !ok {
+			return "", ErrEval
+		}
+		return str.String(), nil
+	}
+	var (
+		cfg jwt.Config
+		err error
+	)
+	if cfg.Alg, err = strFromGet("alg"); err != nil {
+		return nil, err
+	}
+	if cfg.Secret, err = strFromGet("secret"); err != nil {
+		return nil, err
+	}
+	return &cfg, nil
+}
+
+func jwtDecode(arg Value, cfg *jwt.Config) (Value, error) {
+	str, ok := arg.(String)
 	if !ok {
 		return Void{}, ErrEval
 	}
-	return Void{}, jwt.Decode(str.String(), jwtConfig)
+	body, err := jwt.Decode(str.String(), cfg)
+	if err != nil {
+		return Void{}, err
+	}
+	obj := createObject()
+	for k, v := range body {
+		vs, err := NativeToValues(v)
+		if err != nil {
+			return Void{}, err
+		}
+		obj.Set(getString(k), vs)
+	}
+	return obj, nil
 }
 
-func jwtEncode(args []Value) (Value, error) {
-	if len(args) != 1 {
-		return Void{}, ErrArgument
+func jwtEncode(arg Value, cfg *jwt.Config) (Value, error) {
+	val, err := ValuesToNative(arg)
+	if err != nil {
+		return nil, err
 	}
-	str, err := jwt.Encode(args[0], jwtConfig)
+	str, err := jwt.Encode(val, cfg)
 	return getString(str), err
 }
 

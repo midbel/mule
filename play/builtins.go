@@ -76,6 +76,6 @@ func (u *Url) Get(ident Value) (Value, error) {
 	case "scheme":
 		return getString(u.value.Scheme), nil
 	default:
-		return nil, fmt.Errorf("%s: undefined property", name)
+		return Void{}, fmt.Errorf("%s: undefined property", name)
 	}
 }
