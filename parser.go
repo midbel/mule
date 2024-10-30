@@ -587,11 +587,12 @@ func (p *Parser) parseBody() (Body, error) {
 		}
 		return jsonify(set), nil
 	case "xml":
-		set, err := p.parseSet("json")
+		p.next()
+		set, err := p.parseSet("xml")
 		if err != nil {
 			return nil, err
 		}
-		return xmlify(set), nil
+		return xmlify(set)
 	case "text":
 		return nil, nil
 	case "csv":
@@ -878,6 +879,13 @@ func (p *Parser) parseSet(ctx string) (Set, error) {
 		}
 		ident := p.getCurrLiteral()
 		p.next()
+		if p.is(Lbrace) {
+			sub, err := p.parseSet(ctx)
+			if err == nil {
+				set[ident] = append(set[ident], sub)
+			}
+			return err
+		}
 		for !p.done() && !p.is(EOL) {
 			v, err := p.parseValue()
 			if err != nil {

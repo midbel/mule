@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io/fs"
 	"net/http"
+	"net/http/httputil"
 	"os"
 
 	"github.com/midbel/mule/jwt"
@@ -29,6 +30,7 @@ func main() {
 		}
 	}
 
+	http.Handle("/dump", debugRequest())
 	http.Handle("/token/new", createToken())
 	http.Handle("/token", readToken())
 	http.Handle("/codes/400", handleCode(http.StatusBadRequest))
@@ -50,6 +52,18 @@ const (
 	audience = "client"
 )
 
+func debugRequest() http.Handler {
+	fn := func(w http.ResponseWriter, r *http.Request) {
+		buf, err := httputil.DumpRequest(r, true)
+		if err != nil {
+			w.WriteHeader(http.StatusInternalServerError)
+			return
+		}
+		w.Write(buf)
+	}
+	return http.HandlerFunc(fn)
+}
+
 func readToken() http.Handler {
 	cfg := jwt.Config{
 		Alg:    jwt.HS256,
@@ -67,7 +81,7 @@ func readToken() http.Handler {
 			w.WriteHeader(http.StatusBadRequest)
 			return
 		}
-		if err := jwt.Decode(tok.Token, &cfg); err != nil {
+		if _, err := jwt.Decode(tok.Token, &cfg); err != nil {
 			w.WriteHeader(http.StatusUnauthorized)
 			return
 		}

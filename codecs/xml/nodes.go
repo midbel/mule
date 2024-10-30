@@ -362,7 +362,9 @@ func NewDocument(root Node) *Document {
 }
 
 func (d *Document) Write(w io.Writer) error {
-	return NewWriter(w).Write(d)
+	ws := NewWriter(w)
+	ws.Compact = true
+	return ws.Write(d)
 }
 
 func (d *Document) WriteString() (string, error) {
@@ -407,14 +409,16 @@ func (d *Document) FindAll(name string, depth int) []Node {
 	return nil
 }
 
-func (d *Document) Append(node Node) {
+func (d *Document) Append(node Node) error {
 	if el, ok := d.root.(*Element); ok {
 		el.Append(node)
 	}
+	return nil
 }
 
-func (d *Document) Insert(node Node, index int) {
+func (d *Document) Insert(node Node, index int) error {
 	if el, ok := d.root.(*Element); ok {
 		el.Insert(node, index)
 	}
+	return nil
 }

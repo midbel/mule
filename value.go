@@ -279,6 +279,14 @@ func (c compound) Expand(e environ.Environment[Value]) (string, error) {
 
 type Set map[string][]Value
 
+func (s Set) clone() Value {
+	return s
+}
+
+func (s Set) Expand(_ environ.Environment[Value]) (string, error) {
+	return "", nil
+}
+
 func (s Set) Headers(env environ.Environment[Value]) (http.Header, error) {
 	hs := make(http.Header)
 	for k := range s {

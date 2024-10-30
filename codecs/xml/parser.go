@@ -14,6 +14,8 @@ import (
 
 const MaxDepth = 512
 
+const SupportedVersion = "1.0"
+
 type Parser struct {
 	scan *Scanner
 	curr Token

@@ -29,7 +29,6 @@ func (w *Writer) Write(doc *Document) error {
 	if err := w.writeProlog(); err != nil {
 		return err
 	}
-	w.writeNL()
 	return w.writeNode(doc.root, -1)
 }
 

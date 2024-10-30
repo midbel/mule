@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"crypto/tls"
 	"encoding/json"
-	"encoding/xml"
 	"errors"
 	"flag"
 	"fmt"
@@ -16,6 +15,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/midbel/mule/codecs/xml"
 	"github.com/midbel/mule/environ"
 	"github.com/midbel/mule/play"
 )
@@ -618,25 +618,87 @@ type Body interface {
 }
 
 type xmlBody struct {
-	Set
+	root string
+	elem Value
 }
 
-func xmlify(set Set) Body {
-	return xmlBody{
-		Set: set,
+func xmlify(set Set) (Body, error) {
+	if len(set) != 1 {
+		return nil, fmt.Errorf("only one root element allowed")
 	}
+	var root string
+	for k := range set {
+		root = k
+		break
+	}
+	if len(set[root]) != 1 {
+		return nil, fmt.Errorf("invalid root element")
+	}
+	return xmlBody{
+		root: root,
+		elem: set[root][0],
+	}, nil
 }
 
 func (b xmlBody) Expand(env environ.Environment[Value]) (string, error) {
-	vs, err := b.Set.Map(env)
-	if err != nil {
-		return "", err
+	var (
+		tree func(string, Value) (xml.Node, error)
+		root = xml.NewElement(b.root, "")
+		doc  = xml.NewDocument(root)
+	)
+
+	tree = func(name string, val Value) (xml.Node, error) {
+		set, ok := val.(Set)
+		if !ok {
+			str, err := val.Expand(env)
+			if err != nil {
+				return nil, err
+			}
+			return xml.NewText(str), nil
+		}
+		el := xml.NewElement(name, "")
+		for k, vs := range set {
+			if strings.HasPrefix(k, "_") {
+				if len(vs) != 1 {
+					return nil, fmt.Errorf("multi value attribute")
+				}
+				str, err := vs[0].Expand(env)
+				if err != nil {
+					return nil, err
+				}
+				a := xml.NewAttribute(str, strings.TrimPrefix(k, "_"), "")
+				el.Attrs = append(el.Attrs, a)
+				continue
+			}
+			for i := range vs {
+				sub := xml.NewElement(k, "")
+				child, err := tree(k, vs[i])
+				if err != nil {
+					return nil, err
+				}
+				sub.Append(child)
+				el.Append(sub)
+			}
+		}
+		return el, nil
 	}
-	var buf bytes.Buffer
-	if err := xml.NewEncoder(&buf).Encode(vs); err != nil {
-		return "", err
+
+	el, ok := b.elem.(Set)
+	if !ok {
+		return "", fmt.Errorf("invalid element type")
 	}
-	return buf.String(), nil
+	for k, vs := range el {
+		for _, v := range vs {
+			el, err := tree(k, v)
+			if err != nil {
+				return "", err
+			}
+			doc.Append(el)
+		}
+	}
+	str, _ := doc.WriteString()
+	fmt.Println(str)
+	return doc.WriteString()
 }
 
 func (b xmlBody) clone() Value {
