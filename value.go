@@ -219,7 +219,7 @@ func (c changecase) Expand(e environ.Environment[Value]) (string, error) {
 	case upperAllCase:
 		value = strings.ToUpper(value)
 	}
-	return "", nil
+	return value, nil
 }
 
 const (

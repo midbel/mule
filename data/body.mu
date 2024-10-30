@@ -1,4 +1,4 @@
-url "http://localhost:8881"
+url http://localhost:8881
 
 variables {
 	answer 42

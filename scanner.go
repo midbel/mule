@@ -369,7 +369,13 @@ func (s *Scanner) scanComment(tok *Token) {
 }
 
 func (s *Scanner) scanIdent(tok *Token) {
-	for !isDelim(s.char) && !s.done() {
+	isOk := func() bool {
+		if s.substitute() {
+			return isTransform(s.char)
+		}
+		return isDelim(s.char)
+	}
+	for !isOk() && !s.done() {
 		s.write()
 		s.read()
 	}
@@ -621,7 +627,7 @@ func isHeredoc(r, k rune) bool {
 }
 
 func isDelim(r rune) bool {
-	return isBlank(r) || isPunct(r) || isTemplate(r) || isTransform(r)
+	return isBlank(r) || isPunct(r) || isTemplate(r)
 }
 
 func isPunct(r rune) bool {
