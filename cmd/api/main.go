@@ -60,6 +60,7 @@ func debugRequest() http.Handler {
 			return
 		}
 		w.Write(buf)
+		fmt.Println(string(buf))
 	}
 	return http.HandlerFunc(fn)
 }

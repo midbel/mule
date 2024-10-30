@@ -7,6 +7,14 @@ variables {
 post xml {
 	url "/dump"
 
+	auth jwt {
+		name foobar
+		age  42
+		roles dev
+		roles adm
+		iss  http://foobar.org
+	}
+
 	body xml {
 		repositories {
 			repo {

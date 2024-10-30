@@ -640,9 +640,6 @@ func (p *Parser) parseJwtAuth() (Authorization, error) {
 		auth.Alg = p.getCurrLiteral()
 		p.next()
 	}
-	if !p.is(Lbrace) {
-		return auth, p.unexpected("jwt")
-	}
 	err = p.parseBraces("jwt", func() error {
 		var (
 			key string
