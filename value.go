@@ -301,8 +301,8 @@ func (s Set) Headers(env environ.Environment[Value]) (http.Header, error) {
 	return hs, nil
 }
 
-func (s Set) Map(env environ.Environment[Value]) (map[string]interface{}, error) {
-	vs := make(map[string]interface{})
+func (s Set) Map(env environ.Environment[Value]) (map[string]any, error) {
+	vs := make(map[string]any)
 	for k := range s {
 		var arr []string
 		for _, v := range s[k] {

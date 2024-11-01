@@ -1,20 +1,32 @@
-url http://localhost:8881
+url http://localhost:8881/dump
 
 variables {
 	answer 42
 }
 
-post xml {
-	url "/dump"
+auth jwt {
+	name foobar
+	age  42
+	roles dev
+	roles adm
+	iss  http://foobar.org
+}
 
-	auth jwt {
-		name foobar
-		age  42
-		roles dev
-		roles adm
-		iss  http://foobar.org
+post json {
+	body json {
+		languages go
+		languages js
+		name mule
+		developer {
+			name midbel
+			mail "midbel@foobar.org"
+			org  foobar
+		}
+		repo http://gitea.foobar.org/midbel/mule
 	}
+}
 
+post xml {
 	body xml {
 		repositories {
 			repo {
@@ -31,14 +43,6 @@ post xml {
 				_status waiting
 				_star $answer
 				name tish
-				author midbel
-				language go
-			}
-			repo {
-				_id sweet
-				_status waiting
-				_star $answer
-				name sweet
 				author midbel
 				language go
 			}

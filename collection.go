@@ -3,7 +3,6 @@ package mule
 import (
 	"bytes"
 	"crypto/tls"
-	"encoding/json"
 	"errors"
 	"flag"
 	"fmt"
@@ -14,7 +13,9 @@ import (
 	"slices"
 	"strconv"
 	"strings"
+	"time"
 
+	"github.com/midbel/mule/codecs/json"
 	"github.com/midbel/mule/codecs/xml"
 	"github.com/midbel/mule/environ"
 	"github.com/midbel/mule/play"
@@ -264,6 +265,12 @@ type cmdUnset struct {
 	Ident Value
 }
 
+type Exchange struct {
+	Total time.Duration
+	*http.Request
+	*http.Response
+}
+
 type Collection struct {
 	Common
 	environ.Environment[Value]
@@ -490,14 +497,17 @@ func (r *Request) Merge(other *Request) error {
 	return nil
 }
 
-func (r *Request) Execute(ctx *Collection, args []string, stdout, stderr io.Writer) (*http.Response, error) {
+func (r *Request) Execute(ctx *Collection, args []string, stdout, stderr io.Writer) (*Exchange, error) {
 	if err := r.parseArgs(args); err != nil {
 		return nil, err
 	}
+	var exchange Exchange
+
 	req, err := r.build(ctx)
 	if err != nil {
 		return nil, err
 	}
+	exchange.Request = req
 
 	var (
 		root = play.Enclosed(play.Default())
@@ -521,6 +531,7 @@ func (r *Request) Execute(ctx *Collection, args []string, stdout, stderr io.Writ
 	if err != nil {
 		return nil, err
 	}
+	exchange.Response = res
 	defer res.Body.Close()
 	if err := r.Expect(res); err != nil {
 		return nil, err
@@ -533,7 +544,7 @@ func (r *Request) Execute(ctx *Collection, args []string, stdout, stderr io.Writ
 		return nil, err
 	}
 	res.Body = io.NopCloser(bytes.NewReader(buf))
-	return res, nil
+	return &exchange, nil
 }
 
 func (r *Request) parseArgs(args []string) error {
@@ -642,46 +653,9 @@ func xmlify(set Set) (Body, error) {
 
 func (b xmlBody) Expand(env environ.Environment[Value]) (string, error) {
 	var (
-		tree func(string, Value) (xml.Node, error)
 		root = xml.NewElement(b.root, "")
 		doc  = xml.NewDocument(root)
 	)
-
-	tree = func(name string, val Value) (xml.Node, error) {
-		set, ok := val.(Set)
-		if !ok {
-			str, err := val.Expand(env)
-			if err != nil {
-				return nil, err
-			}
-			return xml.NewText(str), nil
-		}
-		el := xml.NewElement(name, "")
-		for k, vs := range set {
-			if strings.HasPrefix(k, "_") {
-				if len(vs) != 1 {
-					return nil, fmt.Errorf("multi value attribute")
-				}
-				str, err := vs[0].Expand(env)
-				if err != nil {
-					return nil, err
-				}
-				a := xml.NewAttribute(str, strings.TrimPrefix(k, "_"), "")
-				el.Attrs = append(el.Attrs, a)
-				continue
-			}
-			for i := range vs {
-				sub := xml.NewElement(k, "")
-				child, err := tree(k, vs[i])
-				if err != nil {
-					return nil, err
-				}
-				sub.Append(child)
-				el.Append(sub)
-			}
-		}
-		return el, nil
-	}
 
 	el, ok := b.elem.(Set)
 	if !ok {
@@ -689,16 +663,50 @@ func (b xmlBody) Expand(env environ.Environment[Value]) (string, error) {
 	}
 	for k, vs := range el {
 		for _, v := range vs {
-			el, err := tree(k, v)
+			el, err := b.tree(env, k, v)
 			if err != nil {
 				return "", err
 			}
 			doc.Append(el)
 		}
 	}
-	str, _ := doc.WriteString()
-	fmt.Println(str)
 	return doc.WriteString()
+}
+
+func (b xmlBody) tree(env environ.Environment[Value], name string, val Value) (xml.Node, error) {
+	set, ok := val.(Set)
+	if !ok {
+		str, err := val.Expand(env)
+		if err != nil {
+			return nil, err
+		}
+		return xml.NewText(str), nil
+	}
+	el := xml.NewElement(name, "")
+	for k, vs := range set {
+		if strings.HasPrefix(k, "_") {
+			if len(vs) != 1 {
+				return nil, fmt.Errorf("multi value attribute")
+			}
+			str, err := vs[0].Expand(env)
+			if err != nil {
+				return nil, err
+			}
+			a := xml.NewAttribute(str, strings.TrimPrefix(k, "_"), "")
+			el.Attrs = append(el.Attrs, a)
+			continue
+		}
+		for i := range vs {
+			sub := xml.NewElement(k, "")
+			child, err := b.tree(env, k, vs[i])
+			if err != nil {
+				return nil, err
+			}
+			sub.Append(child)
+			el.Append(sub)
+		}
+	}
+	return el, nil
 }
 
 func (b xmlBody) clone() Value {
@@ -724,15 +732,33 @@ func jsonify(set Set) Body {
 }
 
 func (b jsonBody) Expand(env environ.Environment[Value]) (string, error) {
-	vs, err := b.Set.Map(env)
+	doc, err := b.expand(env)
 	if err != nil {
 		return "", err
 	}
 	var buf bytes.Buffer
-	if err := json.NewEncoder(&buf).Encode(vs); err != nil {
-		return "", err
+	ws := json.NewWriter(&buf)
+	return buf.String(), ws.Write(doc)
+}
+
+func (b jsonBody) expand(env environ.Environment[Value]) (map[string]any, error) {
+	vs := make(map[string]any)
+	for k := range b.Set {
+		var arr []any
+		for _, v := range b.Set[k] {
+			str, err := v.Expand(env)
+			if err != nil {
+				return nil, err
+			}
+			arr = append(arr, str)
+		}
+		var dat interface{} = arr
+		if len(arr) == 1 {
+			dat = arr[0]
+		}
+		vs[k] = dat
 	}
-	return buf.String(), nil
+	return vs, nil
 }
 
 func (b jsonBody) clone() Value {
