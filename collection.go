@@ -736,29 +736,46 @@ func (b jsonBody) Expand(env environ.Environment[Value]) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	var buf bytes.Buffer
-	ws := json.NewWriter(&buf)
-	return buf.String(), ws.Write(doc)
+	var (
+		buf bytes.Buffer
+		ws  = json.NewWriter(&buf)
+	)
+	if err = ws.Write(doc); err != nil {
+		return "", err
+	}
+	return buf.String(), nil
 }
 
 func (b jsonBody) expand(env environ.Environment[Value]) (map[string]any, error) {
-	vs := make(map[string]any)
-	for k := range b.Set {
-		var arr []any
-		for _, v := range b.Set[k] {
-			str, err := v.Expand(env)
-			if err != nil {
-				return nil, err
+	var expand func(Set) (map[string]any, error)
+	expand = func(set Set) (map[string]any, error) {
+		vs := make(map[string]any)
+		for k := range set {
+			var (
+				arr []any
+				sub any
+				err error
+			)
+			for _, v := range set[k] {
+				if x, ok := v.(Set); ok {
+					sub, err = expand(x)
+				} else {
+					sub, err = v.Expand(env)
+				}
+				if err != nil {
+					return nil, err
+				}
+				arr = append(arr, sub)
 			}
-			arr = append(arr, str)
+			var dat interface{} = arr
+			if len(arr) == 1 {
+				dat = arr[0]
+			}
+			vs[k] = dat
 		}
-		var dat interface{} = arr
-		if len(arr) == 1 {
-			dat = arr[0]
-		}
-		vs[k] = dat
+		return vs, nil
 	}
-	return vs, nil
+	return expand(b.Set)
 }
 
 func (b jsonBody) clone() Value {
