@@ -66,7 +66,48 @@ func (e *Element) Root() bool {
 }
 
 func (e *Element) Leaf() bool {
+	if len(e.Nodes) == 1 {
+		_, ok := e.Nodes[0].(*Text)
+		return ok
+	}
 	return len(e.Nodes) == 0
+}
+
+func (e *Element) Map() map[string]any {
+	values := make(map[string]any)
+	if len(e.Attrs) > 0 {
+		attrs := make(map[string]any)
+		for i := range e.Attrs {
+			attrs[e.Attrs[i].Name] = e.Attrs[i].Value
+		}
+		values["attrs"] = attrs
+	}
+
+	for _, n := range e.Nodes {
+		var val any
+		switch n := n.(type) {
+		case *Element:
+			if !n.Leaf() {
+				val = n.Map()
+			} else {
+				val = n.Value()
+			}
+		case *Text:
+			val = n.Value()
+		default:
+			continue
+		}
+		if arr, ok := values[n.LocalName()]; ok {
+			if x, ok := arr.([]any); ok {
+				values[n.LocalName()] = append(x, val)
+			} else {
+				values[n.LocalName()] = append(x, arr, val)
+			}
+		} else {
+			values[n.LocalName()] = val
+		}
+	}
+	return values
 }
 
 func (e *Element) Value() string {
@@ -419,6 +460,13 @@ func (d *Document) Append(node Node) error {
 func (d *Document) Insert(node Node, index int) error {
 	if el, ok := d.root.(*Element); ok {
 		el.Insert(node, index)
+	}
+	return nil
+}
+
+func (d *Document) Map() map[string]any {
+	if el, ok := d.root.(*Element); ok {
+		return el.Map()
 	}
 	return nil
 }

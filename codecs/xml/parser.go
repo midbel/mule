@@ -29,6 +29,10 @@ type Parser struct {
 	MaxDepth   int
 }
 
+func Parse(r io.Reader) (*Document, error) {
+	return NewParser(r).Parse()
+}
+
 func NewParser(r io.Reader) *Parser {
 	p := Parser{
 		scan:      Scan(r),

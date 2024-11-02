@@ -2,7 +2,6 @@ package mule
 
 import (
 	"bytes"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"net/http"
@@ -10,6 +9,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/midbel/mule/codecs/json"
+	"github.com/midbel/mule/codecs/xml"
 	"github.com/midbel/mule/environ"
 	"github.com/midbel/mule/play"
 )
@@ -63,14 +64,14 @@ func (m *muleObject) Call(ident string, args []play.Value) (play.Value, error) {
 		millis := time.Since(m.when).Milliseconds()
 		return play.NewFloat(float64(millis)), nil
 	default:
-		return nil, fmt.Errorf("%s: undefined fonction", ident)
+		return play.Void{}, fmt.Errorf("%s: undefined fonction", ident)
 	}
 }
 
 func (m *muleObject) Get(ident play.Value) (play.Value, error) {
 	str, ok := ident.(fmt.Stringer)
 	if !ok {
-		return nil, play.ErrEval
+		return play.Void{}, play.ErrEval
 	}
 	switch prop := str.String(); prop {
 	case "collection":
@@ -84,7 +85,7 @@ func (m *muleObject) Get(ident play.Value) (play.Value, error) {
 	case "environ":
 		return &muleEnviron{}, nil
 	default:
-		return nil, fmt.Errorf("%s: property not known", prop)
+		return play.Void{}, fmt.Errorf("%s: property not known", prop)
 	}
 }
 
@@ -184,14 +185,35 @@ func (m *muleRequest) True() play.Value {
 	return play.NewBool(ok)
 }
 
+func (m *muleRequest) Call(ident string, args []play.Value) (play.Value, error) {
+	switch ident {
+	case "setBody":
+		return play.Void{}, nil
+	case "json":
+		obj, err := json.Parse(bytes.NewReader(m.body))
+		if err != nil {
+			return play.Void{}, err
+		}
+		return play.NativeToValues(obj)
+	case "xml":
+		doc, err := xml.Parse(bytes.NewReader(m.body))
+		if err != nil {
+			return play.Void{}, err
+		}
+		return play.NativeToValues(doc.Map())
+	default:
+		return play.Void{}, fmt.Errorf("%s: undefined fonction", ident)
+	}
+}
+
 func (m *muleRequest) Get(ident play.Value) (play.Value, error) {
 	prop, ok := ident.(fmt.Stringer)
 	if !ok {
-		return nil, play.ErrEval
+		return play.Void{}, play.ErrEval
 	}
 	switch ident := prop.String(); ident {
 	case "body":
-		return play.NewString(""), nil
+		return play.NewString(string(m.body)), nil
 	case "name":
 		return play.NewString(m.name), nil
 	case "url":
@@ -244,7 +266,7 @@ func (m *muleResponse) True() play.Value {
 func (m *muleResponse) Get(ident play.Value) (play.Value, error) {
 	prop, ok := ident.(fmt.Stringer)
 	if !ok {
-		return nil, play.ErrEval
+		return play.Void{}, play.ErrEval
 	}
 	switch ident := prop.String(); ident {
 	case "body":
@@ -264,14 +286,17 @@ func (m *muleResponse) Get(ident play.Value) (play.Value, error) {
 func (m *muleResponse) Call(ident string, args []play.Value) (play.Value, error) {
 	switch ident {
 	case "json":
-		var (
-			obj interface{}
-			buf = bytes.NewReader(m.body)
-		)
-		if err := json.NewDecoder(buf).Decode(&obj); err != nil {
+		obj, err := json.Parse(bytes.NewReader(m.body))
+		if err != nil {
 			return play.Void{}, err
 		}
 		return play.NativeToValues(obj)
+	case "xml":
+		doc, err := xml.Parse(bytes.NewReader(m.body))
+		if err != nil {
+			return play.Void{}, err
+		}
+		return play.NativeToValues(doc.Map())
 	case "success":
 		ok := m.response.StatusCode < http.StatusBadRequest
 		return play.NewBool(ok), nil
@@ -285,7 +310,7 @@ func (m *muleResponse) Call(ident string, args []play.Value) (play.Value, error)
 		ok := m.response.StatusCode >= http.StatusInternalServerError
 		return play.NewBool(ok), nil
 	default:
-		return nil, fmt.Errorf("%s: unknown function", ident)
+		return play.Void{}, fmt.Errorf("%s: unknown function", ident)
 	}
 }
 
@@ -302,11 +327,11 @@ func (m *muleHeader) Call(ident string, args []play.Value) (play.Value, error) {
 	switch ident {
 	case "get":
 		if len(args) != 1 {
-			return nil, play.ErrArgument
+			return play.Void{}, play.ErrArgument
 		}
 		id, ok := args[0].(fmt.Stringer)
 		if !ok {
-			return nil, play.ErrEval
+			return play.Void{}, play.ErrEval
 		}
 		arr := play.NewArray()
 		for _, h := range m.headers[id.String()] {
@@ -315,7 +340,7 @@ func (m *muleHeader) Call(ident string, args []play.Value) (play.Value, error) {
 		return arr, nil
 	case "set":
 		if m.immutable {
-			return nil, ErrImmutable
+			return play.Void{}, ErrImmutable
 		}
 	case "has":
 		if len(args) != 1 {
@@ -323,7 +348,7 @@ func (m *muleHeader) Call(ident string, args []play.Value) (play.Value, error) {
 		}
 		id, ok := args[0].(fmt.Stringer)
 		if !ok {
-			return nil, play.ErrEval
+			return play.Void{}, play.ErrEval
 		}
 		_, ok = m.headers[id.String()]
 		return play.NewBool(ok), nil
@@ -343,9 +368,9 @@ func (m *muleHeader) Call(ident string, args []play.Value) (play.Value, error) {
 		}
 		return arr, nil
 	default:
-		return nil, fmt.Errorf("%s: unknown function", ident)
+		return play.Void{}, fmt.Errorf("%s: unknown function", ident)
 	}
-	return nil, play.ErrImpl
+	return play.Void{}, play.ErrImpl
 }
 
 type muleEnviron struct{}
@@ -361,7 +386,7 @@ func (_ *muleEnviron) True() play.Value {
 func (_ *muleEnviron) Get(ident play.Value) (play.Value, error) {
 	prop, ok := ident.(fmt.Stringer)
 	if !ok {
-		return nil, play.ErrEval
+		return play.Void{}, play.ErrEval
 	}
 	return play.NewString(os.Getenv(prop.String())), nil
 }
