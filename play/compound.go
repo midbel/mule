@@ -1265,6 +1265,26 @@ func arrayIsArray(args []Value) (Value, error) {
 	return getBool(ok), nil
 }
 
+func makeXml() Value {
+	g := global{
+		name: "XML",
+		fnset: make(map[string]Callable),
+	}
+
+	g.fnset["parse"] = asCallable(xmlParse)
+	g.fnset["stringify"] = asCallable(xmlString)
+
+	return g
+}
+
+func xmlParse(args []Value) (Value, error) {
+	return nil, nil
+}
+
+func xmlString(args []Value) (Value, error) {
+	return nil, nil
+}
+
 func makeJson() Value {
 	g := global{
 		name:  "JSON",
