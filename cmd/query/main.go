@@ -4,6 +4,7 @@ import (
 	"flag"
 	"fmt"
 	"io"
+	"net/http"
 	"net/url"
 	"os"
 
@@ -40,10 +41,14 @@ func loadDocument(file string) (any, error) {
 	if err != nil {
 		return nil, err
 	}
-	var r io.Reader
+	var r io.ReadCloser
 	switch u.Scheme {
 	case "http", "https":
-		return nil, nil
+		res, err := http.Get(file)
+		if err != nil {
+			return nil, err
+		}
+		r = res.Body
 	case "", "file":
 		r, err = os.Open(file)
 	default:

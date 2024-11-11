@@ -62,8 +62,8 @@ func (i identifier) Eval(doc any) (any, error) {
 			if a == nil {
 				continue
 			}
-			if a, ok := a.([]any); ok {
-				arr = append(arr, a...)
+			if as, ok := a.([]any); ok {
+				arr = append(arr, as...)
 			} else {
 				arr = append(arr, a)
 			}
