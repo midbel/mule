@@ -221,6 +221,10 @@ func isQuote(c rune) bool {
 	return c == '"'
 }
 
+func isBackQuote(c rune) bool {
+	return c == '`'
+}
+
 func isDelim(c rune) bool {
 	return c == '{' || c == '}' || c == '[' || c == ']' || c == ',' || c == ':'
 }
