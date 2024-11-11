@@ -2,7 +2,6 @@ package play
 
 import (
 	"bytes"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -12,6 +11,7 @@ import (
 	"time"
 
 	"github.com/midbel/mule/jwt"
+	"github.com/midbel/mule/codecs/json"
 )
 
 const (
@@ -1278,21 +1278,32 @@ func makeJson() Value {
 }
 
 func jsonParse(args []Value) (Value, error) {
-	if len(args) != 1 {
+	if len(args) > 2 || len(args) == 0 {
 		return Void{}, ErrArgument
 	}
 	str, ok := args[0].(String)
 	if !ok {
 		return args[0], nil
 	}
-	var (
-		obj interface{}
-		buf = strings.NewReader(str.value)
-	)
-	if err := json.NewDecoder(buf).Decode(&obj); err != nil {
-		return Void{}, err
+	doc, err := json.Parse(strings.NewReader(str.value))
+	if err != nil {
+		return nil, err
 	}
-	return NativeToValues(obj)
+	if len(args) == 2 {
+		q, ok := args[1].(String)
+		if !ok {
+			return nil, ErrArgument
+		}
+		query, err := json.Compile(q.value)
+		if err != nil {
+			return nil, err
+		}
+		doc, err = query.Get(doc)
+		if err != nil {
+			return nil, err
+		}
+	}
+	return NativeToValues(doc)
 }
 
 func jsonString(args []Value) (Value, error) {
@@ -1303,8 +1314,11 @@ func jsonString(args []Value) (Value, error) {
 	if err != nil {
 		return nil, err
 	}
-	var buf bytes.Buffer
-	if err := json.NewEncoder(&buf).Encode(v); err != nil {
+	var (
+		buf bytes.Buffer
+		ws = json.NewWriter(&buf)
+	)
+	if err := ws.Write(v); err != nil {
 		return nil, err
 	}
 	return getString(buf.String()), nil
