@@ -193,63 +193,6 @@ func (p *Parser) next() {
 	p.peek = p.scan.Scan()
 }
 
-type Token struct {
-	Literal string
-	Type    rune
-}
-
-func (t Token) String() string {
-	var prefix string
-	switch t.Type {
-	case EOF:
-		return "<eof>"
-	case BegArr:
-		return "<beg-arr>"
-	case EndArr:
-		return "<end-arr>"
-	case BegObj:
-		return "<beg-obj>"
-	case EndObj:
-		return "<end-obj>"
-	case Comma:
-		return "<comma>"
-	case Colon:
-		return "<colon>"
-	case Boolean:
-		prefix = "boolean"
-	case Null:
-		return "<null>"
-	case String:
-		prefix = "string"
-	case Number:
-		prefix = "number"
-	case Ident:
-		prefix = "identifier"
-	case Comment:
-		prefix = "comment"
-	case Invalid:
-		prefix = "invalid"
-	}
-	return fmt.Sprintf("%s(%s)", prefix, t.Literal)
-}
-
-const (
-	EOF = -(1 + iota)
-	BegArr
-	EndArr
-	BegObj
-	EndObj
-	Comma
-	Colon
-	Boolean
-	Null
-	String
-	Number
-	Ident
-	Comment
-	Invalid
-)
-
 type Scanner struct {
 	input io.RuneScanner
 	char  rune
@@ -525,48 +468,4 @@ func (s *Scanner) skipBlank() {
 	for !s.done() && unicode.IsSpace(s.char) {
 		s.read()
 	}
-}
-
-func isComment(c, k rune) bool {
-	return c == '/' && c == k
-}
-
-func isHex(c rune) bool {
-	return isNumber(c) || (c >= 'a' && c <= 'f') || (c >= 'A' && c <= 'F')
-}
-
-func isNumber(c rune) bool {
-	return c >= '0' && c <= '9'
-}
-
-func isLower(c rune) bool {
-	return c >= 'a' && c <= 'z'
-}
-
-func isUpper(c rune) bool {
-	return c >= 'A' && c <= 'Z'
-}
-
-func isLetter(c rune) bool {
-	return isLower(c) || isUpper(c)
-}
-
-func isAlpha(c rune) bool {
-	return isLetter(c) || isNumber(c) || c == '_'
-}
-
-func isApos(c rune) bool {
-	return c == '\''
-}
-
-func isQuote(c rune) bool {
-	return c == '"'
-}
-
-func isDelim(c rune) bool {
-	return c == '{' || c == '}' || c == '[' || c == ']' || c == ',' || c == ':'
-}
-
-func isNL(c rune) bool {
-	return c == '\n' || c == '\r'
 }
